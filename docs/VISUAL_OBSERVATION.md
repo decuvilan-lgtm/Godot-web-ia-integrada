@@ -75,13 +75,13 @@ Neon production branch `br-dark-shadow-b567bp59`, region `us-east-2`:
 - Postgres stores metadata and private object keys only.
 - Image bytes never go into command JSONB results.
 
-Migration `004_visual_observations.sql` was applied successfully to production after explicit user authorization. Verification confirmed:
+Migration `004_visual_observations.sql` and migration `005_visual_ui_sequences.sql` were applied successfully to production after explicit user authorization. Verification confirmed:
 - `command_center.visual_sequences` exists.
 - `command_center.visual_assets` exists.
 - The three planned visual asset indexes exist, along with primary/unique indexes.
 - Both tables currently contain zero rows, as expected before the capture pipeline is implemented.
 
-The sequence source constraint currently lists `editor_2d`, `editor_3d` and `game_preview`. The canonical command contract also permits `editor_ui` sequences; a follow-up schema migration must expand that constraint before such sequences can be persisted. Do not claim this database detail is implemented until that migration is prepared, approved, applied and verified.
+The sequence source constraint now lists `editor_ui`, `editor_2d`, `editor_3d` and `game_preview`, and was verified on the production branch.
 
 ## Artifact transfer
 
@@ -103,6 +103,7 @@ Uploads and completion must be idempotent. An incomplete upload must not appear 
 - [x] Neon Object Storage enabled in the existing production project.
 - [x] Private bucket `godot-visual-captures` created.
 - [x] Migration 004 applied to production and verified.
+- [x] Migration 005 applied to production and verified.
 - [x] Canonical visual command contract documented in `VISUAL_COMMANDS.md`.
 - [ ] Add relay endpoints for presigned upload, upload completion and authenticated download.
 - [ ] Prepare and approve a follow-up migration allowing `editor_ui` sequence sources.
