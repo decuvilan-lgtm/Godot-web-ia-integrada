@@ -1,52 +1,61 @@
 # Godot Web IA Integrada
 
-Entorno de desarrollo basado en Godot Web, con una capa propia de automatización para que un agente pueda inspeccionar y editar proyectos sin sustituir el editor real.
+Entorno de desarrollo basado en el editor real de Godot Web, con una capa de automatización propia y separada del proyecto del usuario.
 
-> Estado: **fundación inicial**. Esta rama prepara el editor web oficial y define la arquitectura del puente. No afirma todavía que exista una sesión remota persistente ni que la IA pueda operar el editor de extremo a extremo.
+> **Estado actual:** el editor web oficial 4.7.2-stable ya está desplegado en Render. El repositorio incluye un complemento de editor para conexión WebSocket autenticada y operaciones de inspección de solo lectura. Todavía no existe un relay remoto desplegado ni una sesión compartida de extremo a extremo; no se debe confundir el complemento con un agente remoto completo.
 
-## Objetivos
+## Acceso
 
-- Ejecutar el editor Godot Web desde navegador, también en Android.
-- Mantener los proyectos del usuario separados de los cambios experimentales del agente.
-- Exponer operaciones estructuradas para inspeccionar proyectos, escenas, nodos, recursos y scripts.
-- Permitir que el agente proponga cambios, los valide y los aplique de forma explícita.
-- Ejecutar pruebas y devolver resultados observables, capturas y registros.
-- Sincronizar el mismo proyecto entre la sesión de trabajo remota y el navegador del usuario.
+- Editor web: https://godot-web-ia-integrada-rt2l.onrender.com
+- Render Dashboard: https://dashboard.render.com/static/srv-dbna2s3rjlhs7386eol0
+- Despliegue: sitio estático de Render, sin base de datos ni servidor de pago.
+- Build: descarga el paquete oficial y verifica su SHA-256 antes de publicarlo.
 
 ## Base del motor
 
-El código fuente oficial está fijado como submódulo en `engine/godot`, en el commit del tag **4.7.2-stable**. Esto mantiene el historial del motor separado y permite preparar parches propios sin copiar ni alterar el upstream. La distribución web inicial usa el paquete oficial precompilado: el script de compilación lo descarga y verifica su SHA-256 antes de publicarlo.
+El código fuente oficial está fijado como submódulo en `engine/godot`, en el commit del tag **4.7.2-stable**. La distribución web inicial utiliza el paquete oficial precompilado; esto permite publicar el editor sin compilar el motor completo en cada despliegue.
 
 - Motor: https://github.com/godotengine/godot
 - Versión fijada: 4.7.2-stable
 - Paquete web: Godot_v4.7.2-stable_web_editor.zip
-- Licencia del motor: MIT; consultar los avisos oficiales incluidos en la distribución.
+- Licencia del motor: MIT; consultar los avisos incluidos en la distribución oficial.
 
-## Despliegue
+## Qué funciona ahora
 
-Render Static Site:
-- Build command: `bash scripts/build-web.sh`
-- Publish directory: `public`
-- Los encabezados COOP/COEP están declarados en `render.yaml` para habilitar aislamiento de origen cuando el navegador y el paquete lo requieran.
+### Editor web
+- Carga de la distribución oficial del editor desde el navegador.
+- Descarga de 4.7.2-stable verificada por SHA-256 durante el build.
+- Metadatos de viewport móvil y encabezados COOP/COEP en el sitio.
+- Proyecto de prueba empaquetado en `bridge-sandbox.zip`.
 
-## Arquitectura prevista
+### Complemento Godot AI Bridge v0.1
+El complemento está en `examples/bridge-sandbox/addons/godot_ai_bridge`. Se ejecuta como `EditorPlugin`, muestra un dock de conexión y requiere:
+- una URL `wss://`;
+- un token temporal introducido en el editor, guardado solo en memoria.
 
-1. **Web Editor**: distribución web oficial del editor Godot.
-2. **AI Bridge**: API local/remota con permisos limitados y operaciones tipadas.
-3. **Project Workspace**: almacenamiento versionado de proyectos y snapshots.
-4. **Scene & Script Controllers**: lectura, edición y validación de escenas y scripts.
-5. **Test Runner**: ejecución aislada de pruebas y recolección de logs.
-6. **Visual Observer**: capturas de pantalla y estado visual del editor/juego.
-7. **Sync Manager**: sincronización entre la sesión remota y el navegador Android.
+Tras autenticarse, acepta únicamente estas acciones de lectura:
+- `ping`
+- `project.get_state`
+- `project.list_files`
+- `scene.inspect`
+- `script.read`
 
-## Seguridad y límites
+El protocolo limita cantidad/profundidad de nodos, cantidad de archivos y tamaño de archivos de texto. Las operaciones de escritura todavía están bloqueadas.
 
-- No se deben exponer tokens ni secretos en el navegador o en Git.
-- El puente no debe aceptar comandos de shell arbitrarios desde el cliente.
-- Las operaciones destructivas deben requerir confirmación y generar snapshot previo.
-- El agente trabaja primero en una copia/sandbox; el proyecto del usuario solo cambia al aceptar.
-- El editor web no equivale al editor nativo: depuración, exportación y funciones de plataforma se evaluarán por separado.
+## Lo que falta para el objetivo completo
+
+- Relay WebSocket remoto y emparejamiento de sesiones.
+- API de edición de escenas y scripts con propuestas/diffs.
+- Snapshots y separación real entre espacio del usuario y espacio del agente.
+- Runner aislado para ejecutar pruebas y recopilar logs.
+- Capturas reales de la interfaz y del viewport.
+- Sincronización persistente entre sesión remota y Android.
+- Pruebas de compatibilidad y rendimiento en dispositivos Android.
+
+La infraestructura actual es solo un sitio estático gratuito. No se ha creado una base de datos ni un servicio de backend. Los límites del editor web frente al editor nativo (depuración, exportación y funciones de plataforma) se evalúan por separado.
 
 ## Desarrollo
 
-Consulta [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el diseño técnico y las etapas de implementación.
+- [Arquitectura técnica](docs/ARCHITECTURE.md)
+- [Protocolo actual del puente](docs/BRIDGE_PROTOCOL.md)
+- [Código del complemento](examples/bridge-sandbox/addons/godot_ai_bridge/plugin.gd)
