@@ -91,6 +91,22 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("script.write", ALLOWED_ACTIONS)
         self.assertNotIn("shell.execute", ALLOWED_ACTIONS)
 
+    def test_pairing_admin_page_is_ephemeral_and_hardened(self):
+        page = self.client.get("/command-center/admin")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("no-store", page.headers.get("cache-control", ""))
+        self.assertEqual(page.headers.get("referrer-policy"), "no-referrer")
+        self.assertIn("script-src 'self'", page.headers.get("content-security-policy", ""))
+        self.assertIn("/command-center/admin.js", page.text)
+
+        script = self.client.get("/command-center/admin.js")
+        self.assertEqual(script.status_code, 200)
+        self.assertIn("X-Command-Center-Admin", script.text)
+        self.assertIn("/v1/command-center/pairing-codes", script.text)
+        self.assertNotIn("localStorage", script.text)
+        self.assertNotIn("sessionStorage", script.text)
+        self.assertIn("token.value = ''", script.text)
+
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
