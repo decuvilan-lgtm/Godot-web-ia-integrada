@@ -102,3 +102,21 @@ Mantener Live Link como integración principal con el editor Android modificado.
 - No sincronizar archivos destructivamente sin base revision, diff, respaldo y confirmación.
 - No activar infraestructura paga ni cambiar los servicios Render del plan Free.
 - Diferenciar siempre entre comprobación estática, prueba headless, compilación, instalación y uso real en el dispositivo.
+
+
+## Actual implementation progress — Neon queue adapter
+
+A new isolated branch was created in the Android editor repository:
+
+- [PR #3 — durable Neon Command Center API adapter](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/pull/3)
+- [API adapter source](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/feature/neon-command-center-adapter/relay/command_center_api.py)
+- [Agent-side HTTP client](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/feature/neon-command-center-adapter/relay/command_center_client.py)
+- [Adapter and environment documentation](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/feature/neon-command-center-adapter/docs/NEON_COMMAND_CENTER_API.md)
+
+The adapter uses the existing `command_center` schema and supports workspace-scoped single-use pairing, hashed device credentials, a persistent read-only command queue, leases/recovery, result storage, and strict browser CORS for the web editor. The agent client requires HTTPS remotely and requires idempotency keys for command creation.
+
+Migration `002_live_link_command_leases.sql` was applied to the Neon production branch and its columns, constraints and indexes were verified. The database still has one workspace and zero paired devices or queued commands.
+
+**CI evidence:** the relay test suite, agent-client tests, and Godot 4.7.2 headless Live Link/filesystem harness passed on the reviewed commits. The latest source-only test run is [42340723107](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/actions/runs/42340723107), which passed. A newer documentation/workflow-only commit has a separate run in progress at the time of this note.
+
+**Not deployed:** no Render environment variables or deployment were changed. The API has not been configured with `COMMAND_CENTER_DATABASE_URL` or `COMMAND_CENTER_ADMIN_TOKEN`; no devices have been paired; editor-side polling is not connected; the existing Live Link WebSocket still uses its legacy authentication. This is a tested code foundation, not end-to-end Android/Web synchronization.
