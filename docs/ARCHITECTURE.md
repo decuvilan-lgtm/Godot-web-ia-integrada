@@ -10,7 +10,11 @@ La migración reproducible está en `database/migrations/001_command_center.sql`
 
 ## Dos puestos de trabajo
 
-La web Godot Web no es la herramienta principal del usuario: es el puesto remoto del agente. El usuario trabaja en Godot Editor para Android, cuyo motor fuente está fijado como submódulo en `engine/godot` (4.7.2-stable), incluyendo la plataforma Android. El objetivo es que ambos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
+La web Godot Web es el puesto remoto del agente. El usuario trabaja en su editor Godot para Android, cuyo flujo de código y compilación está en el repositorio externo [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado).
+
+**Distinción importante sobre el código fuente:** ese repositorio no contiene actualmente el árbol completo del motor. Su workflow descarga upstream Godot 4.7.2-stable en un directorio temporal, aplica `scripts/apply_github_import_patch.py` y compila el APK. El parche y el workflow son la fuente persistente de las modificaciones propias. El submódulo `engine/godot` de este repositorio de integración es solo una referencia upstream y no sustituye al parche del editor Android modificado.
+
+El objetivo es que ambos puestos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
 
 ## Estado implementado
 
@@ -73,21 +77,28 @@ Runner aislado para ejecutar proyectos y devolver:
 El observador podrá ver la interfaz completa o solo el viewport. No se aceptarán capturas simuladas como evidencia.
 
 ### 7. Sincronización con Android
-El usuario abre el proyecto en Godot Android. El agente trabaja sobre una copia remota; los cambios se intercambian mediante paquetes/diffs y se aplican al proyecto del usuario solo tras aprobación. La primera integración puede usar exportación/importación de paquetes versionados antes de intentar sincronización en vivo.
+El usuario abre el proyecto en el Godot Android modificado. El agente trabaja sobre una copia remota; los cambios se intercambian mediante paquetes/diffs y se aplican al proyecto del usuario solo tras aprobación. La primera integración puede usar exportación/importación de paquetes versionados antes de intentar sincronización en vivo.
 
 ## Fuente del motor y parches
 
-El submódulo `engine/godot` fija el commit exacto de `4.7.2-stable`. Los cambios propios del motor se guardan como parches versionados y se aplican sobre una copia de trabajo, sin modificar upstream.
+El repositorio Android modificado es la referencia de integración: [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado). Su parche actual modifica el Project Manager para importar repositorios GitHub públicos. El árbol upstream se obtiene durante el workflow y no se conserva como un checkout completo en el repositorio.
+
+Por tanto:
+- toda modificación propia del motor debe añadirse como parche reproducible o paso versionado al workflow;
+- no se debe editar el árbol temporal después de que termine el workflow;
+- antes de integrar, comprobar los anchors del parche y validar que el nuevo parche se aplica sobre el mismo tag;
+- mantener el parche GitHub existente y evitar cambios colaterales en Project Manager;
+- nunca sobrescribir el APK ni publicar uno que no haya pasado las comprobaciones del workflow.
 
 ## Próximas fases
 
 1. Editor web remoto para la IA: desplegado; falta validación visual y funcional completa.
 2. Bridge de solo lectura: implementado; falta prueba con relay real.
 3. Relay gratuito: creado con plan free; falta prueba de integración y acceso directo desde el controlador IA.
-4. Workspace y sincronización con Android.
-5. Edición segura mediante diffs y snapshots.
-6. Runner, logs y capturas.
-7. Integración nativa del motor solo si las extensiones no alcanzan.
+4. API autenticada y cola durable en Neon.
+5. Emparejamiento y conexión del editor Android modificado.
+6. Edición segura mediante diffs y snapshots.
+7. Runner, logs y capturas.
 
 ## Riesgos
 - Suspensión e inactividad del plan gratuito.
@@ -96,3 +107,4 @@ El submódulo `engine/godot` fija el commit exacto de `4.7.2-stable`. Los cambio
 - Persistencia y conflictos de archivos.
 - Capacidades no disponibles en editor web frente al nativo.
 - Compatibilidad del plugin con la versión Android exacta del editor.
+- Conflictos entre nuevos parches y el parche existente de importación GitHub.
