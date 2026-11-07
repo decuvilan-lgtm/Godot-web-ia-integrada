@@ -48,6 +48,19 @@ class RelayApiTests(unittest.TestCase):
         self.assertEqual(allowed.status_code, 200)
         self.assertFalse(allowed.json()["editor_connected"])
 
+    def test_controller_cannot_send_actions_outside_read_only_allowlist(self):
+        created = self.client.post(
+            "/v1/sessions",
+            headers={"X-Admin-Token": "test-admin-secret"},
+            json={"label": "test"},
+        ).json()
+        response = self.client.post(
+            f"/v1/sessions/{created['session_id']}/request",
+            headers={"Authorization": f"Bearer {created['controller_token']}"},
+            json={"action": "filesystem.delete", "args": {}},
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
