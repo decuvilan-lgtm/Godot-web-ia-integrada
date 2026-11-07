@@ -13,6 +13,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from command_center import router as command_center_router
+from admin import router as command_center_admin_router
 
 APP_VERSION = "0.2.1"
 logger = logging.getLogger("godot_web_ia_relay")
@@ -46,6 +47,7 @@ app.state.command_center_db = None
 app.state.session_cleanup_task = None
 
 app.include_router(command_center_router)
+app.include_router(command_center_admin_router)
 
 class CreateSession(BaseModel):
     label: str = Field(default="Godot project", max_length=80)
