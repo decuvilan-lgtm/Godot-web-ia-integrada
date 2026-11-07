@@ -139,7 +139,8 @@ This is build/CI evidence only. It does **not** establish that the Render produc
 The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/command-center/visual`:
 
 - `POST /uploads/presign`: requires a live command lease owned by the paired `web_editor`; issues a 180-second presigned PUT URL for the private bucket. The server creates the object key; the editor never receives S3 credentials.
-- `POST /uploads/complete`: rechecks the command lease and workspace, verifies object size and MIME type, downloads at most 12 MiB for SHA-256 and image-format/dimension verification, then inserts metadata in `visual_assets`. Sequence frames are associated with the sequence row and duplicate frame submissions are idempotent.
+- `POST /uploads/complete`: rechecks the command lease and workspace, verifies object size and MIME type, downloads at most 12 MiB for SHA-256 and image-format/dimension verification, then inserts metadata in `visual_assets`. The signed object key binds the workspace, command and frame index; duplicate frame submissions are idempotent.
+- Sequence results are finalized as `completed`, `partial` or `failed` when the editor submits its command result, based on the requested frame count and successfully registered assets.
 - `GET /assets/{asset_id}/download`: workspace-scoped, authenticated controller/web-editor access; issues a short-lived private GET URL. The API returns metadata and URLs, not image bytes.
 - S3 calls use path-style SigV4 against the branch endpoint and fail closed unless the four AWS-standard Neon storage environment variables are present.
 - New dependencies are pinned in the relay requirements: boto3 and Pillow.
