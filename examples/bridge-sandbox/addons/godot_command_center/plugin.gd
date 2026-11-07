@@ -489,7 +489,11 @@ func _request_visual_json(path: String, method: int, payload: Dictionary) -> Dic
 
 
 func _perform_visual_request(url: String, method: int, headers: PackedStringArray, body: PackedByteArray) -> Dictionary:
-	var error := _visual_request.request(url, headers, method, body)
+	var error: Error
+	if method == HTTPClient.METHOD_PUT:
+		error = _visual_request.request_raw(url, headers, method, body)
+	else:
+		error = _visual_request.request(url, headers, method, body.get_string_from_utf8())
 	if error != OK:
 		return {"ok": false, "code": 0, "body": PackedByteArray()}
 	var response: Array = await _visual_request.request_completed
