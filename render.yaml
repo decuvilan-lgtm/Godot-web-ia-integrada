@@ -1,0 +1,20 @@
+services:
+  - type: web
+    runtime: static
+    name: godot-web-ia-integrada
+    buildCommand: bash scripts/build-web.sh
+    staticPublishPath: ./public
+    autoDeployTrigger: commit
+    headers:
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Cross-Origin-Embedder-Policy
+        value: require-corp
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
