@@ -36,5 +36,8 @@ jobs:
       - name: Verify published bundle
         run: python3 scripts/verify-web-build.py
 
+      - name: Run three-minute HTTP stability test
+        run: bash scripts/soak-test-web.sh
+
       - name: Report bundle size
         run: du -sh public
