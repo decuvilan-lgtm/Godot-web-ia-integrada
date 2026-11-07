@@ -605,7 +605,7 @@ async def submit_command_result(
     async with pool.acquire() as connection:
         async with connection.transaction():
             command = await connection.fetchrow(
-                """SELECT id,workspace_id,status,target,claimed_by_device,
+                """SELECT id,workspace_id,status,target,action,claimed_by_device,
                           (claim_expires_at > now()) AS lease_valid
                    FROM command_center.commands
                    WHERE id=$1 AND workspace_id=$2 FOR UPDATE""",
@@ -645,6 +645,29 @@ async def submit_command_result(
                 parsed_id,
                 status,
             )
+            if command["action"] == "visual.capture_sequence":
+                sequence = await connection.fetchrow(
+                    """SELECT id, requested_frames FROM command_center.visual_sequences
+                       WHERE command_id=$1 FOR UPDATE""",
+                    parsed_id,
+                )
+                if sequence is not None:
+                    frame_count = await connection.fetchval(
+                        "SELECT count(*) FROM command_center.visual_assets WHERE sequence_id=$1",
+                        sequence["id"],
+                    )
+                    if body.ok and frame_count >= sequence["requested_frames"]:
+                        sequence_status = "completed"
+                    elif frame_count > 0:
+                        sequence_status = "partial"
+                    else:
+                        sequence_status = "failed"
+                    await connection.execute(
+                        """UPDATE command_center.visual_sequences
+                           SET status=$2, finished_at=now() WHERE id=$1""",
+                        sequence["id"],
+                        sequence_status,
+                    )
             await connection.execute(
                 """INSERT INTO command_center.events
                    (workspace_id, actor_device_id, event_type, payload)
