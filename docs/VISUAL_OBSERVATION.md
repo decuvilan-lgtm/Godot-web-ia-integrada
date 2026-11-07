@@ -139,6 +139,7 @@ This is build/CI evidence only. It does **not** establish that the Render produc
 The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/command-center/visual`:
 
 - `POST /uploads/presign`: requires a live command lease owned by the paired `web_editor`; issues a 180-second presigned PUT URL for the private bucket. The server creates the object key; the editor never receives S3 credentials.
+- `POST /commands/{command_id}/heartbeat`: renews only an unexpired lease already owned by that editor, capped by the command's absolute expiry. The Godot capture client renews before each frame and before metadata registration so longer sequences do not silently lose ownership.
 - `POST /uploads/complete`: rechecks the command lease and workspace, verifies object size and MIME type, downloads at most 12 MiB for SHA-256 and image-format/dimension verification, then inserts metadata in `visual_assets`. The signed object key binds the workspace, command and frame index; duplicate frame submissions are idempotent.
 - Sequence results are finalized as `completed`, `partial` or `failed` when the editor submits its command result, based on the requested frame count and successfully registered assets.
 - `GET /assets/{asset_id}/download`: workspace-scoped, authenticated controller/web-editor access; issues a short-lived private GET URL. The API returns metadata and URLs, not image bytes.
