@@ -393,6 +393,9 @@ func _execute_visual_action(action: String, args: Variant) -> Dictionary:
 
 
 func _capture_and_upload_visual(command_id: String, target: String, args: Dictionary, frame_index: int) -> Dictionary:
+	var lease_check: Dictionary = await _request_visual_json("/v1/command-center/commands/" + command_id + "/heartbeat", HTTPClient.METHOD_POST, {})
+	if not bool(lease_check.get("ok", false)):
+		return {"ok": false, "error_code": "COMMAND_LEASE_LOST", "message": "La orden dejó de pertenecer a este editor."}
 	var image: Image = await _capture_editor_viewport(target, args)
 	if image == null or image.is_empty():
 		return {"ok": false, "error_code": "VISUAL_CAPTURE_EMPTY", "message": "El SubViewport no devolvió una imagen válida."}
@@ -434,6 +437,9 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 	if not bool(upload_response.get("ok", false)) or int(upload_response.get("code", 0)) not in [200, 201, 204]:
 		return {"ok": false, "error_code": "VISUAL_OBJECT_UPLOAD_FAILED", "message": "Neon Object Storage rechazó la subida."}
 	var metadata := {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
+	var lease_before_complete: Dictionary = await _request_visual_json("/v1/command-center/commands/" + command_id + "/heartbeat", HTTPClient.METHOD_POST, {})
+	if not bool(lease_before_complete.get("ok", false)):
+		return {"ok": false, "error_code": "COMMAND_LEASE_LOST", "message": "El lease expiró antes de registrar la imagen."}
 	var complete_payload := {
 		"object_key": object_key,
 		"width": image.get_width(),
