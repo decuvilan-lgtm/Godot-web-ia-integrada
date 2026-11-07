@@ -119,3 +119,32 @@ Uploads and completion must be idempotent. An incomplete upload must not appear 
 ## Security and safety
 
 The relay validates device role, command lease, target, coordinate space, dimensions, frame count, interval and payload size. It rejects arbitrary filesystem paths, arbitrary URLs, shell commands and requests to capture another device's private screen. Visual capture does not grant file-write, shell, process-execution or project-apply permissions.
+
+
+## Latest verification checkpoint
+
+The Godot Web editor build workflow completed successfully on 2026-11-07:
+
+- Pinned Godot source submodule verification: passed.
+- Native Godot headless validation of the bridge sandbox: passed.
+- Godot Web Editor build: passed.
+- Published bundle verification: passed.
+- Three-minute HTTP stability observation against the CI-served bundle: passed.
+- Bundle-size report: completed.
+
+This is build/CI evidence only. It does **not** establish that the Render production service stayed healthy for three minutes, that the deployed browser editor is paired, or that any visual capture backend works in the real browser.
+
+## Implementation order and acceptance gates
+
+The visual pipeline stays disabled until each gate is demonstrated:
+
+1. **Storage authorization:** issue a dedicated Neon credential with only `storage:read` and `storage:write`, scoped to the existing production branch. Configure it as Render secrets only after reviewing the exact service and environment target. Never place it in Git, the Godot project, browser JavaScript, command payloads, or logs.
+2. **Relay transfer API:** implement short-lived presigned PUT/GET issuance, upload completion, server-generated object keys, lease/workspace checks, object HEAD verification, MIME/size/hash validation, idempotent metadata insertion, and workspace-scoped downloads.
+3. **Godot viewport capture:** implement 2D and 3D SubViewport capture after `RenderingServer.frame_post_draw`. Compress and bound images before requesting an upload URL. Keep the device credential in memory and never expose storage credentials to Godot.
+4. **Browser-only capture targets:** provide a separately authenticated browser capture agent for `editor_ui` and `game_preview`. Do not pretend a SubViewport image is a full editor screenshot. If this agent is unavailable, return `VISUAL_TARGET_UNAVAILABLE`.
+5. **Zoom restoration:** capture and restore the original 2D editor transform or 3D editor camera state in a guaranteed cleanup path, including capture/upload failures.
+6. **Sequences:** create one sequence record per command, upload each frame independently with its index and timestamp, preserve successful frames after a later failure, and mark the sequence `partial` when appropriate. Keep `frame_step` rejected until deterministic preview control is proven.
+7. **Agent retrieval:** return asset IDs only to the controller, issue short-lived private download URLs after workspace authorization, and verify the controller can inspect the actual bytes.
+8. **End-to-end gate:** test real 2D, 3D, full-UI, preview and sequence captures in the deployed Godot Web workspace. Only then enable the visual command feature flag.
+
+The Android editor remains a separate user-owned workspace throughout these steps. No visual command in this phase may target the Android device or phone screen.
