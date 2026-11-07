@@ -35,6 +35,20 @@ La IA prepara trabajo en su puesto web. El proyecto aceptado del usuario permane
 
 Neon Postgres es la fuente de verdad. Neon Realtime puede notificar cambios, pero las órdenes y resultados deben poder recuperarse consultando Postgres después de una desconexión. El relay puede suspenderse o reiniciarse sin perder el estado autoritativo.
 
+## Identidad persistente del proyecto y consultas múltiples
+
+En esta fase, el **workspace Neon es el contenedor persistente del proyecto remoto de la IA**. El editor Godot Web conserva el mismo proyecto abierto; una consulta no crea un workspace, proyecto Godot ni sesión nueva.
+
+- El dispositivo emparejado determina el `workspace_id`; el cliente no puede elegir ni crear otro workspace al enviar una consulta.
+- Cada consulta crea únicamente una fila `commands`, con su propio UUID e `idempotency_key`.
+- Todas las consultas del mismo puesto se insertan bajo el mismo `workspace_id`, por lo que se refieren al mismo proyecto abierto.
+- Las claves de idempotencia son únicas por workspace: una repetición idéntica reutiliza el resultado/ID anterior; una consulta distinta usa una clave nueva.
+- Se pueden encolar varias consultas antes de que el editor termine la anterior. La cola durable las procesa una por una en el puesto web para evitar operaciones simultáneas que compitan por el estado del editor.
+- `sessions` representa una conexión/pareja de dispositivos, no un proyecto ni una consulta. Crear una consulta no crea ni renueva una sesión.
+- Una captura, secuencia, inspección o lectura es una operación/resultado, nunca un proyecto nuevo.
+
+No existe un endpoint de creación de proyectos en el flujo de consultas. Si en el futuro se necesita trabajar con varios proyectos Godot diferentes, se añadirá un registro explícito de proyectos y una selección deliberada; nunca se inferirá que cada consulta representa un proyecto nuevo.
+
 ## Estado real de implementación
 
 ### 1. Editor Godot Web
