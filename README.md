@@ -3,7 +3,7 @@
 Entorno de desarrollo con dos puestos de trabajo que comparten un mismo proyecto sin pisarse:
 
 - **Puesto de la IA:** editor real Godot Web publicado en Render. El agente trabaja sobre un workspace aislado.
-- **Puesto del usuario:** Godot Editor para Android, construido desde el motor que está fijado en este mismo repositorio bajo `engine/godot`. El usuario conserva el control del proyecto aceptado desde su teléfono.
+- **Puesto del usuario:** tu editor Godot para Android, basado en el trabajo del repositorio [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado). Ese repositorio conserva el parche y el flujo reproducible que reconstruye el APK sobre Godot 4.7.2.
 - **Centro de mando:** Neon Postgres conserva sesiones, dispositivos, órdenes, resultados, revisiones, snapshots y propuestas. Neon Realtime se usa como canal de notificaciones; Postgres sigue siendo la fuente de verdad.
 
 La regla central es que el agente nunca sobrescribe directamente el proyecto aceptado en Android. Sus cambios se presentan como propuestas con diff, validación y snapshot; solo se aplican tras aprobación explícita.
@@ -15,18 +15,23 @@ La regla central es que el agente nunca sobrescribe directamente el proyecto ace
 - Editor web de la IA: https://godot-web-ia-integrada-rt2l.onrender.com
 - Relay: https://godot-web-ia-relay.onrender.com
 - Salud del relay: https://godot-web-ia-relay.onrender.com/health
-- [Repositorio GitHub](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada)
+- [Repositorio de integración IA](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada)
+- [Repositorio Godot Android modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado)
 - [Centro de mando Neon](https://console.neon.tech/app/projects/aged-dew-94732514)
 
 **Infraestructura:** los servicios Render existentes están configurados en plan `free`. No crear ni cambiar recursos a planes pagos. El relay puede suspenderse y reiniciarse; por eso no se considera almacenamiento persistente.
 
-## Godot Android y motor
+## Godot Android: fuente correcta
 
-El motor oficial está fijado como submódulo en `engine/godot`, versión/tag **4.7.2-stable**. El árbol de código incluye la plataforma Android del motor; no se reemplaza por un proyecto de ejemplo ni por otro editor. La distribución web inicial utiliza el paquete oficial precompilado.
+El repositorio que debemos tomar como referencia para el editor Android es **Godot-engine4-v4.7.2-stable-difusion-modificado**, no el submódulo genérico de este repositorio de integración.
 
-- Motor: https://github.com/godotengine/godot
-- Submódulo: `engine/godot`
-- Versión fijada: `4.7.2-stable`
+Importante: ese repositorio no almacena el árbol completo del motor. Su README indica que el workflow descarga temporalmente `godotengine/godot` en el tag `4.7.2-stable`, aplica el parche mantenido en `scripts/apply_github_import_patch.py` y compila el APK Android. El código modificado persistente está, por ahora, representado por ese parche y sus workflows. Por tanto, cualquier integración nativa de IA debe incorporarse como cambios reproducibles al parche/build de ese repositorio, no editar una copia efímera del motor ni asumir que el submódulo de aquí contiene las modificaciones del usuario.
+
+- [Repositorio y documentación del editor Android](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado)
+- [Parche actual del Project Manager](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/main/scripts/apply_github_import_patch.py)
+- [Workflow de compilación Android](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/main/.github/workflows/build-godot-android-source.yml)
+
+El submódulo `engine/godot` que existe en este repositorio de integración es una referencia upstream fijada a 4.7.2-stable; no debe confundirse con el flujo modificado del editor Android.
 
 ## Qué está implementado
 
@@ -65,7 +70,7 @@ Neon Realtime está habilitado para el origen del editor web. Esto aún no const
 1. API autenticada y worker persistente sobre Neon.
 2. Emparejamiento de un solo uso y registro de Android, editor web y controlador IA.
 3. Conexión del AI Bridge a la cola durable, con reconexión por cursor.
-4. Integración Android mediante exportación/importación versionada, sin tocar archivos locales sin aprobación.
+4. Integración en el repositorio Godot Android modificado: primero lectura/diagnóstico y luego intercambio de propuestas versionadas, sin tocar archivos locales sin aprobación.
 5. Propuestas, diffs, validación, snapshots y rollback.
 6. Runner aislado, logs y capturas reales.
 7. Pruebas de desconexión, duplicados, conflictos de revisión y suspensión de Render.
