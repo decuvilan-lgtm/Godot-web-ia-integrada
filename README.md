@@ -84,7 +84,7 @@ El PR #1 añade al relay FastAPI existente:
 - Respuestas no-cache y reconexión Neon acotada.
 - Página administrativa de emparejamiento en `/command-center/admin`.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–003 están instaladas/verificadas en Neon, pero el servicio Render aún no tiene configurados los secretos necesarios. No se ha desplegado esta versión ni se ha hecho una solicitud real contra la base de datos.
+La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–004 están instaladas/verificadas en Neon, incluido el esquema de metadatos de observación visual. El servicio Render aún no tiene configurados los secretos necesarios. No se ha desplegado esta versión ni se ha hecho una solicitud real contra la base de datos.
 
 ## Verificaciones y límites
 
@@ -106,9 +106,9 @@ La API falla de forma cerrada si Neon no está configurado. Las migraciones 001�
 
 ## Observación visual (en desarrollo)
 
-El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md). Permite solicitar capturas de la vista 2D, vista 3D, preview del juego y pantalla completa del editor mediante el mecanismo adecuado para cada fuente; acercar temporalmente una coordenada del mundo; y pedir secuencias acotadas de imágenes consecutivas para analizar movimiento 3D sin transmitir vídeo.
+El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). Cada solicitud debe indicar un objetivo exacto (`editor_ui`, `editor_2d`, `editor_3d` o `game_preview`); las secuencias indican cantidad e intervalo, y el zoom declara el sistema de coordenadas. No se permite adivinar el objetivo ni sustituir una fuente por otra.
 
-Neon Object Storage tiene habilitado el bucket privado `godot-visual-captures` en la rama de producción. La migración `004_visual_observations.sql` añade el registro de metadatos, pero todavía no se ha aplicado. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
+Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
 
 ## Desarrollo
 
