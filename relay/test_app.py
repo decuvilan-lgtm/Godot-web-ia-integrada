@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import sys
 import types
