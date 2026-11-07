@@ -463,5 +463,20 @@ class VisualObjectVerificationTests(unittest.TestCase):
             )
 
 
+    def test_visual_viewport_index_is_limited_to_godot_supported_range(self):
+        from command_center import validate_visual_command
+        for index in range(4):
+            validate_visual_command("visual.capture", {
+                "target": "editor_3d",
+                "viewport_index": index,
+            })
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {
+                "target": "editor_3d",
+                "viewport_index": 4,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_ARGUMENT_INVALID")
+
+
 if __name__ == "__main__":
     unittest.main()
