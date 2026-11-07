@@ -350,6 +350,35 @@ class RelayApiTests(unittest.TestCase):
         app.state.command_center_db_lock = None
         app.state.command_center_db_retry_after = 0.0
 
+    def test_visual_storage_routes_require_authenticated_web_editor(self):
+        upload = self.client.post(
+            "/v1/command-center/visual/uploads/presign",
+            json={
+                "command_id": "00000000-0000-0000-0000-000000000001",
+                "content_type": "image/png",
+            },
+        )
+        self.assertEqual(upload.status_code, 401)
+        download = self.client.get(
+            "/v1/command-center/visual/assets/00000000-0000-0000-0000-000000000001/download"
+        )
+        self.assertEqual(download.status_code, 401)
+
+    def test_visual_storage_fails_closed_without_neon_storage_credentials(self):
+        from visual_storage import storage_client
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(HTTPException) as raised:
+                storage_client()
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_STORAGE_NOT_CONFIGURED")
+
+    def test_visual_upload_completion_rejects_unissued_object_key_shape(self):
+        response = self.client.post(
+            "/v1/command-center/visual/uploads/complete",
+            json={"object_key": "../public/image.png", "width": 10, "height": 10},
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
