@@ -174,7 +174,7 @@ func _handle_message(message: Dictionary) -> void:
 	var request_id: Variant = message.get("id", "")
 	var action := str(message.get("action", ""))
 	var args: Variant = message.get("args", {})
-	if not args is Dictionary:
+	if typeof(args) != TYPE_DICTIONARY:
 		args = {}
 
 	if not _authenticated:
