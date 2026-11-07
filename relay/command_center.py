@@ -116,7 +116,11 @@ def _bounded_int(value: Any, minimum: int, maximum: int) -> bool:
 
 
 def _finite_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    if isinstance(value, int):
+        return True
+    return math.isfinite(value)
 
 
 def _validate_visual_output(output: Any) -> None:
@@ -128,7 +132,9 @@ def _validate_visual_output(output: Any) -> None:
         set(),
         "VISUAL_OUTPUT_INVALID",
     )
-    if "format" in output and output["format"] not in {"jpeg", "webp", "png"}:
+    if "format" in output and (
+        not isinstance(output["format"], str) or output["format"] not in {"jpeg", "webp", "png"}
+    ):
         _visual_error("VISUAL_OUTPUT_INVALID", "format must be jpeg, webp or png")
     for key in ("max_width", "max_height"):
         if key in output and not _bounded_int(output[key], 320, 8192):
@@ -161,7 +167,7 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
-        if target not in VISUAL_TARGETS:
+        if not isinstance(target, str) or target not in VISUAL_TARGETS:
             _visual_error("VISUAL_TARGET_REQUIRED", "target must identify one supported visual source")
         _validate_visual_viewport(args, target)
         if "output" in args:
@@ -181,7 +187,7 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
-        if target not in VISUAL_SEQUENCE_TARGETS:
+        if not isinstance(target, str) or target not in VISUAL_SEQUENCE_TARGETS:
             _visual_error("VISUAL_TARGET_REQUIRED", "target must identify one supported visual source")
         _validate_visual_viewport(args, target)
         if not _bounded_int(args["frames"], 2, 24):
@@ -205,7 +211,7 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
-        if target not in {"editor_2d", "editor_3d"}:
+        if not isinstance(target, str) or target not in {"editor_2d", "editor_3d"}:
             _visual_error("VISUAL_TARGET_MISMATCH", "zoom_to supports only editor_2d or editor_3d")
         _validate_visual_viewport(args, target)
         if args["restore_view"] is not True:
@@ -220,7 +226,7 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
             "VISUAL_ARGUMENT_INVALID",
         )
         space = focus["coordinate_space"]
-        if space not in VISUAL_COORDINATE_SPACES:
+        if not isinstance(space, str) or space not in VISUAL_COORDINATE_SPACES:
             _visual_error("VISUAL_COORDINATE_SPACE_REQUIRED", "coordinate_space is missing or unsupported")
         if space == "world_2d" and target != "editor_2d":
             _visual_error("VISUAL_COORDINATE_MISMATCH", "world_2d coordinates require editor_2d")
