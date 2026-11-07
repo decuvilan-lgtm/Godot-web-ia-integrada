@@ -27,6 +27,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends curl unzip
 
+      - name: Verify pinned Godot source submodule
+        run: bash scripts/verify-engine-pin.sh
+
       - name: Build pinned Godot Web Editor
         run: bash scripts/build-web.sh
 
