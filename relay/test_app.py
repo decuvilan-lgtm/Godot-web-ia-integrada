@@ -379,6 +379,12 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_command_heartbeat_requires_authenticated_editor(self):
+        response = self.client.post(
+            "/v1/command-center/commands/00000000-0000-0000-0000-000000000001/heartbeat"
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_visual_object_keys_bind_workspace_command_and_sequence_frame(self):
         from visual_storage import KEY_RE
         workspace = "11111111-1111-4111-8111-111111111111"
