@@ -105,13 +105,13 @@ Uploads and completion must be idempotent. An incomplete upload must not appear 
 - [x] Migration 004 applied to production and verified.
 - [x] Migration 005 applied to production and verified.
 - [x] Canonical visual command contract documented in `VISUAL_COMMANDS.md`.
-- [ ] Add relay endpoints for presigned upload, upload completion and authenticated download.
-- [ ] Prepare and approve a follow-up migration allowing `editor_ui` sequence sources.
+- [x] Add relay endpoints for presigned upload, upload completion and authenticated download (implemented on the draft branch; not deployed).
+- [x] Apply migration 005 allowing `editor_ui` sequence sources; production verification completed.
 - [ ] Provision a narrowly scoped storage credential for the Render relay and configure it securely.
-- [ ] Implement 2D/3D viewport capture in the Godot Web plugin.
+- [x] Implement 2D/3D viewport capture in the Godot Web plugin (CI smoke-tested; live capture not yet demonstrated).
 - [ ] Implement temporary coordinate zoom with guaranteed restoration.
 - [ ] Connect browser-level screenshot capture for full editor UI and game preview.
-- [ ] Implement timed sequences and camera metadata.
+- [x] Implement realtime timed still-image sequences and per-frame upload metadata (CI-tested; live storage transfer pending).
 - [ ] Add deterministic frame stepping only after a tested preview control hook exists.
 - [ ] Connect agent-side asset retrieval and visual inspection.
 - [ ] Test real images end-to-end; CI parser checks alone are not sufficient.
@@ -146,7 +146,7 @@ The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/comm
 - S3 calls use path-style SigV4 against the branch endpoint and fail closed unless the four AWS-standard Neon storage environment variables are present.
 - New dependencies are pinned in the relay requirements: boto3 and Pillow.
 
-The API has not yet been configured in Render or exercised against production Object Storage. The visual command feature flag remains off. The browser/editor capture plugin and real end-to-end transfer tests are still pending.
+The API has not yet been configured in Render or exercised against production Object Storage. The visual command feature flag remains off. The Godot plugin contains 2D/3D viewport capture and realtime sequence upload code, but no live capture or storage transfer has yet been demonstrated. Browser-level full-UI/game-preview capture, safe zoom restoration and agent-side image inspection remain pending.
 
 ## Implementation order and acceptance gates
 
@@ -162,3 +162,8 @@ The visual pipeline stays disabled until each gate is demonstrated:
 8. **End-to-end gate:** test real 2D, 3D, full-UI, preview and sequence captures in the deployed Godot Web workspace. Only then enable the visual command feature flag.
 
 The Android editor remains a separate user-owned workspace throughout these steps. No visual command in this phase may target the Android device or phone screen.
+
+
+## Additional relay verification coverage
+
+The draft relay test suite now exercises the private object verifier with generated PNG bytes and a fake S3 client. It checks successful SHA-256 calculation, strict reported-dimension matching, MIME/extension consistency, invalid image rejection and object-length mismatch. These are deterministic unit tests; they do not replace the pending presigned PUT/GET integration test against the actual private Neon bucket.
