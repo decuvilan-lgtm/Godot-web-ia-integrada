@@ -176,7 +176,7 @@ async def complete_upload(
             with Image.open(io.BytesIO(data)) as image:
                 image.verify()
             with Image.open(io.BytesIO(data)) as image:
-                if image.format not in {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}:
+                if image.format != {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}[mime]:
                     raise HTTPException(status_code=422, detail="Uploaded image format is invalid")
                 if image.size != (body.width, body.height):
                     raise HTTPException(status_code=422, detail="Reported dimensions do not match the image")
