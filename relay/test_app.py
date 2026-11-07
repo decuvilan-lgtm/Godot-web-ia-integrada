@@ -61,6 +61,36 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_command_center_routes_fail_closed_without_neon(self):
+        denied = self.client.post(
+            "/v1/command-center/pairing-codes",
+            json={"device_kind": "android_editor"},
+        )
+        self.assertEqual(denied.status_code, 401)
+
+        no_database = self.client.post(
+            "/v1/command-center/pair",
+            json={
+                "pairing_code": "p" * 32,
+                "label": "Android editor",
+                "installation_id": "install-identifier-123",
+            },
+        )
+        self.assertEqual(no_database.status_code, 503)
+
+    def test_command_center_requires_bearer_device_credential(self):
+        response = self.client.get("/v1/command-center/commands/next")
+        self.assertEqual(response.status_code, 401)
+
+    def test_command_center_policy_is_read_only(self):
+        from command_center import ALLOWED_ACTIONS
+        self.assertEqual(
+            ALLOWED_ACTIONS,
+            {"ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"},
+        )
+        self.assertNotIn("script.write", ALLOWED_ACTIONS)
+        self.assertNotIn("shell.execute", ALLOWED_ACTIONS)
+
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
