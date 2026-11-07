@@ -10,12 +10,13 @@
 
 ## Database
 
-Migration: `database/migrations/001_command_center.sql`.
+Migrations: `database/migrations/001_command_center.sql` and `database/migrations/002_live_link_command_leases.sql`.
 
 Schema `command_center` is installed in the Neon project's `neondb` database. It contains:
 - `workspaces`: project identity and accepted revision.
 - `devices`: Android editor, web editor and agent registrations. Only token hashes belong here.
-- `pairing_codes`: short-lived, single-use enrollment codes; only SHA-256 hashes are stored.
+- `pairing_codes`: short-lived, single-use enrollment codes scoped to a workspace; only SHA-256 hashes are stored.
+- `commands` lease fields: `claimed_by_device`, `claim_expires_at` and `attempt_count` support safe recovery after a worker disconnects.
 - `sessions`: paired editor/controller lifetimes and expiry.
 - `commands` / `command_results`: durable, idempotent command queue and results.
 - `revisions` / `snapshots`: version lineage and recovery checkpoints.
@@ -37,7 +38,7 @@ The default workspace is seeded as `default` / `Godot Android Workspace`.
 
 ## Current implementation boundary
 
-The schema, default workspace and single-use pairing-code table exist in Neon. Neon Realtime is enabled for the Godot Web editor origin. This is not yet an operational API or a completed end-to-end bridge: no Neon Function has been deployed, no device has been enrolled, and the current Godot bridge remains read-only. Do not advertise Android/Web live synchronization until the API, enrollment, queue worker and reconnect tests are complete.
+The schema, default workspace, workspace-scoped pairing codes and command lease fields exist in Neon. Neon Realtime is enabled for the Godot Web editor origin. This is not yet an operational API or a completed end-to-end bridge: no Neon Function has been deployed, no device has been enrolled, and the current Godot bridge remains read-only. Do not advertise Android/Web live synchronization until the API, enrollment, queue worker and reconnect tests are complete.
 
 The Android-side integration is not yet in that repo's source patch. Its current GitHub import patch must be preserved; the next native changes should be layered as a separate, reproducible patch and validated against the exact upstream tag fetched by the build workflow.
 
