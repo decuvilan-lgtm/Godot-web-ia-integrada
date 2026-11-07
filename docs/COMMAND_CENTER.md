@@ -2,11 +2,11 @@
 
 ## Roles
 
-- **Godot Android**: the user's editor on the phone, built from the Godot source pinned in `engine/godot` (4.7.2-stable). It is the authoritative workspace for accepted user work.
+- **Godot Android**: the user's Android editor built through [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado). This repository maintains the reproducible patch/build workflow; it currently fetches upstream Godot 4.7.2-stable at build time rather than storing the full engine source tree.
 - **Godot Web**: the agent's remote editor/workspace. Agent edits remain isolated until reviewed.
 - **Neon Postgres**: durable state for workspaces, device registrations, sessions, command queue/results, revisions, snapshots, proposals and event history.
 - **Neon Realtime**: notification channel for clients that need to react to persisted state changes. Postgres remains the source of truth; clients must reconnect and resume from a cursor.
-- **GitHub**: source code and reviewed releases, not a transport for each editor command.
+- **GitHub**: source code and reviewed releases, not a transport for each editor command. The Android engine's persistent modifications live in its patch scripts/workflows.
 
 ## Database
 
@@ -39,11 +39,13 @@ The default workspace is seeded as `default` / `Godot Android Workspace`.
 
 The schema, default workspace and single-use pairing-code table exist in Neon. Neon Realtime is enabled for the Godot Web editor origin. This is not yet an operational API or a completed end-to-end bridge: no Neon Function has been deployed, no device has been enrolled, and the current Godot bridge remains read-only. Do not advertise Android/Web live synchronization until the API, enrollment, queue worker and reconnect tests are complete.
 
+The Android-side integration is not yet in that repo's source patch. Its current GitHub import patch must be preserved; the next native changes should be layered as a separate, reproducible patch and validated against the exact upstream tag fetched by the build workflow.
+
 ## Next implementation steps
 
 1. Deploy an authenticated API/worker that uses Neon Postgres as the source of truth.
 2. Add one-time pairing codes and hashed device credentials.
 3. Connect the web editor bridge to the durable command queue.
-4. Add Android-side project export/import and revision reporting without overwriting local files.
+4. Add Android-side project identity, status reporting and safe project export/import to the modified editor build.
 5. Implement proposal validation, approval, snapshot and rollback.
 6. Test disconnect/reconnect, duplicate commands, stale revisions and Render sleep/restart.
