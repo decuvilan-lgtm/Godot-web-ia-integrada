@@ -1,8 +1,16 @@
 # Arquitectura técnica
 
+## Centro de mando persistente (Neon)
+
+El proyecto Neon **Godot Command Center** está en la región `aws-us-east-2`, compatible con Neon Functions. El esquema `command_center` ya existe en `neondb`: workspaces, devices, pairing_codes, sessions, commands, command_results, revisions, snapshots, proposals, proposal_files y events. Hay un workspace inicial `default`. Neon Realtime está habilitado para el origen del editor web.
+
+La migración reproducible está en `database/migrations/001_command_center.sql`; el diseño y sus invariantes están en `docs/COMMAND_CENTER.md`.
+
+**Límite actual:** todavía no hay Neon Function/API desplegada ni dispositivos emparejados. La persistencia de tablas no significa que el relay actual ya las use. El relay sigue manteniendo sesiones y solicitudes en memoria hasta completar la migración y las pruebas. No habilitar escritura remota basándose únicamente en que las tablas existan.
+
 ## Dos puestos de trabajo
 
-La web Godot Web no es la herramienta principal del usuario: es el puesto remoto del agente. El usuario trabaja en Godot Editor para Android. El objetivo es que ambos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
+La web Godot Web no es la herramienta principal del usuario: es el puesto remoto del agente. El usuario trabaja en Godot Editor para Android, cuyo motor fuente está fijado como submódulo en `engine/godot` (4.7.2-stable), incluyendo la plataforma Android. El objetivo es que ambos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
 
 ## Estado implementado
 
