@@ -104,6 +104,12 @@ La API falla de forma cerrada si Neon no está configurado. Las migraciones 001�
 6. Conectar un controlador IA autenticado que pueda encolar órdenes para el puesto web.
 7. Implementar propuestas, diffs, snapshots, validación y aprobación explícita antes de cualquier aplicación al proyecto Android.
 
+## Observación visual (en desarrollo)
+
+El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md). Permite solicitar capturas de la vista 2D, vista 3D, preview del juego y pantalla completa del editor mediante el mecanismo adecuado para cada fuente; acercar temporalmente una coordenada del mundo; y pedir secuencias acotadas de imágenes consecutivas para analizar movimiento 3D sin transmitir vídeo.
+
+Neon Object Storage tiene habilitado el bucket privado `godot-visual-captures` en la rama de producción. La migración `004_visual_observations.sql` añade el registro de metadatos, pero todavía no se ha aplicado. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
+
 ## Desarrollo
 
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
