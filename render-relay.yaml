@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: godot-web-ia-relay
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: relay
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: RELAY_ADMIN_TOKEN
+        generateValue: true
+      - key: SESSION_TTL_SECONDS
+        value: "1800"
+      - key: ALLOWED_ORIGINS
+        value: "https://godot-web-ia-integrada-rt2l.onrender.com"
