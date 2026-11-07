@@ -109,7 +109,7 @@ class RelayApiTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as raised:
             validate_visual_command("visual.capture", {})
         self.assertEqual(raised.exception.status_code, 422)
-        self.assertEqual(raised.exception.detail["code"], "VISUAL_ARGUMENT_INVALID")
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_TARGET_REQUIRED")
 
         with self.assertRaises(HTTPException) as raised:
             validate_visual_command("visual.capture", {"target": "editor"})
