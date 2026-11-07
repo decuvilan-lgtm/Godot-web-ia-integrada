@@ -52,6 +52,7 @@ MAX_LABEL = 80
 logger = logging.getLogger("godot_web_ia_relay.command_center")
 MAX_INSTALLATION_ID = 128
 CLAIM_SECONDS = 45
+COMMAND_TTL_SECONDS = 600
 
 
 class PairingCodeRequest(BaseModel):
@@ -460,7 +461,7 @@ async def create_command(
             command_id = await connection.fetchval(
                 """INSERT INTO command_center.commands
                    (workspace_id, origin_device_id, target, action, args, idempotency_key, expires_at)
-                   VALUES ($1,$2,$3,$4,$5::jsonb,$6,now() + interval '2 minutes')
+                   VALUES ($1,$2,$3,$4,$5::jsonb,$6,now() + ($7::text || ' seconds')::interval)
                    ON CONFLICT (workspace_id,idempotency_key) DO NOTHING
                    RETURNING id""",
                 identity["workspace_id"],
@@ -469,6 +470,7 @@ async def create_command(
                 body.action,
                 json.dumps(body.args),
                 body.idempotency_key,
+                COMMAND_TTL_SECONDS,
             )
             if command_id is None:
                 existing = await connection.fetchrow(
