@@ -14,7 +14,7 @@ Small, ephemeral WebSocket/HTTP relay for pairing the Godot editor plugin with a
 
 - `RELAY_ADMIN_TOKEN`: required high-entropy secret used to create sessions.
 - `SESSION_TTL_SECONDS`: optional, defaults to 1800.
-- `ALLOWED_ORIGINS`: optional comma-separated browser origins.
+- `ALLOWED_ORIGINS`: optional comma-separated browser origins; keep the deployed editor origin in this list.
 
 ## API
 
@@ -34,7 +34,7 @@ The free instance may sleep and its memory is ephemeral. A restart invalidates a
 The FastAPI relay also exposes a separate durable HTTP API backed by the `command_center` schema. It does not replace the ephemeral WebSocket session API above.
 
 Required environment:
-- `COMMAND_CENTER_DATABASE_URL`: Neon connection string for the dedicated `Godot Command Center` database. If missing, Command Center endpoints fail closed with HTTP 503.
+- `COMMAND_CENTER_DATABASE_URL`: Neon connection string for the dedicated `Godot Command Center` database. If missing, Command Center endpoints fail closed with HTTP 503. If Neon is temporarily unreachable at startup, the API retries pool initialization on later requests without requiring a relay restart.
 - `COMMAND_CENTER_ADMIN_TOKEN`: separate high-entropy administrator secret for creating single-use device pairing codes.
 
 Administrator page:
