@@ -478,5 +478,45 @@ class VisualObjectVerificationTests(unittest.TestCase):
         self.assertEqual(raised.exception.detail["code"], "VISUAL_ARGUMENT_INVALID")
 
 
+class VisualAssetIdempotencyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_retry_with_same_object_key_reuses_asset_without_deleting_it(self):
+        from visual_storage import _insert_asset_idempotently
+        pool = types.SimpleNamespace(
+            fetchval=AsyncMock(return_value=None),
+            fetchrow=AsyncMock(return_value={"id": "asset-1", "object_key": "workspace/command/single/nonce.png"}),
+        )
+        client = types.SimpleNamespace(delete_object=unittest.mock.Mock())
+        with patch("visual_storage.run_in_threadpool", new=AsyncMock()) as threaded:
+            asset_id, reused = await _insert_asset_idempotently(
+                pool, client, workspace_id="workspace", command_id="command",
+                sequence_id=None, frame_index=None, capture_kind="editor_2d",
+                object_key="workspace/command/single/nonce.png", mime="image/png",
+                width=3, height=2, size=78, digest="a" * 64,
+                captured_at=None, metadata={},
+            )
+        self.assertEqual(asset_id, "asset-1")
+        self.assertTrue(reused)
+        threaded.assert_not_awaited()
+
+    async def test_retry_with_new_nonce_deletes_unreferenced_duplicate_object(self):
+        from visual_storage import _insert_asset_idempotently
+        pool = types.SimpleNamespace(
+            fetchval=AsyncMock(return_value=None),
+            fetchrow=AsyncMock(return_value={"id": "asset-1", "object_key": "workspace/command/0/old.png"}),
+        )
+        client = types.SimpleNamespace(delete_object=unittest.mock.Mock(return_value={}))
+        with patch("visual_storage.run_in_threadpool", new=AsyncMock(return_value={})) as threaded:
+            asset_id, reused = await _insert_asset_idempotently(
+                pool, client, workspace_id="workspace", command_id="command",
+                sequence_id="sequence", frame_index=0, capture_kind="editor_2d",
+                object_key="workspace/command/0/new.png", mime="image/png",
+                width=3, height=2, size=78, digest="a" * 64,
+                captured_at=None, metadata={},
+            )
+        self.assertEqual(asset_id, "asset-1")
+        self.assertTrue(reused)
+        threaded.assert_awaited_once_with(client.delete_object, Bucket="godot-visual-captures", Key="workspace/command/0/new.png")
+
+
 if __name__ == "__main__":
     unittest.main()
