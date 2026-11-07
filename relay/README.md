@@ -29,3 +29,22 @@ Small, ephemeral WebSocket/HTTP relay for pairing the Godot editor plugin with a
 Only the bridge actions implemented by the plugin are usable: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read`. Writes and arbitrary process execution are not exposed.
 
 The free instance may sleep and its memory is ephemeral. A restart invalidates all sessions and tokens. Do not use it as project storage. A persistent workspace and snapshot system must be built separately before any write capability is enabled.
+## Neon Command Center API
+
+The FastAPI relay also exposes a separate durable HTTP API backed by the `command_center` schema. It does not replace the ephemeral WebSocket session API above.
+
+Required environment:
+- `COMMAND_CENTER_DATABASE_URL`: Neon connection string for the dedicated `Godot Command Center` database. If missing, Command Center endpoints fail closed with HTTP 503.
+- `COMMAND_CENTER_ADMIN_TOKEN`: separate high-entropy administrator secret for creating single-use device pairing codes.
+
+Routes:
+- `POST /v1/command-center/pairing-codes` — requires `X-Command-Center-Admin`; body: `{"device_kind":"android_editor","workspace":"default"}`. The returned code expires in 120 seconds.
+- `POST /v1/command-center/pair` — exchanges a one-time code for a device bearer credential.
+- `POST /v1/command-center/commands` — authenticated `agent_controller` queues an allowlisted read-only command with an idempotency key.
+- `GET /v1/command-center/commands/next?target=android_editor` — an authenticated matching editor claims a leased command.
+- `POST /v1/command-center/commands/{id}/result` — submits the command result.
+- `GET /v1/command-center/commands/{id}` — reads command status within the authenticated workspace.
+
+Only `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read` are enabled. Pairing codes are single-use; presenting a fresh administrator-issued code for an existing installation rotates its credential. Device credentials are stored only as SHA-256 hashes in Neon. Do not expose administrator secrets or device credentials in logs or project files.
+
+Render remains on the free plan. The database URL is intentionally a manual secret (`sync: false`) in the Blueprint; no database credential is committed to this repository.
