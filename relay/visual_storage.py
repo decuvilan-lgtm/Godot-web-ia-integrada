@@ -127,7 +127,7 @@ async def presign_upload(
             raise HTTPException(status_code=422, detail="frame_index is only valid for capture_sequence")
         sequence_id = None
 
-    key = f'{identity["workspace_id"]}/{command["id"]}/{uuid.uuid4()}.{MIME_EXTENSIONS[body.content_type]}'
+    key = f'{identity["workspace_id"]}/{command["id"]}/{body.frame_index if body.frame_index is not None else "single"}/{uuid.uuid4()}.{MIME_EXTENSIONS[body.content_type]}'
     client = storage_client()
     try:
         url = client.generate_presigned_url(
