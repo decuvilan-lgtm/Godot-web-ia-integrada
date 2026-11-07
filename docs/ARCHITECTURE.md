@@ -1,110 +1,128 @@
 # Arquitectura técnica
 
-## Centro de mando persistente (Neon)
+## Regla de puestos separados
 
-El proyecto Neon **Godot Command Center** está en la región `aws-us-east-2`, compatible con Neon Functions. El esquema `command_center` ya existe en `neondb`: workspaces, devices, pairing_codes, sessions, commands, command_results, revisions, snapshots, proposals, proposal_files y events. Hay un workspace inicial `default`. Neon Realtime está habilitado para el origen del editor web.
+Este proyecto tiene dos editores con propietarios distintos:
 
-La migración reproducible está en `database/migrations/001_command_center.sql`; el diseño y sus invariantes están en `docs/COMMAND_CENTER.md`.
+- **Godot Web desplegado en Render: puesto de la IA.** El agente trabaja en una copia remota aislada. No es la interfaz que debe usar el usuario desde su teléfono.
+- **Godot Android: puesto del usuario.** El usuario trabaja en su editor Android modificado, en su propio dispositivo. No se reemplaza por el editor web ni se le exige usar una versión móvil de la web.
+- **Neon Command Center:** autoridad persistente para workspaces, dispositivos, órdenes, resultados, revisiones, snapshots, propuestas y eventos.
+- **Render relay Free:** transporte HTTP/WSS y ejecución de API. No es almacenamiento autoritativo.
+- **GitHub:** código y revisiones de implementación; no es el canal de sincronización de cada cambio de proyecto.
 
-**Límite actual:** todavía no hay Neon Function/API desplegada ni dispositivos emparejados. La persistencia de tablas no significa que el relay actual ya las use. El relay sigue manteniendo sesiones y solicitudes en memoria hasta completar la migración y las pruebas. No habilitar escritura remota basándose únicamente en que las tablas existan.
+La IA prepara trabajo en su puesto web. El proyecto aceptado del usuario permanece separado. Ningún cambio llega al puesto Android sin diff, validación, snapshot y aprobación explícita.
 
-## Dos puestos de trabajo
+## Topología
 
-La web Godot Web es el puesto remoto del agente. El usuario trabaja en su editor Godot para Android, cuyo flujo de código y compilación está en el repositorio externo [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado).
+```text
+        ChatGPT / controlador IA
+                  |
+          órdenes autenticadas
+                  |
+          Render FastAPI relay
+                  |
+          Neon Postgres (cola)
+             /          \
+            /            \
+   Godot Web (IA)     Godot Android (usuario)
+   workspace aislado  proyecto aceptado
+            \            /
+             \          /
+          propuestas y revisiones
+                  |
+        aprobación explícita del usuario
+```
 
-**Distinción importante sobre el código fuente:** ese repositorio no contiene actualmente el árbol completo del motor. Su workflow descarga upstream Godot 4.7.2-stable en un directorio temporal, aplica `scripts/apply_github_import_patch.py` y compila el APK. El parche y el workflow son la fuente persistente de las modificaciones propias. El submódulo `engine/godot` de este repositorio de integración es solo una referencia upstream y no sustituye al parche del editor Android modificado.
+Neon Postgres es la fuente de verdad. Neon Realtime puede notificar cambios, pero las órdenes y resultados deben poder recuperarse consultando Postgres después de una desconexión. El relay puede suspenderse o reiniciarse sin perder el estado autoritativo.
 
-El objetivo es que ambos puestos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
+## Estado real de implementación
 
-## Estado implementado
+### 1. Editor Godot Web
 
-### 1. Editor Web de la IA
-- Distribución oficial Godot Web 4.7.2-stable.
-- Build descarga el paquete oficial y verifica SHA-256.
-- Render static site.
-- Metadatos viewport y encabezados COOP/COEP.
+- Distribución oficial Godot Web 4.7.2-stable publicada como sitio estático.
+- Build con verificación SHA-512 del paquete oficial.
+- Encabezados COOP/COEP y metadatos de viewport.
+- El proyecto sandbox se empaqueta por separado para importarlo/abrirlo en el editor.
+- El sandbox ahora habilita el complemento HTTP del Command Center para el rol `web_editor`.
 
-### 2. AI Bridge v0.1
-Complemento `EditorPlugin` con dock de conexión WebSocket. El usuario/editor configura una URL `wss://` y un token temporal guardado solo en memoria.
+**Importante:** habilitar el complemento dentro del sandbox no significa que el editor web publicado esté ya emparejado ni que el controlador IA pueda manipular automáticamente la interfaz. Falta probar el flujo dentro del navegador Godot Web real y conectar un controlador autorizado que encole órdenes.
 
-Acciones de solo lectura:
-- `ping`
-- `project.get_state`
-- `project.list_files`
-- `scene.inspect`
-- `script.read`
+### 2. Cliente del puesto web de la IA
 
-Límites: 1000 rutas, 500 nodos, profundidad 32, archivos de texto de 256 KiB, solo `res://` y extensiones permitidas. No hay escritura arbitraria ni ejecución de shell.
+Complemento `examples/bridge-sandbox/addons/godot_command_center/plugin.gd`:
 
-### 3. Relay v0.1
-Servicio Python/FastAPI separado, desplegado en Render con plan `free`.
-- `GET /health`
-- `POST /v1/sessions` autenticado por `X-Admin-Token`
-- `GET /v1/sessions/{id}` con token de controlador
-- `POST /v1/sessions/{id}/request` para enviar solicitudes al editor conectado
-- `wss://.../v1/editor/{id}` para el complemento
+- Emparejamiento de un solo uso.
+- Rol `web_editor` validado por el servidor.
+- Token Bearer en memoria; no se guarda en el proyecto.
+- Polling de la cola durable y confirmación de resultados.
+- Acciones iniciales de solo lectura: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, `script.read`.
+- Límites de archivos, nodos, profundidad y tamaño de scripts.
+- Sin escritura arbitraria, shell ni ejecución de procesos.
 
-Sesiones en memoria, expiración predeterminada de 30 minutos, sin persistencia de proyectos. Un reinicio invalida sesiones. El relay aún requiere prueba de integración y un controlador que el agente pueda invocar directamente.
+El antiguo complemento WebSocket se conserva como referencia, pero no está habilitado en el sandbox por defecto.
 
-## Arquitectura objetivo
+### 3. Cliente del puesto Android del usuario
 
-### 4. Workspace y versiones
+El PR #3 del repositorio `Godot-engine4-v4.7.2-stable-difusion-modificado` incorpora un cliente experimental al addon Live Link existente:
+
+- Se empareja con un código temporal y recibe el rol `android_editor` del servidor.
+- Consulta la misma cola Neon y confirma resultados.
+- Token Bearer solo en memoria; debe volver a emparejarse después de reiniciar el editor.
+- Ejecuta el mismo conjunto de cinco acciones de solo lectura.
+- No escribe archivos ni modifica escenas.
+
+Este cliente se añade mediante el flujo reproducible del repositorio Android. Ese repositorio descarga upstream Godot 4.7.2-stable durante el workflow y aplica parches versionados; no se debe editar una copia temporal del motor.
+
+### 4. Relay FastAPI y Neon
+
+El PR #1 de este repositorio añade al relay FastAPI existente:
+
+- API `/v1/command-center` para pairing, órdenes, leases, resultados y consulta.
+- Tokens y códigos almacenados como hashes.
+- Idempotencia obligatoria en creación de órdenes.
+- CORS restringido al origen del editor web.
+- Respuestas no-cache para rutas sensibles.
+- Inicialización de pool Neon y reconexión acotada si la base no está disponible.
+- Página administrativa same-origin para generar códigos temporales.
+
+La API falla de forma cerrada si faltan las credenciales de Neon. El PR sigue siendo borrador: Render todavía no tiene la URL de Neon ni el secreto administrativo configurados, y no se ha desplegado esta versión.
+
+## Separación de datos y seguridad
+
 Estados separados:
-- **User workspace**: proyecto aceptado del usuario en Godot Android.
-- **Agent workspace**: copia remota donde trabaja el agente en el editor web.
-- **Proposal**: diff revisable entre ambos.
-- **Snapshot**: punto de restauración previo a aplicar cambios.
 
-El trabajo experimental del agente nunca debe borrar el proyecto aceptado del usuario. Sincronización con IDs estables, versionado, detección de conflictos y recuperación ante desconexión.
+- **Agent workspace:** copia remota de trabajo en Godot Web.
+- **Accepted workspace:** proyecto del usuario en Godot Android.
+- **Proposal:** conjunto de cambios con diff contra una revisión base.
+- **Snapshot:** punto de recuperación previo a aplicar una propuesta.
+- **Revision:** identidad inmutable de un estado de proyecto.
 
-### 5. Edición segura
-Futuras acciones:
-- crear/actualizar nodos y propiedades permitidas;
-- leer y parchear scripts con diff;
-- inspeccionar recursos y referencias;
-- validar cambios antes de aplicarlos;
-- snapshot previo y rollback.
+Invariantes:
 
-No se habilitará escritura general de archivos hasta probar validación y recuperación.
-
-### 6. Runner y observación
-Runner aislado para ejecutar proyectos y devolver:
-- versión del motor y configuración;
-- logs y código de salida;
-- capturas reales antes/después;
-- duración y recursos usados.
-
-El observador podrá ver la interfaz completa o solo el viewport. No se aceptarán capturas simuladas como evidencia.
-
-### 7. Sincronización con Android
-El usuario abre el proyecto en el Godot Android modificado. El agente trabaja sobre una copia remota; los cambios se intercambian mediante paquetes/diffs y se aplican al proyecto del usuario solo tras aprobación. La primera integración puede usar exportación/importación de paquetes versionados antes de intentar sincronización en vivo.
-
-## Fuente del motor y parches
-
-El repositorio Android modificado es la referencia de integración: [Godot-engine4-v4.7.2-stable-difusion-modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado). Su parche actual modifica el Project Manager para importar repositorios GitHub públicos. El árbol upstream se obtiene durante el workflow y no se conserva como un checkout completo en el repositorio.
-
-Por tanto:
-- toda modificación propia del motor debe añadirse como parche reproducible o paso versionado al workflow;
-- no se debe editar el árbol temporal después de que termine el workflow;
-- antes de integrar, comprobar los anchors del parche y validar que el nuevo parche se aplica sobre el mismo tag;
-- mantener el parche GitHub existente y evitar cambios colaterales en Project Manager;
-- nunca sobrescribir el APK ni publicar uno que no haya pasado las comprobaciones del workflow.
+1. El agente no sobrescribe el proyecto aceptado.
+2. Cada propuesta indica la revisión base exacta.
+3. La aprobación verifica que la revisión aceptada no cambió desde que se creó la propuesta.
+4. Un conflicto de revisión bloquea la aplicación automática.
+5. Cada operación mutante futura será idempotente y auditable.
+6. Las credenciales persistentes se guardan como hashes; los secretos no se registran en logs ni se incluyen en proyectos.
+7. El relay nunca es la única ubicación de una orden pendiente o un resultado.
+8. No se habilita shell remoto ni ejecución arbitraria de procesos.
 
 ## Próximas fases
 
-1. Editor web remoto para la IA: desplegado; falta validación visual y funcional completa.
-2. Bridge de solo lectura: implementado; falta prueba con relay real.
-3. Relay gratuito: creado con plan free; falta prueba de integración y acceso directo desde el controlador IA.
-4. API autenticada y cola durable en Neon.
-5. Emparejamiento y conexión del editor Android modificado.
-6. Edición segura mediante diffs y snapshots.
-7. Runner, logs y capturas.
+1. Completar CI del cliente web y comprobar su carga en el Godot Web desplegado.
+2. Configurar Neon URL y secreto administrativo en el relay Render Free después de revisar el PR.
+3. Desplegar la API y comprobar health/ready sin alterar otros servicios.
+4. Emparejar primero el puesto web de la IA como `web_editor` y luego el editor del usuario como `android_editor`.
+5. Probar órdenes reales de lectura en ambos puestos.
+6. Conectar un controlador IA autenticado capaz de encolar órdenes para el puesto web. Un WebSocket o una API no concede por sí solo a ChatGPT control de navegador; hace falta una herramienta de interacción compatible y verificable.
+7. Implementar propuestas, diffs, validación, snapshots, aprobación y rollback.
+8. Realizar pruebas de desconexión, duplicados, conflictos de revisión, reinicio/suspensión Render y pruebas físicas Android.
 
-## Riesgos
-- Suspensión e inactividad del plan gratuito.
-- Pérdida de sesiones en reinicios.
-- Memoria y cuotas del navegador Android.
-- Persistencia y conflictos de archivos.
-- Capacidades no disponibles en editor web frente al nativo.
-- Compatibilidad del plugin con la versión Android exacta del editor.
-- Conflictos entre nuevos parches y el parche existente de importación GitHub.
+## Limitaciones conocidas
+
+- La build web ronda los 93 MB en la última medición; debe evaluarse la carga real antes de optimizar.
+- El smoke test headless valida que el plugin se importe y cargue, no que funcione en el navegador real.
+- La observación HTTP de tres minutos prueba la entrega local de archivos estáticos, no la estabilidad del servicio Render desplegado.
+- No hay pairing real, APK actualizado probado, conexión de extremo a extremo ni escritura remota.
+- El plan Render debe permanecer en Free.
