@@ -1,0 +1,27 @@
+name: Repository checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate shell scripts
+        run: bash -n scripts/build-web.sh
+      - name: Validate Python scripts
+        run: python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py
+      - name: Validate required deployment configuration
+        run: |
+          grep -q 'runtime: static' render.yaml
+          grep -q 'staticPublishPath: ./public' render.yaml
+          grep -q 'Godot_v4.7.2-stable_web_editor.zip' scripts/build-web.sh
