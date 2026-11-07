@@ -61,7 +61,8 @@ No habilita escritura arbitraria, shell ni ejecución de procesos.
 El proyecto Neon se llama **Godot Command Center**. El esquema `command_center` ya está instalado en `neondb` e incluye workspaces, devices, sessions, commands, command_results, revisions, snapshots, proposals, proposal_files y events. Se creó el workspace `default`.
 
 - [Diseño y estado del centro de mando](docs/COMMAND_CENTER.md)
-- [Migración SQL](database/migrations/001_command_center.sql)
+- [Migración SQL inicial](database/migrations/001_command_center.sql)
+- [Migración de pairing y leases](database/migrations/002_live_link_command_leases.sql)
 
 Neon Realtime está habilitado para el origen del editor web. Esto aún no constituye una API ni sincronización operativa: falta desplegar el servicio autenticado que lea/escriba la cola y gestione el ciclo de vida de dispositivos.
 
