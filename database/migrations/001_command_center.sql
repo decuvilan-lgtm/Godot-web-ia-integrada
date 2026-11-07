@@ -145,6 +145,19 @@ CREATE TABLE IF NOT EXISTS command_center.events (
 CREATE INDEX IF NOT EXISTS events_workspace_cursor_idx
   ON command_center.events(workspace_id,id);
 
+
+CREATE TABLE IF NOT EXISTS command_center.pairing_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code_hash text NOT NULL UNIQUE,
+  device_kind text NOT NULL CHECK (device_kind IN ('web_editor','android_editor','agent_controller')),
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  consumed_by_device uuid REFERENCES command_center.devices(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS pairing_codes_expiry_idx
+  ON command_center.pairing_codes(expires_at) WHERE consumed_at IS NULL;
+
 INSERT INTO command_center.workspaces (slug,display_name)
 VALUES ('default','Godot Android Workspace')
 ON CONFLICT (slug) DO NOTHING;
