@@ -379,6 +379,16 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_visual_object_keys_bind_workspace_command_and_sequence_frame(self):
+        from visual_storage import KEY_RE
+        workspace = "11111111-1111-4111-8111-111111111111"
+        command = "22222222-2222-4222-8222-222222222222"
+        nonce = "33333333-3333-4333-8333-333333333333"
+        self.assertIsNotNone(KEY_RE.fullmatch(f"{workspace}/{command}/single/{nonce}.png"))
+        self.assertIsNotNone(KEY_RE.fullmatch(f"{workspace}/{command}/23/{nonce}.webp"))
+        self.assertIsNone(KEY_RE.fullmatch(f"{workspace}/{command}/24/{nonce}.webp"))
+        self.assertIsNone(KEY_RE.fullmatch(f"{workspace}/{command}/../{nonce}.png"))
+
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
