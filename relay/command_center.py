@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 import uuid
 from typing import Any, Literal
 
@@ -91,6 +92,8 @@ async def get_pool(request: Request):
     database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
     if not database_url:
         raise HTTPException(status_code=503, detail="Neon Command Center database is not configured")
+    if time.monotonic() < getattr(request.app.state, "command_center_db_retry_after", 0.0):
+        raise HTTPException(status_code=503, detail="Neon Command Center database is temporarily unavailable")
 
     lock = getattr(request.app.state, "command_center_db_lock", None)
     if lock is None:
@@ -101,15 +104,19 @@ async def get_pool(request: Request):
         pool = getattr(request.app.state, "command_center_db", None)
         if pool is not None:
             return pool
+        if time.monotonic() < getattr(request.app.state, "command_center_db_retry_after", 0.0):
+            raise HTTPException(status_code=503, detail="Neon Command Center database is temporarily unavailable")
         try:
             import asyncpg
             pool = await asyncpg.create_pool(
-                dsn=database_url, min_size=1, max_size=5, command_timeout=10
+                dsn=database_url, min_size=1, max_size=5, timeout=5, command_timeout=10
             )
             request.app.state.command_center_db = pool
+            request.app.state.command_center_db_retry_after = 0.0
             logger.info("Neon Command Center database pool connected")
             return pool
         except Exception as exc:
+            request.app.state.command_center_db_retry_after = time.monotonic() + 5.0
             logger.warning("Neon Command Center lazy connection failed: %s", type(exc).__name__)
             raise HTTPException(
                 status_code=503,
