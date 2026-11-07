@@ -186,6 +186,7 @@ async def editor_socket(websocket: WebSocket, session_id: str):
 async def cleanup_expired_sessions():
     database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
     app.state.command_center_db = None
+    app.state.command_center_db_lock = asyncio.Lock()
     if database_url:
         try:
             import asyncpg
