@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -170,6 +171,21 @@ async def complete_upload(
         data = obj["Body"].read(MAX_BYTES + 1)
         if len(data) != size or len(data) > MAX_BYTES:
             raise HTTPException(status_code=422, detail="Uploaded object length could not be verified")
+        from PIL import Image, UnidentifiedImageError
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                image.verify()
+            with Image.open(io.BytesIO(data)) as image:
+                if image.format not in {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}:
+                    raise HTTPException(status_code=422, detail="Uploaded image format is invalid")
+                if image.size != (body.width, body.height):
+                    raise HTTPException(status_code=422, detail="Reported dimensions do not match the image")
+                if image.width > 8192 or image.height > 8192:
+                    raise HTTPException(status_code=422, detail="Image dimensions exceed the allowed limit")
+        except HTTPException:
+            raise
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="Uploaded object is not a valid supported image") from exc
         digest = hashlib.sha256(data).hexdigest()
     except HTTPException:
         raise
