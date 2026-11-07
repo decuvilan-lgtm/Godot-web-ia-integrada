@@ -117,6 +117,6 @@ The adapter uses the existing `command_center` schema and supports workspace-sco
 
 Migration `002_live_link_command_leases.sql` was applied to the Neon production branch and its columns, constraints and indexes were verified. The database still has one workspace and zero paired devices or queued commands.
 
-**CI evidence:** the relay test suite, agent-client tests, and Godot 4.7.2 headless Live Link/filesystem harness passed on the reviewed commits. The latest source-only test run is [42340723107](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/actions/runs/42340723107), which passed. A newer documentation/workflow-only commit has a separate run in progress at the time of this note.
+**CI evidence:** the relay test suite, agent-client tests, and Godot 4.7.2 headless Live Link/filesystem harness passed. The latest branch-head validation is [42340748683](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/actions/runs/42340748683), which passed. The Linux emitter build is a separate manual workflow and was not run by this PR validation.
 
 **Not deployed:** no Render environment variables or deployment were changed. The API has not been configured with `COMMAND_CENTER_DATABASE_URL` or `COMMAND_CENTER_ADMIN_TOKEN`; no devices have been paired; editor-side polling is not connected; the existing Live Link WebSocket still uses its legacy authentication. This is a tested code foundation, not end-to-end Android/Web synchronization.
