@@ -43,7 +43,7 @@ En esta fase, el **workspace Neon es el contenedor persistente del proyecto remo
 - Cada consulta crea únicamente una fila `commands`, con su propio UUID e `idempotency_key`.
 - Todas las consultas del mismo puesto se insertan bajo el mismo `workspace_id`, por lo que se refieren al mismo proyecto abierto.
 - Las claves de idempotencia son únicas por workspace: una repetición idéntica reutiliza el resultado/ID anterior; una consulta distinta usa una clave nueva.
-- Se pueden encolar varias consultas antes de que el editor termine la anterior. La cola durable las procesa una por una en el puesto web para evitar operaciones simultáneas que compitan por el estado del editor.
+- Se pueden encolar varias consultas antes de que el editor termine la anterior. La cola durable las procesa una por una en el puesto web para evitar operaciones simultáneas que compitan por el estado del editor. Cada orden pendiente tiene una ventana de expiración de 10 minutos; el lease de ejecución se renueva/reclama por separado.
 - `sessions` representa una conexión/pareja de dispositivos, no un proyecto ni una consulta. Crear una consulta no crea ni renueva una sesión.
 - Una captura, secuencia, inspección o lectura es una operación/resultado, nunca un proyecto nuevo.
 
