@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import os
 import secrets
 import time
@@ -16,6 +17,7 @@ ADMIN_TOKEN = os.environ.get("RELAY_ADMIN_TOKEN", "")
 SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 MAX_PENDING = 64
 MAX_MESSAGE_BYTES = 256 * 1024
+ALLOWED_ACTIONS = {"ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"}
 
 app = FastAPI(title="Godot Web IA Relay", version=APP_VERSION)
 app.add_middleware(
@@ -97,6 +99,10 @@ async def controller_request(session_id: str, body: RelayRequest, authorization:
     session = get_session(session_id)
     if not authorization or not hmac.compare_digest(authorization.removeprefix("Bearer "), session.controller_token):
         raise HTTPException(status_code=401, detail="Invalid controller token")
+    if body.action not in ALLOWED_ACTIONS:
+        raise HTTPException(status_code=400, detail="Action is not allowed by bridge protocol v1")
+    if len(json.dumps(body.args, ensure_ascii=False).encode("utf-8")) > MAX_MESSAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Request arguments exceed the message limit")
     if session.editor is None:
         raise HTTPException(status_code=409, detail="Godot editor is not connected")
     if len(session.pending) >= MAX_PENDING:
@@ -143,7 +149,14 @@ async def editor_socket(websocket: WebSocket, session_id: str):
             return
         await websocket.send_json({"type": "auth_ok"})
         while True:
-            message = await websocket.receive_json()
+            raw_message = await websocket.receive_text()
+            if len(raw_message.encode("utf-8")) > MAX_MESSAGE_BYTES:
+                await websocket.close(code=1009, reason="Message too large")
+                break
+            try:
+                message = json.loads(raw_message)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(message, dict) or message.get("type") != "response":
                 continue
             request_id = str(message.get("id", ""))
