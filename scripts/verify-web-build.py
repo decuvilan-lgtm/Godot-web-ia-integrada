@@ -32,6 +32,21 @@ def fail(message):
 if not ENTRY.is_file() or ENTRY.stat().st_size == 0:
     fail("public/index.html is missing or empty")
 
+sandbox_zip = ROOT / "bridge-sandbox.zip"
+if not sandbox_zip.is_file() or sandbox_zip.stat().st_size == 0:
+    fail("bridge-sandbox.zip is missing or empty")
+
+from zipfile import ZipFile
+with ZipFile(sandbox_zip) as archive:
+    required = {
+        "bridge-sandbox/project.godot",
+        "bridge-sandbox/addons/godot_ai_bridge/plugin.gd",
+        "bridge-sandbox/scenes/main.tscn",
+    }
+    missing_sandbox_files = required - set(archive.namelist())
+    if missing_sandbox_files:
+        fail("sandbox package is missing: " + ", ".join(sorted(missing_sandbox_files)))
+
 wasm = list(ROOT.rglob("*.wasm"))
 js = list(ROOT.rglob("*.js"))
 if not wasm:
