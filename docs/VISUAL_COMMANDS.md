@@ -1,0 +1,226 @@
+# Visual Command Contract
+
+Version: 1.0  
+Status: normative specification; implementation pending.
+
+This document is the canonical contract for visual observation commands sent through Neon Command Center. Human requests must be translated into one of these exact command objects before they enter the queue. The relay validates them; the web editor executes only the requested observation.
+
+## 1. Non-negotiable rules
+
+1. Every request names exactly one `target`. "Capture the editor" without a target is invalid.
+2. A sequence names an exact positive frame count and an interval in milliseconds.
+3. A zoom request names the coordinate space and the coordinate values. Bare `x/y` values are invalid.
+4. Visual commands target only `web_editor` (the AI's Godot Web workspace). They never target the user's Android editor.
+5. Captures are read-only. Temporary camera/focus changes must be restored even when capture fails.
+6. No command may request arbitrary filesystem paths, arbitrary URLs, shell commands, or capture of another device's screen.
+7. Image bytes go directly to the private Neon Object Storage bucket. Command results contain asset IDs and metadata, never base64 image data.
+8. Missing required fields, unknown fields, unsupported target/coordinate combinations, or out-of-range values are rejected before execution.
+
+## 2. Target vocabulary
+
+| target | Exact image content | Capture backend | Sequence allowed |
+|---|---|---|---|
+| `editor_ui` | Entire Godot Web page viewport: editor chrome, docks, panels and visible editor layout. Excludes browser tabs and OS chrome. | Browser-level page screenshot | Yes |
+| `editor_2d` | Godot 2D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 2D SubViewport | Yes |
+| `editor_3d` | Godot 3D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 3D SubViewport | Yes |
+| `game_preview` | The running game's visible preview area only. | Embedded preview/browser capture or tested preview capture hook | Yes |
+
+`zoom_detail` is not a target. It is an asset classification produced when a capture temporarily focuses a coordinate inside `editor_2d` or `editor_3d`.
+
+A target must never be silently substituted. For example, a request for `editor_ui` must not return an `editor_2d` SubViewport and label it as the editor screenshot.
+
+## 3. Command names
+
+### 3.1 `visual.capture`
+
+Exactly one still image.
+
+Required:
+- `target`: one of the four target values above.
+
+Optional:
+- `viewport_index`: integer 0–7; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
+- `output.format`: `jpeg`, `webp`, or `png`; default `webp`.
+- `output.max_width`, `output.max_height`: each 320–8192; defaults 2560 and 1440.
+- `output.quality`: integer 40–100; applies only to JPEG/WebP; default 85.
+- `include_metadata`: boolean; default true.
+
+Example — whole editor page:
+```json
+{
+  "target": "editor_ui",
+  "output": {
+    "format": "webp",
+    "max_width": 2560,
+    "max_height": 1440,
+    "quality": 88
+  },
+  "include_metadata": true
+}
+```
+
+Example — 3D viewport only:
+```json
+{
+  "target": "editor_3d",
+  "viewport_index": 0,
+  "output": {
+    "format": "png",
+    "max_width": 1920,
+    "max_height": 1080
+  },
+  "include_metadata": true
+}
+```
+
+### 3.2 `visual.capture_sequence`
+
+A bounded series of still images, never a video.
+
+Required:
+- `target`: one of `editor_ui`, `editor_2d`, `editor_3d`, `game_preview`.
+- `frames`: integer 2–24.
+- `interval_ms`: integer 50–5000.
+
+Optional:
+- `viewport_index`: same rule as `visual.capture`.
+- `timing_mode`: `realtime` only until deterministic preview stepping exists. Do not accept `frame_step` before its control hook is implemented and tested.
+- `output`: same output object as `visual.capture`.
+- `include_metadata`: boolean; default true.
+- `include_contact_sheet`: boolean; default true. A contact sheet is supplementary; each original frame remains a separate asset.
+
+Example — 12 consecutive screenshots of the full editor UI:
+```json
+{
+  "target": "editor_ui",
+  "frames": 12,
+  "interval_ms": 250,
+  "timing_mode": "realtime",
+  "output": {
+    "format": "webp",
+    "max_width": 1920,
+    "max_height": 1080,
+    "quality": 85
+  },
+  "include_metadata": true,
+  "include_contact_sheet": true
+}
+```
+
+Example — 8 consecutive images of the 3D viewport:
+```json
+{
+  "target": "editor_3d",
+  "viewport_index": 0,
+  "frames": 8,
+  "interval_ms": 150,
+  "timing_mode": "realtime",
+  "output": {
+    "format": "png",
+    "max_width": 1600,
+    "max_height": 900
+  },
+  "include_metadata": true,
+  "include_contact_sheet": true
+}
+```
+
+Each frame records a zero-based `frame_index`, capture timestamp, elapsed time, target, dimensions and optional camera/viewport metadata. The sequence result records requested and completed frame counts and the final status (`completed`, `partial`, or `failed`).
+
+### 3.3 `visual.zoom_to`
+
+Temporarily focuses a coordinate in a supported viewport, captures one still, then restores the original view.
+
+Required:
+- `target`: `editor_2d` or `editor_3d`.
+- `focus.coordinate_space`: exactly one of `world_2d`, `world_3d`, `viewport_pixels`, `viewport_normalized`.
+- `focus.position`: 2 numbers for `world_2d`/pixel/normalized coordinates; 3 numbers for `world_3d`.
+- `restore_view`: must be true. The relay supplies true if omitted; false is rejected.
+
+Additional coordinate rules:
+- `world_2d`: target must be `editor_2d`; `position=[x,y]`; `zoom` between 0.25 and 16.
+- `world_3d`: target must be `editor_3d`; `position=[x,y,z]`; `distance` between 0.1 and 1000.
+- `viewport_pixels`: target must be `editor_2d` or `editor_3d`; position is pixel coordinates within that target viewport.
+- `viewport_normalized`: target must be `editor_2d` or `editor_3d`; each coordinate is between 0 and 1.
+- Pixel/normalized focus requires a supported capture backend to translate viewport focus safely; reject if unsupported rather than guessing.
+
+Example — zoom into a 2D world point:
+```json
+{
+  "target": "editor_2d",
+  "focus": {
+    "coordinate_space": "world_2d",
+    "position": [640.0, 360.0],
+    "zoom": 3.0
+  },
+  "restore_view": true,
+  "output": {
+    "format": "png",
+    "max_width": 1600,
+    "max_height": 900
+  }
+}
+```
+
+Example — focus a 3D world point:
+```json
+{
+  "target": "editor_3d",
+  "viewport_index": 0,
+  "focus": {
+    "coordinate_space": "world_3d",
+    "position": [0.0, 1.5, 0.0],
+    "distance": 4.0
+  },
+  "restore_view": true
+}
+```
+
+## 4. Common output and storage limits
+
+- Image dimensions: maximum 8192 × 8192.
+- Maximum encoded size per image: 12 MiB.
+- Formats: JPEG, WebP, PNG.
+- Sequence size: 2–24 frames; interval: 50–5000 ms.
+- Object keys are server-generated and scoped to workspace/command/asset IDs. Clients cannot choose arbitrary object keys.
+- Presigned upload/download URLs are short-lived, private, never logged and never returned to unrelated devices.
+- The relay validates actual object size, MIME type and SHA-256 before inserting `visual_assets`.
+- Results return asset IDs, dimensions, hashes, timestamps and sequence metadata only.
+
+## 5. Sequence semantics
+
+- `realtime`: capture every requested interval while the target is rendering. Actual elapsed intervals may vary with browser and render load; timestamps are authoritative.
+- `frame_step`: reserved for a future deterministic preview controller. It must be rejected until the preview can pause, advance exactly one simulation frame, wait for rendering, and resume safely.
+- A failed frame does not erase successful frames. Mark the sequence `partial` when at least one frame succeeded but not all did.
+- The requested count is a maximum exact target, not a promise that a backend can capture unsupported targets. Unsupported backends fail explicitly.
+- Never label a still-image sequence as a video.
+
+## 6. Error codes
+
+| code | Meaning |
+|---|---|
+| `VISUAL_TARGET_REQUIRED` | Target is missing or invalid. |
+| `VISUAL_TARGET_UNAVAILABLE` | Requested capture backend is not implemented/available. |
+| `VISUAL_SEQUENCE_LIMIT` | Frame count or interval is outside the allowed range. |
+| `VISUAL_COORDINATE_SPACE_REQUIRED` | Focus lacks an explicit coordinate space. |
+| `VISUAL_COORDINATE_MISMATCH` | Coordinate dimensions or target do not match. |
+| `VISUAL_RESTORE_REQUIRED` | Request attempts to leave the editor view changed. |
+| `VISUAL_CAPTURE_TIMEOUT` | Capture did not complete within its deadline. |
+| `VISUAL_UPLOAD_INVALID` | Uploaded object failed metadata/hash validation. |
+
+## 7. Examples of natural-language translation
+
+| Human request | Valid command |
+|---|---|
+| "Show me the whole Godot Web editor." | `visual.capture`, target `editor_ui` |
+| "Show me only the 2D canvas." | `visual.capture`, target `editor_2d` |
+| "Give me 10 consecutive screenshots of the full editor, 300 ms apart." | `visual.capture_sequence`, target `editor_ui`, frames 10, interval_ms 300 |
+| "Give me 15 consecutive images of the 3D viewport, 100 ms apart." | `visual.capture_sequence`, target `editor_3d`, frames 15, interval_ms 100 |
+| "Zoom into world position (640, 360) in the 2D viewport." | `visual.zoom_to`, target `editor_2d`, coordinate_space `world_2d` |
+| "Show the running game, not the editor." | `visual.capture`, target `game_preview` |
+
+If a human request does not identify which target they mean, the agent must ask one concise clarification before enqueueing a command. It must not guess.
+
+## 8. Workspace boundary
+
+All visual commands in this phase are restricted to the AI's `web_editor` device and its isolated Godot Web workspace. They cannot inspect or capture the user's Android editor, phone screen, or unrelated browser tabs.
