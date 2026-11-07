@@ -187,15 +187,17 @@ async def cleanup_expired_sessions():
     database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
     app.state.command_center_db = None
     app.state.command_center_db_lock = asyncio.Lock()
+    app.state.command_center_db_retry_after = 0.0
     if database_url:
         try:
             import asyncpg
             app.state.command_center_db = await asyncpg.create_pool(
-                dsn=database_url, min_size=1, max_size=5, command_timeout=10
+                dsn=database_url, min_size=1, max_size=5, timeout=5, command_timeout=10
             )
         except Exception:
             # A Neon outage or missing driver must not take down the existing
             # WebSocket relay. Command Center routes remain fail-closed (503).
+            app.state.command_center_db_retry_after = time.monotonic() + 5.0
             logger.exception("Command Center database pool could not be initialized")
 
     async def cleanup_loop():
