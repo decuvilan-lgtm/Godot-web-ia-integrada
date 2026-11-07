@@ -164,6 +164,11 @@ class RelayApiTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as first:
                 await get_pool(request)
             self.assertEqual(first.exception.status_code, 503)
+            self.assertGreater(app.state.command_center_db_retry_after, 0)
+            with self.assertRaises(HTTPException) as cooling_down:
+                await get_pool(request)
+            self.assertEqual(cooling_down.exception.status_code, 503)
+            app.state.command_center_db_retry_after = 0.0
             return await get_pool(request)
 
         fake_asyncpg = types.SimpleNamespace(create_pool=create_pool)
@@ -183,6 +188,7 @@ class RelayApiTests(unittest.TestCase):
         self.assertEqual(attempts["count"], 2)
         app.state.command_center_db = None
         app.state.command_center_db_lock = None
+        app.state.command_center_db_retry_after = 0.0
 
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
