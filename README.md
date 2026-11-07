@@ -77,6 +77,7 @@ Neon Realtime está habilitado para el origen del editor web. Esto aún no const
 
 ## Desarrollo
 
+- [Auditoría e integración con el Godot Android modificado](docs/ANDROID_EDITOR_INTEGRATION.md)
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
 - [Protocolo del puente](docs/BRIDGE_PROTOCOL.md)
