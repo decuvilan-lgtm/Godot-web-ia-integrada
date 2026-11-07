@@ -115,7 +115,7 @@ A new isolated branch was created in the Android editor repository:
 
 The adapter uses the existing `command_center` schema and supports workspace-scoped single-use pairing, hashed device credentials, a persistent read-only command queue, leases/recovery, result storage, and strict browser CORS for the web editor. The agent client requires HTTPS remotely and requires idempotency keys for command creation.
 
-Migration `002_live_link_command_leases.sql` was applied to the Neon production branch and its columns, constraints and indexes were verified. The database still has one workspace and zero paired devices or queued commands.
+Migration `002_live_link_command_leases.sql and 003_require_command_idempotency_keys.sql` was applied to the Neon production branch and its columns, constraints and indexes were verified. The database still has one workspace and zero paired devices or queued commands.
 
 **CI evidence:** the relay test suite, agent-client tests, and Godot 4.7.2 headless Live Link/filesystem harness passed. The latest branch-head validation is [42340748683](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/actions/runs/42340748683), which passed. The Linux emitter build is a separate manual workflow and was not run by this PR validation.
 
