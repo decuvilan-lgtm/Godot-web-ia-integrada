@@ -134,6 +134,18 @@ The Godot Web editor build workflow completed successfully on 2026-11-07:
 
 This is build/CI evidence only. It does **not** establish that the Render production service stayed healthy for three minutes, that the deployed browser editor is paired, or that any visual capture backend works in the real browser.
 
+## Private visual transfer API (implemented, not deployed)
+
+The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/command-center/visual`:
+
+- `POST /uploads/presign`: requires a live command lease owned by the paired `web_editor`; issues a 180-second presigned PUT URL for the private bucket. The server creates the object key; the editor never receives S3 credentials.
+- `POST /uploads/complete`: rechecks the command lease and workspace, verifies object size and MIME type, downloads at most 12 MiB for SHA-256 and image-format/dimension verification, then inserts metadata in `visual_assets`. Sequence frames are associated with the sequence row and duplicate frame submissions are idempotent.
+- `GET /assets/{asset_id}/download`: workspace-scoped, authenticated controller/web-editor access; issues a short-lived private GET URL. The API returns metadata and URLs, not image bytes.
+- S3 calls use path-style SigV4 against the branch endpoint and fail closed unless the four AWS-standard Neon storage environment variables are present.
+- New dependencies are pinned in the relay requirements: boto3 and Pillow.
+
+The API has not yet been configured in Render or exercised against production Object Storage. The visual command feature flag remains off. The browser/editor capture plugin and real end-to-end transfer tests are still pending.
+
 ## Implementation order and acceptance gates
 
 The visual pipeline stays disabled until each gate is demonstrated:
