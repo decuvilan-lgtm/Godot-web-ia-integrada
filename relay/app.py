@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import os
 import secrets
 import time
@@ -13,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from command_center import router as command_center_router
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
+logger = logging.getLogger("godot_web_ia_relay")
 ADMIN_TOKEN = os.environ.get("RELAY_ADMIN_TOKEN", "")
 SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 MAX_PENDING = 64
@@ -66,7 +68,7 @@ def get_session(session_id: str) -> Session:
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "godot-web-ia-relay", "version": APP_VERSION}
+    return {"ok": True, "service": "godot-web-ia-relay", "version": APP_VERSION, "command_center_ready": app.state.command_center_db is not None}
 
 @app.post("/v1/sessions")
 async def create_session(body: CreateSession, x_admin_token: str | None = Header(default=None)):
@@ -183,10 +185,15 @@ async def cleanup_expired_sessions():
     database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
     app.state.command_center_db = None
     if database_url:
-        import asyncpg
-        app.state.command_center_db = await asyncpg.create_pool(
-            dsn=database_url, min_size=1, max_size=5, command_timeout=10
-        )
+        try:
+            import asyncpg
+            app.state.command_center_db = await asyncpg.create_pool(
+                dsn=database_url, min_size=1, max_size=5, command_timeout=10
+            )
+        except Exception:
+            # A Neon outage or missing driver must not take down the existing
+            # WebSocket relay. Command Center routes remain fail-closed (503).
+            logger.exception("Command Center database pool could not be initialized")
 
     async def cleanup_loop():
         while True:
