@@ -52,7 +52,7 @@ Required:
 - `target`: one of the four target values above.
 
 Optional:
-- `viewport_index`: integer 0–7; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
+- `viewport_index`: integer 0–3; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
 - `output.format`: `jpeg`, `webp`, or `png`; default `webp`.
 - `output.max_width`, `output.max_height`: each 320–8192; defaults 2560 and 1440.
 - `output.quality`: integer 40–100; applies only to JPEG/WebP; default 85.
