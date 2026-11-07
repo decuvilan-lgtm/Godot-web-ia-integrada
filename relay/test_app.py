@@ -3,7 +3,7 @@ import os
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from starlette.requests import Request
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -89,6 +89,71 @@ class RelayApiTests(unittest.TestCase):
     def test_command_center_requires_bearer_device_credential(self):
         response = self.client.get("/v1/command-center/commands/next")
         self.assertEqual(response.status_code, 401)
+
+    def test_multiple_queries_reuse_one_workspace_without_creating_projects_or_sessions(self):
+        from command_center import create_command
+
+        class AsyncContext:
+            def __init__(self, value=None):
+                self.value = value
+            async def __aenter__(self):
+                return self.value
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+        class FakeConnection:
+            def __init__(self):
+                self.command_inserts = []
+                self.other_inserts = []
+                self.counter = 0
+            def transaction(self):
+                return AsyncContext()
+            async def fetchval(self, query, *args):
+                self.command_inserts.append((query, args))
+                self.counter += 1
+                return f"command-{self.counter}"
+            async def execute(self, query, *args):
+                self.other_inserts.append((query, args))
+
+        class FakePool:
+            def __init__(self, connection):
+                self.connection = connection
+            def acquire(self):
+                return AsyncContext(self.connection)
+
+        connection = FakeConnection()
+        identity = {
+            "id": "device-web-1",
+            "device_kind": "agent_controller",
+            "workspace_id": "persistent-workspace-1",
+        }
+        with patch("command_center.authenticate_device", new=AsyncMock(return_value=identity)), \
+             patch("command_center.get_pool", new=AsyncMock(return_value=FakePool(connection))):
+            first = self.client.post(
+                "/v1/command-center/commands",
+                headers={"Authorization": "Bearer test"},
+                json={"target": "web_editor", "action": "ping", "args": {}, "idempotency_key": "query-1"},
+            )
+            second = self.client.post(
+                "/v1/command-center/commands",
+                headers={"Authorization": "Bearer test"},
+                json={"target": "web_editor", "action": "project.get_state", "args": {}, "idempotency_key": "query-2"},
+            )
+
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 202)
+        self.assertEqual(first.json()["command_id"], "command-1")
+        self.assertEqual(second.json()["command_id"], "command-2")
+        self.assertEqual(len(connection.command_inserts), 2)
+        self.assertEqual(
+            [entry[1][0] for entry in connection.command_inserts],
+            ["persistent-workspace-1", "persistent-workspace-1"],
+        )
+        sql = " ".join(entry[0].lower() for entry in connection.command_inserts)
+        self.assertIn("insert into command_center.commands", sql)
+        self.assertNotIn("insert into command_center.workspaces", sql)
+        self.assertNotIn("insert into command_center.sessions", sql)
+        self.assertNotIn("insert into command_center.projects", sql)
 
     def test_command_center_policy_keeps_visual_commands_separate_and_disabled(self):
         from command_center import READ_ONLY_ACTIONS, VISUAL_ACTIONS, VISUAL_COMMANDS_ENABLED
