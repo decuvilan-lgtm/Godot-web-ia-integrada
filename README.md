@@ -108,7 +108,7 @@ La API falla de forma cerrada si Neon no está configurado. Las migraciones 001�
 
 El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). Cada solicitud debe indicar un objetivo exacto (`editor_ui`, `editor_2d`, `editor_3d` o `game_preview`); las secuencias indican cantidad e intervalo, y el zoom declara el sistema de coordenadas. No se permite adivinar el objetivo ni sustituir una fuente por otra.
 
-Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
+Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. La migración 005, necesaria para guardar secuencias de capturas de `editor_ui`, está preparada y probada en una rama temporal, pendiente de autorización para producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
 
 ## Desarrollo
 
