@@ -84,7 +84,11 @@ El PR #1 añade al relay FastAPI existente:
 - Respuestas no-cache y reconexión Neon acotada.
 - Página administrativa de emparejamiento en `/command-center/admin`.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–004 están instaladas/verificadas en Neon, incluido el esquema de metadatos de observación visual. El servicio Render aún no tiene configurados los secretos necesarios. No se ha desplegado esta versión ni se ha hecho una solicitud real contra la base de datos.
+La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–005 están instaladas/verificadas en Neon, incluido el esquema de metadatos de observación visual y la compatibilidad de secuencias para `editor_ui`. El servicio Render aún no tiene configurados los secretos necesarios. No se ha desplegado esta versión ni se ha hecho una solicitud real contra la base de datos.
+
+## Proyecto persistente y consultas múltiples
+
+El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada consulta crea solo una orden independiente; no crea un proyecto, workspace ni sesión. Se pueden encolar varias consultas sobre el mismo proyecto: cada una tiene su ID e idempotency key, y el editor las procesa en cola, una por una. Las repeticiones de una misma consulta reutilizan su clave; las consultas nuevas usan claves nuevas, pero mantienen el mismo workspace. La selección/creación de otros proyectos será una acción explícita futura, nunca un efecto secundario de consultar.
 
 ## Verificaciones y límites
 
@@ -108,7 +112,7 @@ La API falla de forma cerrada si Neon no está configurado. Las migraciones 001�
 
 El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). Cada solicitud debe indicar un objetivo exacto (`editor_ui`, `editor_2d`, `editor_3d` o `game_preview`); las secuencias indican cantidad e intervalo, y el zoom declara el sistema de coordenadas. No se permite adivinar el objetivo ni sustituir una fuente por otra.
 
-Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. La migración 005, necesaria para guardar secuencias de capturas de `editor_ui`, está preparada y probada en una rama temporal, pendiente de autorización para producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
+Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
 
 ## Desarrollo
 
