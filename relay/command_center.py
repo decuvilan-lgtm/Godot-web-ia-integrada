@@ -151,7 +151,7 @@ def _validate_visual_viewport(args: dict[str, Any], target: str) -> None:
     if "viewport_index" in args:
         if target != "editor_3d":
             _visual_error("VISUAL_TARGET_MISMATCH", "viewport_index is only valid for editor_3d")
-        if not _bounded_int(args["viewport_index"], 0, 7):
+        if not _bounded_int(args["viewport_index"], 0, 3):
             _visual_error("VISUAL_ARGUMENT_INVALID", "viewport_index must be an integer from 0 to 7")
 
 
