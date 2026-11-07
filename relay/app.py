@@ -49,6 +49,15 @@ app.state.session_cleanup_task = None
 app.include_router(command_center_router)
 app.include_router(command_center_admin_router)
 
+@app.middleware("http")
+async def prevent_command_center_response_caching(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/v1/command-center/", "/command-center/admin")):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 class CreateSession(BaseModel):
     label: str = Field(default="Godot project", max_length=80)
 
