@@ -50,6 +50,6 @@ Routes:
 - `POST /v1/command-center/commands/{id}/result` — submits the command result.
 - `GET /v1/command-center/commands/{id}` — reads command status within the authenticated workspace.
 
-Only `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read` are enabled. Pairing codes are single-use; presenting a fresh administrator-issued code for an existing installation rotates its credential. Device credentials are stored only as SHA-256 hashes in Neon. Do not expose administrator secrets or device credentials in logs or project files.
+Only `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read` are enabled. Pairing codes are single-use; presenting a fresh administrator-issued code for an existing installation rotates its credential. Device credentials are stored only as SHA-256 hashes in Neon. Command Center API responses, including one-time pairing credentials and command results, are marked no-store. Do not expose administrator secrets or device credentials in logs or project files.
 
 Render remains on the free plan. The database URL is intentionally a manual secret (`sync: false`) in the Blueprint; no database credential is committed to this repository.
