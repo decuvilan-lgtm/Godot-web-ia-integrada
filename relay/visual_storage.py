@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import uuid
@@ -69,6 +70,44 @@ def verify_uploaded_object(client, key: str, extension: str, width: int, height:
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Uploaded object is not a valid supported image") from exc
     return mime, size, hashlib.sha256(data).hexdigest()
+
+
+async def _insert_asset_idempotently(
+    pool, client, *, workspace_id, command_id, sequence_id, frame_index,
+    capture_kind, object_key, mime, width, height, size, digest, captured_at, metadata,
+):
+    asset_id = await pool.fetchval(
+        """INSERT INTO command_center.visual_assets
+           (workspace_id, command_id, sequence_id, frame_index, capture_kind,
+            object_key, mime_type, width, height, byte_size, sha256, captured_at, metadata)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+           ON CONFLICT DO NOTHING
+           RETURNING id""",
+        workspace_id, command_id, sequence_id, frame_index, capture_kind,
+        object_key, mime, width, height, size, digest, captured_at, json.dumps(metadata),
+    )
+    if asset_id is not None:
+        return str(asset_id), False
+
+    existing = await pool.fetchrow(
+        """SELECT id, object_key FROM command_center.visual_assets
+           WHERE command_id=$1 AND sequence_id IS NOT DISTINCT FROM $2
+             AND frame_index IS NOT DISTINCT FROM $3""",
+        command_id, sequence_id, frame_index,
+    )
+    if existing is None:
+        raise HTTPException(status_code=409, detail="Capture metadata conflicts with an existing asset")
+
+    # A retried completion can upload a fresh nonce for a frame that is already
+    # registered. Keep the original object and remove the unreferenced duplicate.
+    if existing["object_key"] != object_key:
+        try:
+            await run_in_threadpool(client.delete_object, Bucket=BUCKET, Key=object_key)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Could not remove duplicate unreferenced visual object for command %s", command_id
+            )
+    return str(existing["id"]), True
 
 
 def storage_client():
@@ -225,27 +264,15 @@ async def complete_upload(
     if command["action"] != "visual.capture_sequence" and frame_in_key != "single":
         raise HTTPException(status_code=422, detail="Single capture key has an unexpected frame index")
     captured_at = body.captured_at or datetime.now(timezone.utc)
-    asset_id = await pool.fetchval(
-        """INSERT INTO command_center.visual_assets
-           (workspace_id, command_id, sequence_id, frame_index, capture_kind,
-            object_key, mime_type, width, height, byte_size, sha256, captured_at, metadata)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
-           ON CONFLICT (sequence_id, frame_index) DO NOTHING
-           RETURNING id""",
-        identity["workspace_id"], command["id"], sequence_id, frame_index, capture_kind,
-        body.object_key, mime, body.width, body.height, size, digest, captured_at,
-        json.dumps(body.metadata),
+    asset_id, reused = await _insert_asset_idempotently(
+        pool, client,
+        workspace_id=identity["workspace_id"], command_id=command["id"],
+        sequence_id=sequence_id, frame_index=frame_index, capture_kind=capture_kind,
+        object_key=body.object_key, mime=mime, width=body.width, height=body.height,
+        size=size, digest=digest, captured_at=captured_at, metadata=body.metadata,
     )
-    if asset_id is None:
-        existing = await pool.fetchval(
-            """SELECT id FROM command_center.visual_assets
-               WHERE command_id=$1 AND sequence_id IS NOT DISTINCT FROM $2
-                 AND frame_index IS NOT DISTINCT FROM $3""",
-            command["id"], sequence_id, frame_index,
-        )
-        if existing is None:
-            raise HTTPException(status_code=409, detail="Capture metadata conflicts with an existing asset")
-        return {"asset_id": str(existing), "reused": True}
+    if reused:
+        return {"asset_id": asset_id, "sequence_id": str(sequence_id) if sequence_id else None, "reused": True}
     if sequence_id:
         completed = await pool.fetchval(
             "SELECT count(*) FROM command_center.visual_assets WHERE sequence_id=$1",
@@ -257,7 +284,7 @@ async def complete_upload(
                 sequence_id,
             )
     return {
-        "asset_id": str(asset_id), "sequence_id": str(sequence_id) if sequence_id else None,
+        "asset_id": asset_id, "sequence_id": str(sequence_id) if sequence_id else None,
         "frame_index": frame_index, "byte_size": size, "sha256": digest, "reused": False,
     }
 
