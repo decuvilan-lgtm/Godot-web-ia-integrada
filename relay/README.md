@@ -37,6 +37,11 @@ Required environment:
 - `COMMAND_CENTER_DATABASE_URL`: Neon connection string for the dedicated `Godot Command Center` database. If missing, Command Center endpoints fail closed with HTTP 503.
 - `COMMAND_CENTER_ADMIN_TOKEN`: separate high-entropy administrator secret for creating single-use device pairing codes.
 
+Administrator page:
+- Open `/command-center/admin` on the relay host to generate a pairing code without constructing an HTTP request manually.
+- The page sends the admin secret only in the `X-Command-Center-Admin` request header, clears the password field after submission, and does not write credentials or codes to browser storage.
+- The page and its same-origin script use no-store cache headers, a restrictive Content Security Policy, and no third-party assets. Keep the admin URL private and use it only over HTTPS.
+
 Routes:
 - `POST /v1/command-center/pairing-codes` — requires `X-Command-Center-Admin`; body: `{"device_kind":"android_editor","workspace":"default"}`. The returned code expires in 120 seconds.
 - `POST /v1/command-center/pair` — exchanges a one-time code for a device bearer credential.
