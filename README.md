@@ -15,7 +15,7 @@ Entorno de desarrollo basado en Godot Web, con una capa propia de automatizació
 
 ## Base del motor
 
-La primera versión usa el paquete web oficial **Godot 4.7.2-stable** publicado por el proyecto Godot. El script de compilación descarga el archivo oficial y verifica su SHA-256 antes de publicarlo. El código fuente del motor se incorporará como submódulo en una fase posterior para mantener los cambios propios separados del upstream.
+El código fuente oficial está fijado como submódulo en `engine/godot`, en el commit del tag **4.7.2-stable**. Esto mantiene el historial del motor separado y permite preparar parches propios sin copiar ni alterar el upstream. La distribución web inicial usa el paquete oficial precompilado: el script de compilación lo descarga y verifica su SHA-256 antes de publicarlo.
 
 - Motor: https://github.com/godotengine/godot
 - Versión fijada: 4.7.2-stable
