@@ -153,7 +153,7 @@ async def create_pairing_code(
     x_command_center_admin: str | None = Header(default=None, alias="X-Command-Center-Admin"),
 ):
     require_admin(x_command_center_admin)
-    pool = get_pool(request)
+    pool = await get_pool(request)
     workspace_id = await pool.fetchval(
         "SELECT id FROM command_center.workspaces WHERE slug=$1",
         body.workspace,
@@ -181,7 +181,7 @@ async def create_pairing_code(
 async def pair_device(body: PairDeviceRequest, request: Request):
     if not body.label.strip():
         raise HTTPException(status_code=422, detail="Device label cannot be blank")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     credential = secrets.token_urlsafe(48)
     async with pool.acquire() as connection:
         async with connection.transaction():
@@ -246,7 +246,7 @@ async def create_command(
         raise HTTPException(status_code=400, detail="Action is not enabled in the read-only command policy")
     if json_size(body.args) > MAX_ARGS_BYTES:
         raise HTTPException(status_code=413, detail="Command arguments exceed the size limit")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     async with pool.acquire() as connection:
         async with connection.transaction():
             command_id = await connection.fetchval(
@@ -305,7 +305,7 @@ async def claim_next_command(
     target = target or identity["device_kind"]
     if target not in EDITOR_KINDS or target != identity["device_kind"]:
         raise HTTPException(status_code=403, detail="A device can only claim commands for its own editor role")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     async with pool.acquire() as connection:
         async with connection.transaction():
             expired_rows = await connection.fetch(
@@ -391,7 +391,7 @@ async def submit_command_result(
         raise HTTPException(status_code=400, detail="Invalid command ID")
     if json_size(body.result) > MAX_RESULT_BYTES:
         raise HTTPException(status_code=413, detail="Command result exceeds the size limit")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     async with pool.acquire() as connection:
         async with connection.transaction():
             command = await connection.fetchrow(
@@ -457,7 +457,7 @@ async def get_command(
         parsed_id = uuid.UUID(command_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid command ID")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     row = await pool.fetchrow(
         """SELECT c.id,c.target,c.action,c.status,c.created_at,c.finished_at,
                   r.ok,r.result,r.error_code,r.error_message,r.duration_ms
