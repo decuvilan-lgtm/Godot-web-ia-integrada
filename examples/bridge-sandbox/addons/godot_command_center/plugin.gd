@@ -475,7 +475,8 @@ func _request_visual_json(path: String, method: int, payload: Dictionary) -> Dic
 	)
 	if not bool(response.get("ok", false)):
 		return {"ok": false, "code": response.get("code", 0)}
-	var parsed: Variant = JSON.parse_string((response.get("body", PackedByteArray()) as PackedByteArray).get_string_from_utf8())
+	var response_body: PackedByteArray = response.get("body", PackedByteArray())
+	var parsed: Variant = JSON.parse_string(response_body.get_string_from_utf8())
 	if not parsed is Dictionary:
 		return {"ok": false, "code": response.get("code", 0)}
 	return {"ok": int(response.get("code", 0)) in [200, 201], "data": parsed, "code": response.get("code", 0)}
