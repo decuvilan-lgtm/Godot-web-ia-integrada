@@ -73,6 +73,7 @@ class RelayApiTests(unittest.TestCase):
             json={"device_kind": "android_editor"},
         )
         self.assertEqual(denied.status_code, 401)
+        self.assertIn("no-store", denied.headers.get("cache-control", ""))
 
         no_database = self.client.post(
             "/v1/command-center/pair",
@@ -83,6 +84,7 @@ class RelayApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(no_database.status_code, 503)
+        self.assertIn("no-store", no_database.headers.get("cache-control", ""))
 
     def test_command_center_requires_bearer_device_credential(self):
         response = self.client.get("/v1/command-center/commands/next")
