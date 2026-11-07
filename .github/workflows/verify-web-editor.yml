@@ -30,6 +30,9 @@ jobs:
       - name: Verify pinned Godot source submodule
         run: bash scripts/verify-engine-pin.sh
 
+      - name: Validate bridge sandbox in native Godot headless editor
+        run: bash scripts/test-bridge-sandbox.sh
+
       - name: Build pinned Godot Web Editor
         run: bash scripts/build-web.sh
 
