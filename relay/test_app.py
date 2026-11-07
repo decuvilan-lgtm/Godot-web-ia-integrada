@@ -90,14 +90,107 @@ class RelayApiTests(unittest.TestCase):
         response = self.client.get("/v1/command-center/commands/next")
         self.assertEqual(response.status_code, 401)
 
-    def test_command_center_policy_is_read_only(self):
-        from command_center import ALLOWED_ACTIONS
+    def test_command_center_policy_keeps_visual_commands_separate_and_disabled(self):
+        from command_center import READ_ONLY_ACTIONS, VISUAL_ACTIONS, VISUAL_COMMANDS_ENABLED
         self.assertEqual(
-            ALLOWED_ACTIONS,
+            READ_ONLY_ACTIONS,
             {"ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"},
         )
-        self.assertNotIn("script.write", ALLOWED_ACTIONS)
-        self.assertNotIn("shell.execute", ALLOWED_ACTIONS)
+        self.assertEqual(
+            VISUAL_ACTIONS,
+            {"visual.capture", "visual.capture_sequence", "visual.zoom_to"},
+        )
+        self.assertFalse(VISUAL_COMMANDS_ENABLED)
+        self.assertNotIn("script.write", READ_ONLY_ACTIONS)
+        self.assertNotIn("shell.execute", READ_ONLY_ACTIONS)
+
+    def test_visual_capture_requires_an_exact_target(self):
+        from command_center import validate_visual_command
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {})
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_ARGUMENT_INVALID")
+
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {"target": "editor"})
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_TARGET_REQUIRED")
+
+    def test_visual_capture_sequence_validates_target_count_and_interval(self):
+        from command_center import validate_visual_command
+        validate_visual_command("visual.capture_sequence", {
+            "target": "editor_ui",
+            "frames": 12,
+            "interval_ms": 250,
+            "timing_mode": "realtime",
+        })
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture_sequence", {
+                "target": "editor_3d",
+                "frames": 25,
+                "interval_ms": 250,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_SEQUENCE_LIMIT")
+
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture_sequence", {
+                "target": "editor_3d",
+                "frames": 12,
+                "interval_ms": 10,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_SEQUENCE_LIMIT")
+
+    def test_visual_zoom_requires_matching_coordinate_space_and_restoration(self):
+        from command_center import validate_visual_command
+        validate_visual_command("visual.zoom_to", {
+            "target": "editor_2d",
+            "focus": {
+                "coordinate_space": "world_2d",
+                "position": [640.0, 360.0],
+                "zoom": 3.0,
+            },
+            "restore_view": True,
+        })
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.zoom_to", {
+                "target": "editor_3d",
+                "focus": {
+                    "coordinate_space": "world_2d",
+                    "position": [640.0, 360.0],
+                    "zoom": 3.0,
+                },
+                "restore_view": True,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_COORDINATE_MISMATCH")
+
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.zoom_to", {
+                "target": "editor_2d",
+                "focus": {
+                    "coordinate_space": "world_2d",
+                    "position": [640.0, 360.0],
+                    "zoom": 3.0,
+                },
+                "restore_view": False,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_RESTORE_REQUIRED")
+
+    def test_visual_commands_reject_unknown_fields_and_frame_step_until_supported(self):
+        from command_center import validate_visual_command
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {
+                "target": "editor_ui",
+                "screen": "android_phone",
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_ARGUMENT_INVALID")
+
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture_sequence", {
+                "target": "game_preview",
+                "frames": 4,
+                "interval_ms": 100,
+                "timing_mode": "frame_step",
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_TIMING_UNAVAILABLE")
 
     def test_pairing_admin_page_is_ephemeral_and_hardened(self):
         page = self.client.get("/command-center/admin")
