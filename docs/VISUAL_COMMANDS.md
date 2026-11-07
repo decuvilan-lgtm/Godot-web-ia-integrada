@@ -148,7 +148,7 @@ Required:
 - `target`: `editor_2d` or `editor_3d`.
 - `focus.coordinate_space`: exactly one of `world_2d`, `world_3d`, `viewport_pixels`, `viewport_normalized`.
 - `focus.position`: 2 numbers for `world_2d`/pixel/normalized coordinates; 3 numbers for `world_3d`.
-- `restore_view`: must be true. The relay supplies true if omitted; false is rejected.
+- `restore_view`: required and must be explicitly set to `true`; omission and `false` are rejected by the relay.
 
 Additional coordinate rules:
 - `world_2d`: target must be `editor_2d`; `position=[x,y]`; `zoom` between 0.25 and 16.
