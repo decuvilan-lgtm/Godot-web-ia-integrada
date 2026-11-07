@@ -160,10 +160,12 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
         _visual_error("VISUAL_ARGUMENT_INVALID", "Visual command args must be an object")
 
     if action == "visual.capture":
+        if "target" not in args:
+            _visual_error("VISUAL_TARGET_REQUIRED", "target is required")
         _strict_keys(
             args,
             {"target", "viewport_index", "output", "include_metadata"},
-            {"target"},
+            set(),
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
@@ -177,13 +179,15 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
         return
 
     if action == "visual.capture_sequence":
+        if "target" not in args:
+            _visual_error("VISUAL_TARGET_REQUIRED", "target is required")
         _strict_keys(
             args,
             {
                 "target", "viewport_index", "frames", "interval_ms", "timing_mode",
                 "output", "include_metadata", "include_contact_sheet",
             },
-            {"target", "frames", "interval_ms"},
+            {"frames", "interval_ms"},
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
@@ -204,10 +208,14 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
         return
 
     if action == "visual.zoom_to":
+        if "target" not in args:
+            _visual_error("VISUAL_TARGET_REQUIRED", "target is required")
+        if "restore_view" not in args or args.get("restore_view") is not True:
+            _visual_error("VISUAL_RESTORE_REQUIRED", "restore_view must be true")
         _strict_keys(
             args,
             {"target", "viewport_index", "focus", "restore_view", "output"},
-            {"target", "focus", "restore_view"},
+            {"focus"},
             "VISUAL_ARGUMENT_INVALID",
         )
         target = args["target"]
@@ -219,10 +227,14 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
         focus = args["focus"]
         if not isinstance(focus, dict):
             _visual_error("VISUAL_COORDINATE_SPACE_REQUIRED", "focus must be an object")
+        if "coordinate_space" not in focus:
+            _visual_error("VISUAL_COORDINATE_SPACE_REQUIRED", "coordinate_space is required")
+        if "position" not in focus:
+            _visual_error("VISUAL_COORDINATE_MISMATCH", "position is required")
         _strict_keys(
             focus,
             {"coordinate_space", "position", "zoom", "distance"},
-            {"coordinate_space", "position"},
+            set(),
             "VISUAL_ARGUMENT_INVALID",
         )
         space = focus["coordinate_space"]
