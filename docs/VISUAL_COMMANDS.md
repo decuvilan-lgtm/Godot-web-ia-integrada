@@ -16,7 +16,20 @@ This document is the canonical contract for visual observation commands sent thr
 7. Image bytes go directly to the private Neon Object Storage bucket. Command results contain asset IDs and metadata, never base64 image data.
 8. Missing required fields, unknown fields, unsupported target/coordinate combinations, or out-of-range values are rejected before execution.
 
-## 2. Target vocabulary
+## 2. Persistent project and multiple queries
+
+All visual requests in this phase operate on the already-open Godot Web AI project inside its existing Neon workspace. A visual request never creates a project, workspace, device pairing or session.
+
+- The authenticated device identity supplies the workspace; callers cannot select a different workspace per query.
+- Each request becomes a distinct durable command with its own command ID and idempotency key.
+- Multiple commands may be queued against the same workspace/project. The web editor drains them sequentially, preserving a stable editor state and avoiding concurrent UI manipulation.
+- Retries of the same logical request reuse the same idempotency key. A genuinely new query gets a new key, but keeps the same workspace/project.
+- A capture sequence is one command with multiple frame assets; it is not a set of newly created projects or sessions.
+- `sessions` represent device connection state only. They are not created per query.
+
+A future multi-project mode must add explicit project registration/selection. It must never create a project implicitly for each query.
+
+## 3. Target vocabulary
 
 | target | Exact image content | Capture backend | Sequence allowed |
 |---|---|---|---|
@@ -29,7 +42,7 @@ This document is the canonical contract for visual observation commands sent thr
 
 A target must never be silently substituted. For example, a request for `editor_ui` must not return an `editor_2d` SubViewport and label it as the editor screenshot.
 
-## 3. Command names
+## 4. Command names
 
 ### 3.1 `visual.capture`
 
@@ -176,7 +189,7 @@ Example — focus a 3D world point:
 }
 ```
 
-## 4. Common output and storage limits
+## 5. Common output and storage limits
 
 - Image dimensions: maximum 8192 × 8192.
 - Maximum encoded size per image: 12 MiB.
@@ -187,7 +200,7 @@ Example — focus a 3D world point:
 - The relay validates actual object size, MIME type and SHA-256 before inserting `visual_assets`.
 - Results return asset IDs, dimensions, hashes, timestamps and sequence metadata only.
 
-## 5. Sequence semantics
+## 6. Sequence semantics
 
 - `realtime`: capture every requested interval while the target is rendering. Actual elapsed intervals may vary with browser and render load; timestamps are authoritative.
 - `frame_step`: reserved for a future deterministic preview controller. It must be rejected until the preview can pause, advance exactly one simulation frame, wait for rendering, and resume safely.
@@ -195,7 +208,7 @@ Example — focus a 3D world point:
 - The requested count is a maximum exact target, not a promise that a backend can capture unsupported targets. Unsupported backends fail explicitly.
 - Never label a still-image sequence as a video.
 
-## 6. Error codes
+## 7. Error codes
 
 | code | Meaning |
 |---|---|
@@ -208,7 +221,7 @@ Example — focus a 3D world point:
 | `VISUAL_CAPTURE_TIMEOUT` | Capture did not complete within its deadline. |
 | `VISUAL_UPLOAD_INVALID` | Uploaded object failed metadata/hash validation. |
 
-## 7. Examples of natural-language translation
+## 8. Examples of natural-language translation
 
 | Human request | Valid command |
 |---|---|
@@ -221,6 +234,6 @@ Example — focus a 3D world point:
 
 If a human request does not identify which target they mean, the agent must ask one concise clarification before enqueueing a command. It must not guess.
 
-## 8. Workspace boundary
+## 9. Workspace boundary
 
 All visual commands in this phase are restricted to the AI's `web_editor` device and its isolated Godot Web workspace. They cannot inspect or capture the user's Android editor, phone screen, or unrelated browser tabs.
