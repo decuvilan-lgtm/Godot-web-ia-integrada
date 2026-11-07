@@ -399,5 +399,68 @@ class RelayApiTests(unittest.TestCase):
         response = self.client.get("/v1/sessions/not-a-real-session")
         self.assertEqual(response.status_code, 404)
 
+
+class VisualObjectVerificationTests(unittest.TestCase):
+    def _png(self, size=(3, 2)):
+        from PIL import Image
+        buffer = io.BytesIO()
+        Image.new("RGB", size, (12, 34, 56)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _client(self, data, mime="image/png", declared_size=None):
+        class FakeClient:
+            def head_object(self, **kwargs):
+                return {
+                    "ContentLength": len(data) if declared_size is None else declared_size,
+                    "ContentType": mime,
+                }
+            def get_object(self, **kwargs):
+                return {"Body": io.BytesIO(data)}
+        return FakeClient()
+
+    def test_valid_png_is_verified_and_hashed(self):
+        import hashlib
+        from visual_storage import verify_uploaded_object
+        payload = self._png()
+        mime, size, digest = verify_uploaded_object(
+            self._client(payload), "capture.png", "png", 3, 2
+        )
+        self.assertEqual(mime, "image/png")
+        self.assertEqual(size, len(payload))
+        self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
+
+    def test_image_dimensions_must_match_reported_metadata(self):
+        from visual_storage import verify_uploaded_object
+        payload = self._png(size=(3, 2))
+        with self.assertRaisesRegex(ValueError, "valid supported image"):
+            verify_uploaded_object(
+                self._client(payload), "capture.png", "png", 2, 3
+            )
+
+    def test_declared_mime_and_extension_must_match(self):
+        from visual_storage import verify_uploaded_object
+        payload = self._png()
+        with self.assertRaisesRegex(ValueError, "size or MIME"):
+            verify_uploaded_object(
+                self._client(payload, mime="image/jpeg"), "capture.png", "png", 3, 2
+            )
+
+    def test_invalid_image_bytes_are_rejected(self):
+        from visual_storage import verify_uploaded_object
+        with self.assertRaisesRegex(ValueError, "valid supported image"):
+            verify_uploaded_object(
+                self._client(b"not an image"), "capture.png", "png", 3, 2
+            )
+
+    def test_uploaded_length_must_match_head_metadata(self):
+        from visual_storage import verify_uploaded_object
+        payload = self._png()
+        with self.assertRaisesRegex(ValueError, "length could not be verified"):
+            verify_uploaded_object(
+                self._client(payload, declared_size=len(payload) + 1),
+                "capture.png", "png", 3, 2,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
