@@ -41,6 +41,8 @@ if [[ ! -f "${PUBLIC_DIR}/index.html" ]]; then
   cp "${PUBLIC_DIR}/${ENTRY_NAME}" "${PUBLIC_DIR}/index.html"
 fi
 
+python3 "${ROOT_DIR}/scripts/patch-web-shell.py"
+
 test -s "${PUBLIC_DIR}/index.html"
 test "$(find "${PUBLIC_DIR}" -type f | wc -l)" -gt 1
 
