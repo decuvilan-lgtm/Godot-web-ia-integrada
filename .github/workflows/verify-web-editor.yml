@@ -1,0 +1,37 @@
+name: Verify Godot Web Editor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-web-editor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify official web editor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends curl unzip
+
+      - name: Build pinned Godot Web Editor
+        run: bash scripts/build-web.sh
+
+      - name: Verify published bundle
+        run: python3 scripts/verify-web-build.py
+
+      - name: Report bundle size
+        run: du -sh public
