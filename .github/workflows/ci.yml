@@ -16,10 +16,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate shell scripts
-        run: bash -n scripts/build-web.sh
-      - name: Validate Python scripts
-        run: python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py
+      - name: Validate shell and Python scripts
+        run: |
+          bash -n scripts/build-web.sh
+          python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/test_app.py
       - name: Validate mobile shell and sandbox package
         run: |
           mkdir -p public
@@ -33,6 +33,24 @@ jobs:
           grep -q 'runtime: static' render.yaml
           grep -q 'staticPublishPath: ./public' render.yaml
           grep -q 'Godot_v4.7.2-stable_web_editor.zip' scripts/build-web.sh
+          grep -q 'plan: free' render-relay.yaml
+
+  relay-api-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install relay test dependencies
+        run: pip install -r requirements.txt
+      - name: Run relay API tests
+        run: python -m unittest -v test_app.py
 
   godot-plugin-smoke-test:
     runs-on: ubuntu-latest
