@@ -110,6 +110,8 @@ Uploads and completion must be idempotent. Sequence frames are unique by `(seque
 - [ ] Apply migration 006 (partial unique index for one standalone capture per command) to production after explicit authorization.
 - [x] Apply migration 005 allowing `editor_ui` sequence sources; production verification completed.
 - [ ] Provision a narrowly scoped storage credential for the Render relay and configure it securely.
+- [x] Add a manual, non-startup CORS setup utility with exact-origin validation and unit tests; no bucket CORS rules have been changed yet.
+- [ ] Run the CORS utility with the dedicated storage credential and verify browser preflight + presigned PUT from the deployed Godot Web origin.
 - [x] Implement 2D/3D viewport capture in the Godot Web plugin (CI smoke-tested; live capture not yet demonstrated).
 - [ ] Implement temporary coordinate zoom with guaranteed restoration.
 - [ ] Connect browser-level screenshot capture for full editor UI and game preview.
@@ -135,6 +137,26 @@ The Godot Web editor build workflow completed successfully on 2026-11-07:
 - Bundle-size report: completed.
 
 This is build/CI evidence only. It does **not** establish that the Render production service stayed healthy for three minutes, that the deployed browser editor is paired, or that any visual capture backend works in the real browser.
+
+## Browser upload CORS setup (utility added; not applied)
+
+Neon Object Storage supports `GetBucketCors`, `PutBucketCors`, `DeleteBucketCors` and automatic OPTIONS preflight handling. The draft branch now includes:
+
+- `relay/storage_cors.py`: explicit operator-run setup utility for the private `godot-visual-captures` bucket.
+- It accepts only one exact HTTPS origin (no wildcard, credentials, path, query or fragment).
+- It allows PUT/GET/HEAD, only the Content-Type request header, exposes ETag and caches preflight for 300 seconds.
+- It writes the CORS rule and immediately reads it back to verify the provider accepted it.
+- `tests/live_link/test_storage_cors.py` covers origin validation, least-privilege rule shape and provider read-back verification.
+- It is never invoked at application startup and no production CORS configuration has been changed.
+
+After the dedicated Neon storage credential and the exact deployed web origin are configured in the relay environment, run:
+
+```bash
+cd relay
+python -m storage_cors
+```
+
+Required environment: `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `COMMAND_CENTER_STORAGE_CORS_ORIGIN`. The origin currently intended for the AI web editor is `https://godot-web-ia-integrada-rt2l.onrender.com`. The utility never prints credentials or signed URLs. A successful read-back is not a substitute for the remaining real-browser OPTIONS + presigned PUT acceptance test.
 
 ## Private visual transfer API (implemented, not deployed)
 
