@@ -1,73 +1,79 @@
 # Godot Web IA Integrada
 
-Entorno de desarrollo dividido en dos puestos de trabajo:
+Entorno de desarrollo con dos puestos de trabajo que comparten un mismo proyecto sin pisarse:
 
-- **Puesto de la IA:** editor real de Godot Web publicado en Render. Está pensado para que el agente trabaje en el navegador remoto.
-- **Puesto del usuario:** Godot Editor para Android, instalado y ejecutado por el usuario en su teléfono. No necesita abrir el editor web para trabajar.
+- **Puesto de la IA:** editor real Godot Web publicado en Render. El agente trabaja sobre un workspace aislado.
+- **Puesto del usuario:** Godot Editor para Android, construido desde el motor que está fijado en este mismo repositorio bajo `engine/godot`. El usuario conserva el control del proyecto aceptado desde su teléfono.
+- **Centro de mando:** Neon Postgres conserva sesiones, dispositivos, órdenes, resultados, revisiones, snapshots y propuestas. Neon Realtime se usa como canal de notificaciones; Postgres sigue siendo la fuente de verdad.
 
-La meta es que ambos puestos puedan inspeccionar y modificar el mismo proyecto mediante un relay y una sincronización explícita, con propuestas, historial y recuperación. Esa sincronización de extremo a extremo aún está en desarrollo.
+La regla central es que el agente nunca sobrescribe directamente el proyecto aceptado en Android. Sus cambios se presentan como propuestas con diff, validación y snapshot; solo se aplican tras aprobación explícita.
 
-> **Estado actual:** editor web 4.7.2-stable publicado; complemento AI Bridge de solo lectura; relay HTTP/WebSocket creado en Render Free y en proceso de validación. Aún no existe una sesión compartida funcional ni escritura remota.
+> **Estado real:** editor web 4.7.2-stable publicado; AI Bridge de solo lectura; relay HTTP/WebSocket existente; esquema persistente de Neon instalado y documentado. Todavía no existe emparejamiento Android/Web de extremo a extremo ni escritura remota habilitada.
 
 ## Acceso
 
 - Editor web de la IA: https://godot-web-ia-integrada-rt2l.onrender.com
 - Relay: https://godot-web-ia-relay.onrender.com
-- Estado del relay: https://godot-web-ia-relay.onrender.com/health
-- Render editor: https://dashboard.render.com/static/srv-dbna2s3rjlhs7386eol0
-- Render relay: https://dashboard.render.com/web/srv-dbna8ep5efls73aoqb8g
+- Salud del relay: https://godot-web-ia-relay.onrender.com/health
+- [Repositorio GitHub](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada)
+- [Centro de mando Neon](https://console.neon.tech/app/projects/aged-dew-94732514)
 
-**Infraestructura:** el editor está publicado como sitio estático y el relay como servicio web con plan `free`. No se ha contratado ni seleccionado un plan de pago. El relay es efímero: al suspenderse o reiniciarse pierde las sesiones activas.
+**Infraestructura:** los servicios Render existentes están configurados en plan `free`. No crear ni cambiar recursos a planes pagos. El relay puede suspenderse y reiniciarse; por eso no se considera almacenamiento persistente.
 
-## Base del motor
+## Godot Android y motor
 
-El código fuente oficial está fijado como submódulo en `engine/godot`, en el commit del tag **4.7.2-stable**. La distribución web inicial utiliza el paquete oficial precompilado.
+El motor oficial está fijado como submódulo en `engine/godot`, versión/tag **4.7.2-stable**. El árbol de código incluye la plataforma Android del motor; no se reemplaza por un proyecto de ejemplo ni por otro editor. La distribución web inicial utiliza el paquete oficial precompilado.
 
 - Motor: https://github.com/godotengine/godot
-- Versión fijada: 4.7.2-stable
-- Paquete web: Godot_v4.7.2-stable_web_editor.zip
+- Submódulo: `engine/godot`
+- Versión fijada: `4.7.2-stable`
 
-## Qué funciona ahora
+## Qué está implementado
 
-### Editor web de la IA
-- Carga de la distribución oficial del editor desde el navegador.
-- Descarga del paquete oficial verificada por SHA-256 durante el build.
-- Encabezados COOP/COEP y metadatos de viewport.
-- Proyecto de prueba empaquetado en `bridge-sandbox.zip`.
+### Editor web
+- Distribución oficial Godot Web.
+- Build que verifica SHA-256 del paquete.
+- Encabezados COOP/COEP.
+- Proyecto sandbox para probar el complemento.
 
 ### AI Bridge v0.1
-Complemento para el editor Godot que conecta por WebSocket seguro y autentica con un token temporal. Actualmente permite solo:
+Conexión WebSocket segura y token temporal en memoria. Acciones disponibles:
 - `ping`
 - `project.get_state`
 - `project.list_files`
 - `scene.inspect`
 - `script.read`
 
-Las operaciones de escritura todavía están bloqueadas.
+No habilita escritura arbitraria, shell ni ejecución de procesos.
 
 ### Relay v0.1
-- Servicio Python/FastAPI desplegado en Render con plan `free`.
-- Crea sesiones efímeras con credenciales separadas para editor y controlador.
-- Recibe peticiones autenticadas del controlador y las reenvía al complemento conectado.
+- FastAPI/Uvicorn en Render Free.
+- Sesiones efímeras, credenciales separadas y WebSocket.
+- Reenvío de solicitudes al editor conectado.
 - No almacena proyectos ni archivos.
-- Las sesiones expiran a los 30 minutos o al reiniciarse el servicio.
 
-## Lo que falta para el objetivo completo
+### Neon Command Center — base persistente inicial
+El proyecto Neon se llama **Godot Command Center**. El esquema `command_center` ya está instalado en `neondb` e incluye workspaces, devices, sessions, commands, command_results, revisions, snapshots, proposals, proposal_files y events. Se creó el workspace `default`.
 
-- Verificar el arranque y el endpoint de salud del relay.
-- Probar el emparejamiento editor-controlador de extremo a extremo.
-- Proporcionar una interfaz segura para iniciar sesión sin exponer secretos.
-- Integrar un controlador accesible al agente desde su entorno de trabajo.
-- Añadir conexión/sincronización con Godot Android del usuario.
-- Crear workspace separado para IA, diffs, snapshots y aprobación de cambios.
-- Añadir edición segura de escenas/scripts y runner aislado.
-- Capturas reales del editor y del viewport.
+- [Diseño y estado del centro de mando](docs/COMMAND_CENTER.md)
+- [Migración SQL](database/migrations/001_command_center.sql)
 
-El relay gratuito puede dormir y su memoria es temporal. Por eso no debe ser el almacenamiento del proyecto. La persistencia y el historial se diseñarán de forma independiente.
+Neon Realtime está habilitado para el origen del editor web. Esto aún no constituye una API ni sincronización operativa: falta desplegar el servicio autenticado que lea/escriba la cola y gestione el ciclo de vida de dispositivos.
+
+## Próximas etapas
+
+1. API autenticada y worker persistente sobre Neon.
+2. Emparejamiento de un solo uso y registro de Android, editor web y controlador IA.
+3. Conexión del AI Bridge a la cola durable, con reconexión por cursor.
+4. Integración Android mediante exportación/importación versionada, sin tocar archivos locales sin aprobación.
+5. Propuestas, diffs, validación, snapshots y rollback.
+6. Runner aislado, logs y capturas reales.
+7. Pruebas de desconexión, duplicados, conflictos de revisión y suspensión de Render.
 
 ## Desarrollo
 
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
+- [Centro de mando](docs/COMMAND_CENTER.md)
 - [Protocolo del puente](docs/BRIDGE_PROTOCOL.md)
 - [Relay](relay/README.md)
-- [Código del complemento](examples/bridge-sandbox/addons/godot_ai_bridge/plugin.gd)
+- [Complemento AI Bridge](examples/bridge-sandbox/addons/godot_ai_bridge/plugin.gd)
