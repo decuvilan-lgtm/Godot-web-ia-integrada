@@ -96,7 +96,7 @@ The sequence source constraint now lists `editor_ui`, `editor_2d`, `editor_3d` a
 9. The authenticated agent controller requests a short-lived download URL and retrieves the image.
 10. Neon retains metadata and bytes; Render does not persist screenshot files.
 
-Uploads and completion must be idempotent. An incomplete upload must not appear as a valid visual asset. Signed URLs must be short-lived, private, never logged and never persisted in the editor project.
+Uploads and completion must be idempotent. Sequence frames are unique by `(sequence_id, frame_index)`; standalone captures require one unique asset per command because PostgreSQL's ordinary UNIQUE constraint treats NULL sequence IDs as distinct. Migration `006_visual_asset_single_capture_idempotency.sql` adds that partial unique index. It is included in the draft branch but has **not** been applied to production. On a retry that creates a fresh object key for an already registered frame, the relay keeps the original asset and attempts to delete the unreferenced duplicate object. An incomplete upload must not appear as a valid visual asset. Signed URLs must be short-lived, private, never logged and never persisted in the editor project.
 
 ## Implementation status
 
@@ -106,6 +106,8 @@ Uploads and completion must be idempotent. An incomplete upload must not appear 
 - [x] Migration 005 applied to production and verified.
 - [x] Canonical visual command contract documented in `VISUAL_COMMANDS.md`.
 - [x] Add relay endpoints for presigned upload, upload completion and authenticated download (implemented on the draft branch; not deployed).
+- [x] Make single-capture metadata registration idempotent in code and add duplicate-object cleanup on retries.
+- [ ] Apply migration 006 (partial unique index for one standalone capture per command) to production after explicit authorization.
 - [x] Apply migration 005 allowing `editor_ui` sequence sources; production verification completed.
 - [ ] Provision a narrowly scoped storage credential for the Render relay and configure it securely.
 - [x] Implement 2D/3D viewport capture in the Godot Web plugin (CI smoke-tested; live capture not yet demonstrated).
