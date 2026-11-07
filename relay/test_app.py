@@ -113,6 +113,42 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("sessionStorage", script.text)
         self.assertIn("token.value = ''", script.text)
 
+    def test_browser_cors_allows_editor_origin_and_required_headers_only(self):
+        allowed = self.client.options(
+            "/v1/command-center/pair",
+            headers={
+                "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(
+            allowed.headers.get("access-control-allow-origin"),
+            "https://godot-web-ia-integrada-rt2l.onrender.com",
+        )
+
+        authenticated = self.client.options(
+            "/v1/command-center/commands/next",
+            headers={
+                "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+        self.assertEqual(authenticated.status_code, 200)
+        self.assertIn("authorization", authenticated.headers.get("access-control-allow-headers", "").lower())
+
+        denied = self.client.options(
+            "/v1/command-center/pair",
+            headers={
+                "Origin": "https://untrusted.invalid",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        self.assertEqual(denied.status_code, 400)
+
     def test_command_center_lazily_reconnects_after_startup_failure(self):
         from command_center import get_pool
         attempts = {"count": 0}
