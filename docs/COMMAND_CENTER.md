@@ -10,7 +10,7 @@
 
 ## Database
 
-Migrations: `database/migrations/001_command_center.sql` and `database/migrations/002_live_link_command_leases.sql`.
+Migrations: `database/migrations/001_command_center.sql`, `database/migrations/002_live_link_command_leases.sql`, and `database/migrations/003_require_command_idempotency_keys.sql`.
 
 Schema `command_center` is installed in the Neon project's `neondb` database. It contains:
 - `workspaces`: project identity and accepted revision.
@@ -38,7 +38,7 @@ The default workspace is seeded as `default` / `Godot Android Workspace`.
 
 ## Current implementation boundary
 
-The schema, default workspace, workspace-scoped pairing codes and command lease fields exist in Neon. Neon Realtime is enabled for the Godot Web editor origin. This is not yet an operational API or a completed end-to-end bridge: no Neon Function has been deployed, no device has been enrolled, and the current Godot bridge remains read-only. Do not advertise Android/Web live synchronization until the API, enrollment, queue worker and reconnect tests are complete.
+The schema, default workspace, workspace-scoped pairing codes, command lease fields and mandatory bounded idempotency keys exist in Neon. Neon Realtime is enabled for the Godot Web editor origin. This is not yet an operational API or a completed end-to-end bridge: no Neon Function has been deployed, no device has been enrolled, and the current Godot bridge remains read-only. Do not advertise Android/Web live synchronization until the API, enrollment, queue worker and reconnect tests are complete.
 
 The Android-side integration is not yet in that repo's source patch. Its current GitHub import patch must be preserved; the next native changes should be layered as a separate, reproducible patch and validated against the exact upstream tag fetched by the build workflow.
 
