@@ -104,6 +104,19 @@ Mantener Live Link como integración principal con el editor Android modificado.
 - Diferenciar siempre entre comprobación estática, prueba headless, compilación, instalación y uso real en el dispositivo.
 
 
+## Godot editor-side Command Center client
+
+The Android editor branch PR #3 now includes an experimental client in the existing Live Link addon:
+
+- [Addon implementation](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/feature/neon-command-center-adapter/scripts/live_link_addon/plugin.gd)
+- [Addon integration notes](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/feature/neon-command-center-adapter/scripts/live_link_addon/README.md)
+
+The client uses HTTPS, pairs with a single-use code, receives its authoritative device role from the server, polls the durable command queue, and acknowledges results. Its first command executor is restricted to `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read`. It does not write project files, run shell commands, simulate input or edit scenes. Script reads are limited to 64 KiB; file listings are bounded and omit common secret-file patterns and generated folders.
+
+The bearer credential stays in memory only. A random installation identifier is stored in editor settings, and presenting a new administrator-issued pairing code for that installation rotates its device credential instead of creating a duplicate device record. Persistent secure credential storage still requires platform-specific Android Keystore/Web Crypto work.
+
+**This is not yet operational end-to-end:** the Render relay has not been configured with the Neon database/admin secrets, there is no web UI to issue pairing codes, and no Android physical-device test has been run. The WebSocket Live Link still uses its legacy room/token authentication; the new queue is a separate HTTP channel.
+
 ## Actual implementation progress — Neon queue adapter
 
 A new isolated branch was created in the Android editor repository:
