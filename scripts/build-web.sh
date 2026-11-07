@@ -42,6 +42,7 @@ if [[ ! -f "${PUBLIC_DIR}/index.html" ]]; then
 fi
 
 python3 "${ROOT_DIR}/scripts/patch-web-shell.py"
+python3 "${ROOT_DIR}/scripts/package-bridge-sandbox.py"
 
 test -s "${PUBLIC_DIR}/index.html"
 test "$(find "${PUBLIC_DIR}" -type f | wc -l)" -gt 1
