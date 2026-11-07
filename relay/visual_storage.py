@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from command_center import authenticate_device, get_pool
@@ -36,6 +37,38 @@ class CompleteRequest(BaseModel):
     height: int = Field(ge=1, le=8192)
     captured_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+
+def verify_uploaded_object(client, key: str, extension: str, width: int, height: int):
+    head = client.head_object(Bucket=BUCKET, Key=key)
+    size = int(head.get("ContentLength", 0))
+    mime = head.get("ContentType", "")
+    if size < 1 or size > MAX_BYTES or mime not in MIME_EXTENSIONS or MIME_EXTENSIONS[mime] != extension:
+        raise ValueError("Uploaded object size or MIME type is invalid")
+    obj = client.get_object(Bucket=BUCKET, Key=key)
+    stream = obj["Body"]
+    try:
+        data = stream.read(MAX_BYTES + 1)
+    finally:
+        stream.close()
+    if len(data) != size or len(data) > MAX_BYTES:
+        raise ValueError("Uploaded object length could not be verified")
+    from PIL import Image, UnidentifiedImageError
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+        with Image.open(io.BytesIO(data)) as image:
+            expected_format = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}[mime]
+            if image.format != expected_format:
+                raise ValueError("Uploaded image format is invalid")
+            if image.size != (width, height):
+                raise ValueError("Reported dimensions do not match the image")
+            if image.width > 8192 or image.height > 8192:
+                raise ValueError("Image dimensions exceed the allowed limit")
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ValueError("Uploaded object is not a valid supported image") from exc
+    return mime, size, hashlib.sha256(data).hexdigest()
 
 
 def storage_client():
@@ -130,7 +163,8 @@ async def presign_upload(
     key = f'{identity["workspace_id"]}/{command["id"]}/{body.frame_index if body.frame_index is not None else "single"}/{uuid.uuid4()}.{MIME_EXTENSIONS[body.content_type]}'
     client = storage_client()
     try:
-        url = client.generate_presigned_url(
+        url = await run_in_threadpool(
+            client.generate_presigned_url,
             "put_object",
             Params={"Bucket": BUCKET, "Key": key, "ContentType": body.content_type},
             ExpiresIn=URL_TTL,
@@ -162,33 +196,11 @@ async def complete_upload(
         raise HTTPException(status_code=413, detail="Capture metadata exceeds limit")
     client = storage_client()
     try:
-        head = client.head_object(Bucket=BUCKET, Key=body.object_key)
-        size = int(head.get("ContentLength", 0))
-        mime = head.get("ContentType", "")
-        if size < 1 or size > MAX_BYTES or mime not in MIME_EXTENSIONS or MIME_EXTENSIONS[mime] != extension:
-            raise HTTPException(status_code=422, detail="Uploaded object size or MIME type is invalid")
-        obj = client.get_object(Bucket=BUCKET, Key=body.object_key)
-        data = obj["Body"].read(MAX_BYTES + 1)
-        if len(data) != size or len(data) > MAX_BYTES:
-            raise HTTPException(status_code=422, detail="Uploaded object length could not be verified")
-        from PIL import Image, UnidentifiedImageError
-        try:
-            with Image.open(io.BytesIO(data)) as image:
-                image.verify()
-            with Image.open(io.BytesIO(data)) as image:
-                if image.format != {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}[mime]:
-                    raise HTTPException(status_code=422, detail="Uploaded image format is invalid")
-                if image.size != (body.width, body.height):
-                    raise HTTPException(status_code=422, detail="Reported dimensions do not match the image")
-                if image.width > 8192 or image.height > 8192:
-                    raise HTTPException(status_code=422, detail="Image dimensions exceed the allowed limit")
-        except HTTPException:
-            raise
-        except (UnidentifiedImageError, OSError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail="Uploaded object is not a valid supported image") from exc
-        digest = hashlib.sha256(data).hexdigest()
-    except HTTPException:
-        raise
+        mime, size, digest = await run_in_threadpool(
+            verify_uploaded_object, client, body.object_key, extension, body.width, body.height
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Uploaded object is missing or unreadable") from exc
 
@@ -271,7 +283,9 @@ async def presign_download(
     if row is None:
         raise HTTPException(status_code=404, detail="Visual asset not found")
     try:
-        url = storage_client().generate_presigned_url(
+        client = storage_client()
+        url = await run_in_threadpool(
+            client.generate_presigned_url,
             "get_object",
             Params={"Bucket": BUCKET, "Key": row["object_key"]},
             ExpiresIn=URL_TTL,
