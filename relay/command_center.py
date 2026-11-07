@@ -585,6 +585,35 @@ async def claim_next_command(
     }
 
 
+@router.post("/commands/{command_id}/heartbeat")
+async def heartbeat_command(
+    command_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    identity = await authenticate_device(request, authorization)
+    if identity["device_kind"] not in EDITOR_KINDS:
+        raise HTTPException(status_code=403, detail="Only an editor device can renew a command lease")
+    try:
+        parsed_id = uuid.UUID(command_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid command ID") from exc
+    pool = await get_pool(request)
+    expires_at = await pool.fetchval(
+        """UPDATE command_center.commands
+           SET claim_expires_at=LEAST(expires_at, now() + ($4::text || ' seconds')::interval)
+           WHERE id=$1 AND workspace_id=$2 AND target=$3
+             AND claimed_by_device=$5 AND status='claimed'
+             AND claim_expires_at > now() AND expires_at > now()
+           RETURNING claim_expires_at""",
+        parsed_id, identity["workspace_id"], identity["device_kind"],
+        CLAIM_SECONDS, identity["id"],
+    )
+    if expires_at is None:
+        raise HTTPException(status_code=409, detail="Command lease expired or is no longer owned by this device")
+    return {"command_id": str(parsed_id), "lease_expires_at": expires_at.isoformat()}
+
+
 @router.post("/commands/{command_id}/result")
 async def submit_command_result(
     command_id: str,
