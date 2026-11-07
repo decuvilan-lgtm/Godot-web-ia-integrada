@@ -39,6 +39,10 @@ if not wasm:
 if not js:
     fail("no JavaScript runtime was found")
 
+html_text = ENTRY.read_text(encoding="utf-8", errors="replace")
+if 'name="viewport"' not in html_text.lower():
+    fail("mobile viewport metadata is missing")
+
 parser = AssetParser()
 parser.feed(ENTRY.read_text(encoding="utf-8", errors="replace"))
 
