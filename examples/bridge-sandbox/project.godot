@@ -1,0 +1,15 @@
+; Godot AI Bridge sandbox project.
+; This project is a safe test target for the browser-to-agent bridge.
+
+config_version=5
+
+[application]
+config/name="Godot AI Bridge Sandbox"
+run/main_scene="res://scenes/main.tscn"
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot_ai_bridge/plugin.cfg")
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
