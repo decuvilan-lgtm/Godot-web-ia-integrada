@@ -17,6 +17,7 @@ var _poll_button: Button
 var _status: Label
 var _pair_request: HTTPRequest
 var _command_request: HTTPRequest
+var _visual_request: HTTPRequest
 
 var _installation_id := ""
 var _credential := ""
@@ -43,6 +44,10 @@ func _enter_tree() -> void:
 	_command_request.max_redirects = 0
 	_command_request.request_completed.connect(_on_command_completed)
 	add_child(_command_request)
+	_visual_request = HTTPRequest.new()
+	_visual_request.timeout = 30.0
+	_visual_request.max_redirects = 0
+	add_child(_visual_request)
 	_ensure_installation_id()
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	set_process(true)
@@ -55,6 +60,8 @@ func _exit_tree() -> void:
 		_pair_request.cancel_request()
 	if is_instance_valid(_command_request):
 		_command_request.cancel_request()
+	if is_instance_valid(_visual_request):
+		_visual_request.cancel_request()
 	if is_instance_valid(_dock):
 		remove_control_from_docks(_dock)
 		_dock.queue_free()
@@ -227,6 +234,7 @@ func _forget_credential() -> void:
 	_command_id = ""
 	_pending_result.clear()
 	_command_request.cancel_request()
+	_visual_request.cancel_request()
 	_command_busy = false
 	_request_kind = ""
 	_code_input.editable = true
@@ -292,7 +300,9 @@ func _on_command_completed(result: int, response_code: int, _headers: PackedStri
 			_set_status("La orden no contiene un identificador válido.")
 			return
 		_command_started_ms = Time.get_ticks_msec()
-		var execution := _execute_read_only(str(command.get("action", "")), command.get("args", {}))
+		_command_busy = true
+		var execution: Dictionary = await _execute_command(str(command.get("action", "")), command.get("args", {}))
+		_command_busy = false
 		_pending_result = {
 			"ok": bool(execution.get("ok", false)),
 			"result": execution.get("result", {}),
@@ -337,6 +347,149 @@ func _send_pending_result() -> void:
 		return
 	_command_busy = true
 	_request_kind = "result"
+
+
+func _execute_command(action: String, args: Variant) -> Dictionary:
+	if action.begins_with("visual."):
+		return await _execute_visual_action(action, args)
+	return _execute_read_only(action, args)
+
+
+func _execute_visual_action(action: String, args: Variant) -> Dictionary:
+	if not args is Dictionary:
+		return {"ok": false, "result": {"error": "Los argumentos visuales deben ser un objeto."}}
+	var target := str(args.get("target", ""))
+	if target in ["editor_ui", "game_preview"]:
+		return {"ok": false, "result": {"error_code": "VISUAL_TARGET_UNAVAILABLE", "message": "Este objetivo requiere captura del navegador; el complemento Godot no lo sustituye por una captura parcial."}}
+	if action == "visual.zoom_to":
+		return {"ok": false, "result": {"error_code": "VISUAL_ZOOM_BACKEND_UNAVAILABLE", "message": "La captura con zoom se mantiene deshabilitada hasta implementar y probar la restauración exacta de la vista."}}
+	if target not in ["editor_2d", "editor_3d"]:
+		return {"ok": false, "result": {"error_code": "VISUAL_TARGET_UNAVAILABLE", "message": "Objetivo visual no disponible en este complemento."}}
+	var frame_count := int(args.get("frames", 1)) if action == "visual.capture_sequence" else 1
+	var interval_ms := int(args.get("interval_ms", 250))
+	if frame_count < 1 or frame_count > 24:
+		return {"ok": false, "result": {"error_code": "VISUAL_SEQUENCE_LIMIT", "message": "Cantidad de imágenes fuera del límite."}}
+	var asset_ids: Array[String] = []
+	for frame_index in range(frame_count):
+		var uploaded: Dictionary = await _capture_and_upload_visual(str(_command_id), target, args, frame_index if frame_count > 1 else -1)
+		if not bool(uploaded.get("ok", false)):
+			return {"ok": false, "result": {
+				"error_code": str(uploaded.get("error_code", "VISUAL_CAPTURE_FAILED")),
+				"message": str(uploaded.get("message", "No se pudo capturar o subir la imagen.")),
+				"asset_ids": asset_ids,
+				"captured_frames": asset_ids.size(),
+				"requested_frames": frame_count
+			}}
+		asset_ids.append(str(uploaded.get("asset_id", "")))
+		if frame_index + 1 < frame_count:
+			await get_tree().create_timer(float(interval_ms) / 1000.0).timeout
+	return {"ok": true, "result": {
+		"asset_ids": asset_ids,
+		"captured_frames": asset_ids.size(),
+		"requested_frames": frame_count,
+		"target": target,
+		"source": "godot_editor_subviewport"
+	}}
+
+
+func _capture_and_upload_visual(command_id: String, target: String, args: Dictionary, frame_index: int) -> Dictionary:
+	var image: Image = await _capture_editor_viewport(target, args)
+	if image == null or image.is_empty():
+		return {"ok": false, "error_code": "VISUAL_CAPTURE_EMPTY", "message": "El SubViewport no devolvió una imagen válida."}
+	var output: Dictionary = args.get("output", {})
+	var max_width := clampi(int(output.get("max_width", 4096)), 320, 8192)
+	var max_height := clampi(int(output.get("max_height", 4096)), 320, 8192)
+	var scale_factor := minf(1.0, minf(float(max_width) / image.get_width(), float(max_height) / image.get_height()))
+	if scale_factor < 1.0:
+		image.resize(maxi(1, int(image.get_width() * scale_factor)), maxi(1, int(image.get_height() * scale_factor)), Image.INTERPOLATE_LANCZOS)
+	var format := str(output.get("format", "jpeg"))
+	var content_type := "image/jpeg" if format == "jpeg" else "image/png"
+	if format not in ["jpeg", "png"]:
+		return {"ok": false, "error_code": "VISUAL_FORMAT_UNAVAILABLE", "message": "El complemento solo genera JPEG y PNG por ahora."}
+	var bytes: PackedByteArray
+	if format == "png":
+		bytes = image.save_png_to_buffer()
+	else:
+		var quality := clampi(int(output.get("quality", 85)), 40, 100)
+		bytes = image.save_jpg_to_buffer(float(quality) / 100.0)
+	if bytes.is_empty() or bytes.size() > 12 * 1024 * 1024:
+		return {"ok": false, "error_code": "VISUAL_IMAGE_SIZE", "message": "La imagen comprimida está vacía o supera 12 MiB."}
+	var upload_payload := {"command_id": command_id, "content_type": content_type}
+	if frame_index >= 0:
+		upload_payload["frame_index"] = frame_index
+	var presign: Dictionary = await _request_visual_json("/v1/command-center/visual/uploads/presign", HTTPClient.METHOD_POST, upload_payload)
+	if not bool(presign.get("ok", false)):
+		return {"ok": false, "error_code": "VISUAL_UPLOAD_URL_FAILED", "message": "El relay no autorizó la subida de esta imagen."}
+	var upload_data: Dictionary = presign.get("data", {})
+	var upload_url := str(upload_data.get("upload_url", ""))
+	var object_key := str(upload_data.get("object_key", ""))
+	if upload_url.is_empty() or object_key.is_empty():
+		return {"ok": false, "error_code": "VISUAL_UPLOAD_URL_INVALID", "message": "El relay devolvió datos de subida incompletos."}
+	var upload_response: Dictionary = await _perform_visual_request(
+		upload_url,
+		HTTPClient.METHOD_PUT,
+		PackedStringArray(["Content-Type: " + content_type]),
+		bytes
+	)
+	if not bool(upload_response.get("ok", false)) or int(upload_response.get("code", 0)) not in [200, 201, 204]:
+		return {"ok": false, "error_code": "VISUAL_OBJECT_UPLOAD_FAILED", "message": "Neon Object Storage rechazó la subida."}
+	var metadata := {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
+	var complete_payload := {
+		"object_key": object_key,
+		"width": image.get_width(),
+		"height": image.get_height(),
+		"metadata": metadata
+	}
+	var completed: Dictionary = await _request_visual_json("/v1/command-center/visual/uploads/complete", HTTPClient.METHOD_POST, complete_payload)
+	if not bool(completed.get("ok", false)):
+		return {"ok": false, "error_code": "VISUAL_UPLOAD_REGISTER_FAILED", "message": "La imagen llegó al almacenamiento, pero Neon no confirmó sus metadatos."}
+	var completed_data: Dictionary = completed.get("data", {})
+	return {"ok": true, "asset_id": str(completed_data.get("asset_id", ""))}
+
+
+func _capture_editor_viewport(target: String, args: Dictionary) -> Image:
+	var viewport: SubViewport
+	if target == "editor_2d":
+		viewport = EditorInterface.get_editor_viewport_2d()
+	elif target == "editor_3d":
+		var viewport_index := clampi(int(args.get("viewport_index", 0)), 0, 3)
+		viewport = EditorInterface.get_editor_viewport_3d(viewport_index)
+	else:
+		return null
+	if viewport == null or viewport.get_texture() == null:
+		return null
+	await RenderingServer.frame_post_draw
+	var image := viewport.get_texture().get_image()
+	if image == null or image.is_empty():
+		return null
+	return image
+
+
+func _request_visual_json(path: String, method: int, payload: Dictionary) -> Dictionary:
+	var body := JSON.stringify(payload).to_utf8_buffer()
+	var response: Dictionary = await _perform_visual_request(
+		_api_base() + path,
+		method,
+		PackedStringArray(["Authorization: Bearer " + _credential, "Content-Type: application/json"]),
+		body
+	)
+	if not bool(response.get("ok", false)):
+		return {"ok": false, "code": response.get("code", 0)}
+	var parsed: Variant = JSON.parse_string((response.get("body", PackedByteArray()) as PackedByteArray).get_string_from_utf8())
+	if not parsed is Dictionary:
+		return {"ok": false, "code": response.get("code", 0)}
+	return {"ok": int(response.get("code", 0)) in [200, 201], "data": parsed, "code": response.get("code", 0)}
+
+
+func _perform_visual_request(url: String, method: int, headers: PackedStringArray, body: PackedByteArray) -> Dictionary:
+	var error := _visual_request.request(url, headers, method, body)
+	if error != OK:
+		return {"ok": false, "code": 0, "body": PackedByteArray()}
+	var response: Array = await _visual_request.request_completed
+	var result_code: int = int(response[0])
+	var http_code: int = int(response[1])
+	var response_body: PackedByteArray = response[3]
+	return {"ok": result_code == HTTPRequest.RESULT_SUCCESS, "code": http_code, "body": response_body}
 
 
 func _execute_read_only(action: String, args: Variant) -> Dictionary:
