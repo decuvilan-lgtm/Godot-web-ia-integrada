@@ -46,7 +46,7 @@ func _build_dock() -> void:
 	_dock.add_child(url_label)
 
 	_url_input = LineEdit.new()
-	_url_input.placeholder_text = "wss://tu-servidor/bridge"
+	_url_input.placeholder_text = "wss://godot-web-ia-relay.onrender.com/v1/editor/ID_DE_SESION"
 	_url_input.clear_button_enabled = true
 	_dock.add_child(_url_input)
 
