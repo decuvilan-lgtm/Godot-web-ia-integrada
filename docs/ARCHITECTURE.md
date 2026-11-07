@@ -1,101 +1,90 @@
 # Arquitectura técnica
 
-## Principio central
+## Dos puestos de trabajo
 
-La IA debe operar el editor Godot real mediante operaciones estructuradas, no mediante clicks ciegos como mecanismo principal. El control visual será complementario. Los cambios se proponen primero en un espacio de trabajo separado y no alteran el proyecto aceptado hasta que se aprueban.
+La web Godot Web no es la herramienta principal del usuario: es el puesto remoto del agente. El usuario trabaja en Godot Editor para Android. El objetivo es que ambos puedan observar el mismo proyecto y que el agente pueda proponer cambios sin sobrescribir trabajo aceptado.
 
 ## Estado implementado
 
-### 1. Editor Web
+### 1. Editor Web de la IA
 - Distribución oficial Godot Web 4.7.2-stable.
-- El build descarga el paquete oficial y comprueba su SHA-256.
-- Render sirve el resultado como sitio estático gratuito.
-- El HTML recibe metadatos de viewport móvil.
-- El sitio declara COOP/COEP para los requisitos de aislamiento de origen del editor.
+- Build descarga el paquete oficial y verifica SHA-256.
+- Render static site.
+- Metadatos viewport y encabezados COOP/COEP.
 
-Esto valida el empaquetado y publicación; no demuestra todavía compatibilidad completa con todos los navegadores Android ni persistencia tras cerrar la pestaña.
+### 2. AI Bridge v0.1
+Complemento `EditorPlugin` con dock de conexión WebSocket. El usuario/editor configura una URL `wss://` y un token temporal guardado solo en memoria.
 
-### 2. AI Bridge v0.1: complemento de solo lectura
-
-Ubicación: `examples/bridge-sandbox/addons/godot_ai_bridge`.
-
-Es un `EditorPlugin` con un dock de conexión. El usuario introduce una URL `wss://` y un token temporal. El token no se guarda en el proyecto ni en disco. El complemento usa `WebSocketPeer` y autentica antes de atender solicitudes.
-
-Acciones habilitadas:
+Acciones de solo lectura:
 - `ping`
 - `project.get_state`
 - `project.list_files`
 - `scene.inspect`
 - `script.read`
 
-Límites defensivos:
-- Máximo 1000 archivos listados.
-- Máximo 500 nodos por árbol y profundidad 32.
-- Máximo 256 KiB por archivo leído.
-- Solo rutas `res://` sin segmentos de traversal.
-- Solo extensiones de texto permitidas.
-- No existe ejecución arbitraria de shell.
-- Cualquier acción desconocida se rechaza.
+Límites: 1000 rutas, 500 nodos, profundidad 32, archivos de texto de 256 KiB, solo `res://` y extensiones permitidas. No hay escritura arbitraria ni ejecución de shell.
 
-El complemento es funcional como cliente de protocolo, pero no puede conectarse hasta que exista un servidor relay compatible.
+### 3. Relay v0.1
+Servicio Python/FastAPI separado, desplegado en Render con plan `free`.
+- `GET /health`
+- `POST /v1/sessions` autenticado por `X-Admin-Token`
+- `GET /v1/sessions/{id}` con token de controlador
+- `POST /v1/sessions/{id}/request` para enviar solicitudes al editor conectado
+- `wss://.../v1/editor/{id}` para el complemento
 
-## Componentes pendientes
+Sesiones en memoria, expiración predeterminada de 30 minutos, sin persistencia de proyectos. Un reinicio invalida sesiones. El relay aún requiere prueba de integración y un controlador que el agente pueda invocar directamente.
 
-### 3. Relay y sesiones
-Servidor WebSocket/HTTP para emparejar el editor con el agente, autenticar ambos extremos, mantener solicitudes correlacionadas y gestionar reconexiones. El servidor debe validar origen, límites de tamaño, frecuencia y expiración de sesión.
+## Arquitectura objetivo
 
 ### 4. Workspace y versiones
 Estados separados:
-- **User workspace**: estado aceptado del proyecto.
-- **Agent workspace**: copia de trabajo del agente.
+- **User workspace**: proyecto aceptado del usuario en Godot Android.
+- **Agent workspace**: copia remota donde trabaja el agente en el editor web.
 - **Proposal**: diff revisable entre ambos.
-- **Snapshot**: punto de restauración anterior a cambios aplicados.
+- **Snapshot**: punto de restauración previo a aplicar cambios.
 
-Borrar o revertir contenido en el workspace del agente nunca debe borrar cambios aceptados del usuario. El almacenamiento del navegador no será la única copia.
+El trabajo experimental del agente nunca debe borrar el proyecto aceptado del usuario. Sincronización con IDs estables, versionado, detección de conflictos y recuperación ante desconexión.
 
 ### 5. Edición segura
-Acciones futuras:
+Futuras acciones:
 - crear/actualizar nodos y propiedades permitidas;
 - leer y parchear scripts con diff;
-- inspeccionar recursos;
-- validar referencias antes de aplicar;
+- inspeccionar recursos y referencias;
+- validar cambios antes de aplicarlos;
 - snapshot previo y rollback.
 
-No se habilitarán escrituras generales de archivos hasta tener validación, permisos y recuperación probados.
+No se habilitará escritura general de archivos hasta probar validación y recuperación.
 
 ### 6. Runner y observación
-Un runner aislado deberá registrar:
+Runner aislado para ejecutar proyectos y devolver:
 - versión del motor y configuración;
-- operación ejecutada y código de salida;
-- logs relevantes;
+- logs y código de salida;
 - capturas reales antes/después;
 - duración y recursos usados.
 
-El observador debe capturar la interfaz completa o solo el viewport. No se aceptarán imágenes simuladas como evidencia de una prueba.
+El observador podrá ver la interfaz completa o solo el viewport. No se aceptarán capturas simuladas como evidencia.
 
-### 7. Sincronización
-Identidad estable del proyecto, historial de cambios, sincronización incremental, detección de conflictos y recuperación ante desconexión móvil.
+### 7. Sincronización con Android
+El usuario abre el proyecto en Godot Android. El agente trabaja sobre una copia remota; los cambios se intercambian mediante paquetes/diffs y se aplican al proyecto del usuario solo tras aprobación. La primera integración puede usar exportación/importación de paquetes versionados antes de intentar sincronización en vivo.
 
 ## Fuente del motor y parches
 
-El submódulo `engine/godot` apunta al commit exacto del tag `4.7.2-stable`. No se modifica el repositorio upstream. Los cambios propios del motor se guardarán como parches versionados en `patches/godot/` y se aplicarán sobre una copia de trabajo del submódulo.
+El submódulo `engine/godot` fija el commit exacto de `4.7.2-stable`. Los cambios propios del motor se guardan como parches versionados y se aplican sobre una copia de trabajo, sin modificar upstream.
 
 ## Próximas fases
 
-1. **Bootstrap web**: completado; falta probar visualmente en Android real.
-2. **Bridge mínimo**: cliente de solo lectura implementado; falta el relay.
-3. **Relay gratuito de pruebas**: implementar y planificar como recurso independiente, sin aceptar planes de pago.
-4. **Edición segura**: diffs, snapshots y operaciones limitadas.
-5. **Runner**: pruebas aisladas, logs y capturas.
-6. **Sesión compartida**: el agente opera el workspace remoto y el usuario observa los mismos cambios desde Android.
-7. **Integración nativa**: modificar Godot solo cuando una extensión no alcance.
+1. Editor web remoto para la IA: desplegado; falta validación visual y funcional completa.
+2. Bridge de solo lectura: implementado; falta prueba con relay real.
+3. Relay gratuito: creado con plan free; falta prueba de integración y acceso directo desde el controlador IA.
+4. Workspace y sincronización con Android.
+5. Edición segura mediante diffs y snapshots.
+6. Runner, logs y capturas.
+7. Integración nativa del motor solo si las extensiones no alcanzan.
 
-## Riesgos a validar
-
-- Requisitos COOP/COEP y SharedArrayBuffer.
-- Límites de memoria y compatibilidad del navegador Android.
-- Persistencia del proyecto al cerrar pestaña o perder conexión.
-- Compatibilidad de IndexedDB y cuota de almacenamiento.
-- Capacidades que la compilación web no ofrece frente al editor nativo.
-- Tiempo de carga inicial y caché.
-- Suspensión por inactividad y almacenamiento efímero de cualquier backend gratuito.
+## Riesgos
+- Suspensión e inactividad del plan gratuito.
+- Pérdida de sesiones en reinicios.
+- Memoria y cuotas del navegador Android.
+- Persistencia y conflictos de archivos.
+- Capacidades no disponibles en editor web frente al nativo.
+- Compatibilidad del plugin con la versión Android exacta del editor.
