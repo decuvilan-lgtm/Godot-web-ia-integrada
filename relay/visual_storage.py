@@ -21,7 +21,7 @@ MAX_BYTES = 12 * 1024 * 1024
 URL_TTL = 180
 MIME_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 CAPTURE_KINDS = {"editor_ui", "editor_2d", "editor_3d", "game_preview"}
-KEY_RE = re.compile(r"^([0-9a-f-]{36})/([0-9a-f-]{36})/([0-9a-f-]{36})\.(jpg|png|webp)$")
+KEY_RE = re.compile(r"^([0-9a-f-]{36})/([0-9a-f-]{36})/(single|(?:[0-9]|1[0-9]|2[0-3]))/([0-9a-f-]{36})\.(jpg|png|webp)$")
 
 
 class UploadRequest(BaseModel):
@@ -154,7 +154,7 @@ async def complete_upload(
     match = KEY_RE.fullmatch(body.object_key)
     if match is None:
         raise HTTPException(status_code=422, detail="Object key is not a valid relay-issued key")
-    workspace_in_key, command_in_key, nonce, extension = match.groups()
+    workspace_in_key, command_in_key, frame_in_key, nonce, extension = match.groups()
     identity, command, args, pool = await leased_visual_command(request, authorization, command_in_key)
     if workspace_in_key != str(identity["workspace_id"]):
         raise HTTPException(status_code=403, detail="Object key belongs to another workspace")
@@ -197,9 +197,9 @@ async def complete_upload(
     sequence_id = None
     frame_index = None
     if command["action"] == "visual.capture_sequence":
-        frame_index = body.metadata.get("frame_index")
+        frame_index = int(frame_in_key) if frame_in_key != "single" else None
         frames = args.get("frames", 0)
-        if not isinstance(frame_index, int) or isinstance(frame_index, bool) or not 0 <= frame_index < frames:
+        if frame_index is None or not 0 <= frame_index < frames:
             raise HTTPException(status_code=422, detail="Sequence completion requires a valid frame_index")
         sequence_id = await pool.fetchval(
             "SELECT id FROM command_center.visual_sequences WHERE command_id=$1",
@@ -210,6 +210,8 @@ async def complete_upload(
     if capture_kind not in CAPTURE_KINDS and capture_kind != "zoom_detail":
         raise HTTPException(status_code=422, detail="Capture target is invalid")
 
+    if command["action"] != "visual.capture_sequence" and frame_in_key != "single":
+        raise HTTPException(status_code=422, detail="Single capture key has an unexpected frame index")
     captured_at = body.captured_at or datetime.now(timezone.utc)
     asset_id = await pool.fetchval(
         """INSERT INTO command_center.visual_assets
