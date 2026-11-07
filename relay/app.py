@@ -11,8 +11,9 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from command_center import router as command_center_router
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 ADMIN_TOKEN = os.environ.get("RELAY_ADMIN_TOKEN", "")
 SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 MAX_PENDING = 64
@@ -25,7 +26,7 @@ app.add_middleware(
     allow_origins=os.environ.get("ALLOWED_ORIGINS", "https://godot-web-ia-integrada-rt2l.onrender.com").split(","),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin"],
 )
 
 @dataclass
@@ -39,6 +40,10 @@ class Session:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 sessions: dict[str, Session] = {}
+app.state.command_center_db = None
+app.state.session_cleanup_task = None
+
+app.include_router(command_center_router)
 
 class CreateSession(BaseModel):
     label: str = Field(default="Godot project", max_length=80)
@@ -175,6 +180,14 @@ async def editor_socket(websocket: WebSocket, session_id: str):
 
 @app.on_event("startup")
 async def cleanup_expired_sessions():
+    database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
+    app.state.command_center_db = None
+    if database_url:
+        import asyncpg
+        app.state.command_center_db = await asyncpg.create_pool(
+            dsn=database_url, min_size=1, max_size=5, command_timeout=10
+        )
+
     async def cleanup_loop():
         while True:
             now = time.time()
@@ -190,4 +203,14 @@ async def cleanup_expired_sessions():
                             future.set_exception(RuntimeError("Session expired"))
                     sessions.pop(key, None)
             await asyncio.sleep(30)
-    asyncio.create_task(cleanup_loop())
+    app.state.session_cleanup_task = asyncio.create_task(cleanup_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_services():
+    task = app.state.session_cleanup_task
+    if task is not None:
+        task.cancel()
+    pool = app.state.command_center_db
+    if pool is not None:
+        await pool.close()
