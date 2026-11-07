@@ -5,6 +5,7 @@ import types
 import unittest
 from unittest.mock import patch
 from starlette.requests import Request
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 os.environ["RELAY_ADMIN_TOKEN"] = "test-admin-secret"
@@ -123,6 +124,12 @@ class RelayApiTests(unittest.TestCase):
                 raise OSError("temporary database outage")
             return sentinel_pool
 
+        async def exercise(request):
+            with self.assertRaises(HTTPException) as first:
+                await get_pool(request)
+            self.assertEqual(first.exception.status_code, 503)
+            return await get_pool(request)
+
         fake_asyncpg = types.SimpleNamespace(create_pool=create_pool)
         request = Request({
             "type": "http",
@@ -135,10 +142,7 @@ class RelayApiTests(unittest.TestCase):
         app.state.command_center_db_lock = None
         with patch.dict(os.environ, {"COMMAND_CENTER_DATABASE_URL": "postgresql://test.invalid/db"}):
             with patch.dict(sys.modules, {"asyncpg": fake_asyncpg}):
-                with self.assertRaises(Exception) as first:
-                    asyncio.run(get_pool(request))
-                self.assertEqual(getattr(first.exception, "status_code", None), 503)
-                pool = asyncio.run(get_pool(request))
+                pool = asyncio.run(exercise(request))
         self.assertIs(pool, sentinel_pool)
         self.assertEqual(attempts["count"], 2)
         app.state.command_center_db = None
