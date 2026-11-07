@@ -1,5 +1,10 @@
+import asyncio
 import os
+import sys
+import types
 import unittest
+from unittest.mock import patch
+from starlette.requests import Request
 from fastapi.testclient import TestClient
 
 os.environ["RELAY_ADMIN_TOKEN"] = "test-admin-secret"
@@ -106,6 +111,38 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("localStorage", script.text)
         self.assertNotIn("sessionStorage", script.text)
         self.assertIn("token.value = ''", script.text)
+
+    def test_command_center_lazily_reconnects_after_startup_failure(self):
+        from command_center import get_pool
+        attempts = {"count": 0}
+        sentinel_pool = object()
+
+        async def create_pool(**kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise OSError("temporary database outage")
+            return sentinel_pool
+
+        fake_asyncpg = types.SimpleNamespace(create_pool=create_pool)
+        request = Request({
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [],
+            "app": app,
+        })
+        app.state.command_center_db = None
+        app.state.command_center_db_lock = None
+        with patch.dict(os.environ, {"COMMAND_CENTER_DATABASE_URL": "postgresql://test.invalid/db"}):
+            with patch.dict(sys.modules, {"asyncpg": fake_asyncpg}):
+                with self.assertRaises(Exception) as first:
+                    asyncio.run(get_pool(request))
+                self.assertEqual(getattr(first.exception, "status_code", None), 503)
+                pool = asyncio.run(get_pool(request))
+        self.assertIs(pool, sentinel_pool)
+        self.assertEqual(attempts["count"], 2)
+        app.state.command_center_db = None
+        app.state.command_center_db_lock = None
 
     def test_expired_or_unknown_session_is_not_found(self):
         response = self.client.get("/v1/sessions/not-a-real-session")
