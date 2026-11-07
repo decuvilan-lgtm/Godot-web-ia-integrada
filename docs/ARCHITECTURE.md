@@ -59,6 +59,10 @@ El observador debe poder solicitar capturas de la interfaz completa o solo del v
 
 El proyecto debe tener una identidad estable y un historial de cambios. La sincronización será incremental, con detección de conflictos y recuperación ante desconexión móvil. No se dependerá del almacenamiento temporal del navegador como única copia.
 
+## Fuente del motor y parches
+
+El submódulo `engine/godot` apunta al commit exacto del tag `4.7.2-stable`. No se modifica el repositorio upstream. Los cambios propios del motor se guardarán como parches versionados en `patches/godot/` y se aplicarán sobre una copia de trabajo del submódulo. Esto facilita revisar, retirar y rebasar cambios cuando se actualice Godot.
+
 ## Fases
 
 1. **Bootstrap web**: publicar y abrir el editor oficial en Render.
