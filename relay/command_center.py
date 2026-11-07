@@ -10,6 +10,7 @@ import hashlib
 import logging
 import hmac
 import json
+import math
 import os
 import secrets
 import time
@@ -23,12 +24,26 @@ router = APIRouter(prefix="/v1/command-center", tags=["command-center"])
 
 DEVICE_KINDS = {"android_editor", "web_editor", "agent_controller"}
 EDITOR_KINDS = {"android_editor", "web_editor"}
-ALLOWED_ACTIONS = {
+READ_ONLY_ACTIONS = {
     "ping",
     "project.get_state",
     "project.list_files",
     "scene.inspect",
     "script.read",
+}
+VISUAL_ACTIONS = {
+    "visual.capture",
+    "visual.capture_sequence",
+    "visual.zoom_to",
+}
+ALLOWED_ACTIONS = READ_ONLY_ACTIONS | VISUAL_ACTIONS
+# Keep visual commands rejected until signed storage transfer and real capture
+# backends are implemented and verified end-to-end.
+VISUAL_COMMANDS_ENABLED = False
+VISUAL_TARGETS = {"editor_ui", "editor_2d", "editor_3d", "game_preview"}
+VISUAL_SEQUENCE_TARGETS = VISUAL_TARGETS
+VISUAL_COORDINATE_SPACES = {
+    "world_2d", "world_3d", "viewport_pixels", "viewport_normalized"
 }
 MAX_IDEMPOTENCY_KEY = 128
 MAX_ARGS_BYTES = 256 * 1024
@@ -81,6 +96,165 @@ def json_size(value: Any) -> int:
         return len(json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
     except (TypeError, ValueError):
         return MAX_ARGS_BYTES + 1
+
+
+def _visual_error(code: str, message: str) -> None:
+    raise HTTPException(status_code=422, detail={"code": code, "message": message})
+
+
+def _strict_keys(value: dict[str, Any], allowed: set[str], required: set[str], code: str) -> None:
+    unknown = set(value) - allowed
+    missing = required - set(value)
+    if unknown:
+        _visual_error(code, f"Unknown fields: {', '.join(sorted(unknown))}")
+    if missing:
+        _visual_error(code, f"Missing required fields: {', '.join(sorted(missing))}")
+
+
+def _bounded_int(value: Any, minimum: int, maximum: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum
+
+
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _validate_visual_output(output: Any) -> None:
+    if not isinstance(output, dict):
+        _visual_error("VISUAL_OUTPUT_INVALID", "output must be an object")
+    _strict_keys(
+        output,
+        {"format", "max_width", "max_height", "quality"},
+        set(),
+        "VISUAL_OUTPUT_INVALID",
+    )
+    if "format" in output and output["format"] not in {"jpeg", "webp", "png"}:
+        _visual_error("VISUAL_OUTPUT_INVALID", "format must be jpeg, webp or png")
+    for key in ("max_width", "max_height"):
+        if key in output and not _bounded_int(output[key], 320, 8192):
+            _visual_error("VISUAL_OUTPUT_INVALID", f"{key} must be an integer from 320 to 8192")
+    if "quality" in output:
+        if not _bounded_int(output["quality"], 40, 100):
+            _visual_error("VISUAL_OUTPUT_INVALID", "quality must be an integer from 40 to 100")
+        if output.get("format") == "png":
+            _visual_error("VISUAL_OUTPUT_INVALID", "quality is not valid for PNG output")
+
+
+def _validate_visual_viewport(args: dict[str, Any], target: str) -> None:
+    if "viewport_index" in args:
+        if target != "editor_3d":
+            _visual_error("VISUAL_TARGET_MISMATCH", "viewport_index is only valid for editor_3d")
+        if not _bounded_int(args["viewport_index"], 0, 7):
+            _visual_error("VISUAL_ARGUMENT_INVALID", "viewport_index must be an integer from 0 to 7")
+
+
+def validate_visual_command(action: str, args: dict[str, Any]) -> None:
+    """Validate the canonical visual command contract before it can enter Neon."""
+    if not isinstance(args, dict):
+        _visual_error("VISUAL_ARGUMENT_INVALID", "Visual command args must be an object")
+
+    if action == "visual.capture":
+        _strict_keys(
+            args,
+            {"target", "viewport_index", "output", "include_metadata"},
+            {"target"},
+            "VISUAL_ARGUMENT_INVALID",
+        )
+        target = args["target"]
+        if target not in VISUAL_TARGETS:
+            _visual_error("VISUAL_TARGET_REQUIRED", "target must identify one supported visual source")
+        _validate_visual_viewport(args, target)
+        if "output" in args:
+            _validate_visual_output(args["output"])
+        if "include_metadata" in args and not isinstance(args["include_metadata"], bool):
+            _visual_error("VISUAL_ARGUMENT_INVALID", "include_metadata must be boolean")
+        return
+
+    if action == "visual.capture_sequence":
+        _strict_keys(
+            args,
+            {
+                "target", "viewport_index", "frames", "interval_ms", "timing_mode",
+                "output", "include_metadata", "include_contact_sheet",
+            },
+            {"target", "frames", "interval_ms"},
+            "VISUAL_ARGUMENT_INVALID",
+        )
+        target = args["target"]
+        if target not in VISUAL_SEQUENCE_TARGETS:
+            _visual_error("VISUAL_TARGET_REQUIRED", "target must identify one supported visual source")
+        _validate_visual_viewport(args, target)
+        if not _bounded_int(args["frames"], 2, 24):
+            _visual_error("VISUAL_SEQUENCE_LIMIT", "frames must be an integer from 2 to 24")
+        if not _bounded_int(args["interval_ms"], 50, 5000):
+            _visual_error("VISUAL_SEQUENCE_LIMIT", "interval_ms must be an integer from 50 to 5000")
+        if args.get("timing_mode", "realtime") != "realtime":
+            _visual_error("VISUAL_TIMING_UNAVAILABLE", "Only realtime timing is currently supported")
+        if "output" in args:
+            _validate_visual_output(args["output"])
+        for key in ("include_metadata", "include_contact_sheet"):
+            if key in args and not isinstance(args[key], bool):
+                _visual_error("VISUAL_ARGUMENT_INVALID", f"{key} must be boolean")
+        return
+
+    if action == "visual.zoom_to":
+        _strict_keys(
+            args,
+            {"target", "viewport_index", "focus", "restore_view", "output"},
+            {"target", "focus", "restore_view"},
+            "VISUAL_ARGUMENT_INVALID",
+        )
+        target = args["target"]
+        if target not in {"editor_2d", "editor_3d"}:
+            _visual_error("VISUAL_TARGET_MISMATCH", "zoom_to supports only editor_2d or editor_3d")
+        _validate_visual_viewport(args, target)
+        if args["restore_view"] is not True:
+            _visual_error("VISUAL_RESTORE_REQUIRED", "restore_view must be true")
+        focus = args["focus"]
+        if not isinstance(focus, dict):
+            _visual_error("VISUAL_COORDINATE_SPACE_REQUIRED", "focus must be an object")
+        _strict_keys(
+            focus,
+            {"coordinate_space", "position", "zoom", "distance"},
+            {"coordinate_space", "position"},
+            "VISUAL_ARGUMENT_INVALID",
+        )
+        space = focus["coordinate_space"]
+        if space not in VISUAL_COORDINATE_SPACES:
+            _visual_error("VISUAL_COORDINATE_SPACE_REQUIRED", "coordinate_space is missing or unsupported")
+        if space == "world_2d" and target != "editor_2d":
+            _visual_error("VISUAL_COORDINATE_MISMATCH", "world_2d coordinates require editor_2d")
+        if space == "world_3d" and target != "editor_3d":
+            _visual_error("VISUAL_COORDINATE_MISMATCH", "world_3d coordinates require editor_3d")
+        position = focus["position"]
+        expected_length = 3 if space == "world_3d" else 2
+        if (
+            not isinstance(position, list)
+            or len(position) != expected_length
+            or not all(_finite_number(value) for value in position)
+        ):
+            _visual_error("VISUAL_COORDINATE_MISMATCH", f"{space} position must contain {expected_length} finite numbers")
+        if space == "viewport_normalized" and any(value < 0 or value > 1 for value in position):
+            _visual_error("VISUAL_COORDINATE_MISMATCH", "normalized viewport coordinates must be between 0 and 1")
+        if space == "viewport_pixels" and any(value < 0 for value in position):
+            _visual_error("VISUAL_COORDINATE_MISMATCH", "viewport pixel coordinates cannot be negative")
+        if space == "world_2d":
+            if "zoom" not in focus or not _finite_number(focus["zoom"]) or not 0.25 <= focus["zoom"] <= 16:
+                _visual_error("VISUAL_ARGUMENT_INVALID", "world_2d focus requires zoom between 0.25 and 16")
+            if "distance" in focus:
+                _visual_error("VISUAL_ARGUMENT_INVALID", "distance is not valid for world_2d")
+        elif space == "world_3d":
+            if "distance" not in focus or not _finite_number(focus["distance"]) or not 0.1 <= focus["distance"] <= 1000:
+                _visual_error("VISUAL_ARGUMENT_INVALID", "world_3d focus requires distance between 0.1 and 1000")
+            if "zoom" in focus:
+                _visual_error("VISUAL_ARGUMENT_INVALID", "zoom is not valid for world_3d")
+        elif "zoom" in focus or "distance" in focus:
+            _visual_error("VISUAL_ARGUMENT_INVALID", "zoom/distance are not valid for viewport coordinate focus")
+        if "output" in args:
+            _validate_visual_output(args["output"])
+        return
+
+    _visual_error("VISUAL_ACTION_UNKNOWN", "Unknown visual command")
 
 
 async def get_pool(request: Request):
@@ -250,7 +424,16 @@ async def create_command(
     if identity["device_kind"] != "agent_controller":
         raise HTTPException(status_code=403, detail="Only an agent controller can enqueue commands")
     if body.action not in ALLOWED_ACTIONS:
-        raise HTTPException(status_code=400, detail="Action is not enabled in the read-only command policy")
+        raise HTTPException(status_code=400, detail="Action is not enabled in the command policy")
+    if body.action in VISUAL_ACTIONS:
+        if body.target != "web_editor":
+            raise HTTPException(status_code=403, detail="Visual commands are restricted to the AI web_editor workspace")
+        validate_visual_command(body.action, body.args)
+        if not VISUAL_COMMANDS_ENABLED:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "VISUAL_PIPELINE_NOT_READY", "message": "Visual capture is not enabled until storage transfer and capture backends pass end-to-end tests"},
+            )
     if json_size(body.args) > MAX_ARGS_BYTES:
         raise HTTPException(status_code=413, detail="Command arguments exceed the size limit")
     pool = await get_pool(request)
