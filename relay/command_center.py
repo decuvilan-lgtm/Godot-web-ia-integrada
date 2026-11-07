@@ -5,7 +5,9 @@ It fails closed when COMMAND_CENTER_DATABASE_URL is not configured.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 import hmac
 import json
 import os
@@ -31,6 +33,7 @@ MAX_IDEMPOTENCY_KEY = 128
 MAX_ARGS_BYTES = 256 * 1024
 MAX_RESULT_BYTES = 1024 * 1024
 MAX_LABEL = 80
+logger = logging.getLogger("godot_web_ia_relay.command_center")
 MAX_INSTALLATION_ID = 128
 CLAIM_SECONDS = 45
 
@@ -79,11 +82,39 @@ def json_size(value: Any) -> int:
         return MAX_ARGS_BYTES + 1
 
 
-def get_pool(request: Request):
+async def get_pool(request: Request):
+    """Return the Neon pool, reconnecting lazily after startup or transient outages."""
     pool = getattr(request.app.state, "command_center_db", None)
-    if pool is None:
+    if pool is not None:
+        return pool
+
+    database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
+    if not database_url:
         raise HTTPException(status_code=503, detail="Neon Command Center database is not configured")
-    return pool
+
+    lock = getattr(request.app.state, "command_center_db_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        request.app.state.command_center_db_lock = lock
+
+    async with lock:
+        pool = getattr(request.app.state, "command_center_db", None)
+        if pool is not None:
+            return pool
+        try:
+            import asyncpg
+            pool = await asyncpg.create_pool(
+                dsn=database_url, min_size=1, max_size=5, command_timeout=10
+            )
+            request.app.state.command_center_db = pool
+            logger.info("Neon Command Center database pool connected")
+            return pool
+        except Exception as exc:
+            logger.warning("Neon Command Center lazy connection failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=503,
+                detail="Neon Command Center database is temporarily unavailable",
+            ) from exc
 
 
 def require_admin(supplied: str | None) -> None:
@@ -98,7 +129,7 @@ async def authenticate_device(request: Request, authorization: str | None):
     scheme, separator, token = authorization.partition(" ")
     if not separator or scheme.lower() != "bearer" or not token or len(token) > 512:
         raise HTTPException(status_code=401, detail="Bearer device credential required")
-    pool = get_pool(request)
+    pool = await get_pool(request)
     row = await pool.fetchrow(
         """SELECT id, workspace_id, device_kind, label
            FROM command_center.devices
