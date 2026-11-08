@@ -1,7 +1,7 @@
 # Visual Command Contract
 
 Version: 1.0  
-Status: normative specification; proxy implementation deployed; live end-to-end transfer verification pending.
+Status: normative request contract; relay proxy deployed; live end-to-end transfer verification pending. The relay currently rejects all visual commands. The Godot plugin can capture only the 2D/3D editor SubViewports and supports JPEG/PNG; browser-level targets and zoom are not implemented.
 
 For the operator pairing steps and controlled acceptance procedure, see [LIVE_VISUAL_TRANSFER_RUNBOOK.md](LIVE_VISUAL_TRANSFER_RUNBOOK.md).
 
@@ -35,10 +35,10 @@ A future multi-project mode must add explicit project registration/selection. It
 
 | target | Exact image content | Capture backend | Sequence allowed |
 |---|---|---|---|
-| `editor_ui` | Entire Godot Web page viewport: editor chrome, docks, panels and visible editor layout. Excludes browser tabs and OS chrome. | Browser-level page screenshot | Yes |
-| `editor_2d` | Godot 2D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 2D SubViewport | Yes |
-| `editor_3d` | Godot 3D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 3D SubViewport | Yes |
-| `game_preview` | The running game's visible preview area only. | Embedded preview/browser capture or tested preview capture hook | Yes |
+| `editor_ui` | Entire Godot Web page viewport, including editor docks and panels. | Browser-level page screenshot — not implemented | Not currently supported |
+| `editor_2d` | Godot 2D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 2D SubViewport — implemented in plugin, not live-verified | Plugin supports it |
+| `editor_3d` | Godot 3D editor viewport only; not the surrounding docks or browser UI. | Godot EditorInterface 3D SubViewport — implemented in plugin, not live-verified | Plugin supports it |
+| `game_preview` | The running game's visible preview area only. | Browser/preview capture backend — not implemented | Not currently supported |
 
 `zoom_detail` is not a target. It is an asset classification produced when a capture temporarily focuses a coordinate inside `editor_2d` or `editor_3d`.
 
@@ -55,12 +55,12 @@ Required:
 
 Optional:
 - `viewport_index`: integer 0–3; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
-- `output.format`: `jpeg`, `webp`, or `png`; default `webp`.
-- `output.max_width`, `output.max_height`: each 320–8192; defaults 2560 and 1440.
-- `output.quality`: integer 40–100; applies only to JPEG/WebP; default 85.
+- Contract formats: `jpeg`, `webp`, or `png`. Current Godot plugin implementation supports only `jpeg` and `png`, and defaults to `jpeg` when format is omitted; `webp` is not yet implemented there.
+- `output.max_width`, `output.max_height`: each 320–8192. Contract defaults are 2560 and 1440; the current plugin defaults to 4096 × 4096 and clamps each requested dimension to 320–8192.
+- `output.quality`: integer 40–100; applies to JPEG/WebP in the contract. The current plugin applies quality only to JPEG; PNG ignores quality.
 - `include_metadata`: boolean; default true.
 
-Example — whole editor page:
+Example — whole editor page (contract example only; current plugin rejects `editor_ui` until a browser-level capture backend exists):
 ```json
 {
   "target": "editor_ui",
@@ -104,10 +104,10 @@ Optional:
 - `include_metadata`: boolean; default true.
 - `include_contact_sheet`: boolean; default true. A contact sheet is supplementary; each original frame remains a separate asset.
 
-Example — 12 consecutive screenshots of the full editor UI:
+Example — 12 consecutive screenshots of the 2D viewport:
 ```json
 {
-  "target": "editor_ui",
+  "target": "editor_2d",
   "frames": 12,
   "interval_ms": 250,
   "timing_mode": "realtime",
@@ -144,7 +144,7 @@ Each frame records a zero-based `frame_index`, capture timestamp, elapsed time, 
 
 ### 3.3 `visual.zoom_to`
 
-Temporarily focuses a coordinate in a supported viewport, captures one still, then restores the original view.
+Contract only for now: the current Godot plugin explicitly rejects this action with `VISUAL_ZOOM_BACKEND_UNAVAILABLE`. Do not enqueue it until exact view restoration is implemented and tested. The intended behavior is to focus a coordinate in a supported viewport, capture one still, then restore the original view.
 
 Required:
 - `target`: `editor_2d` or `editor_3d`.
@@ -202,7 +202,8 @@ Example — focus a 3D world point:
 - **Registration path:** after upload, the client calls `POST /v1/command-center/visual/uploads/complete`. The relay rechecks the lease, reads the stored object, verifies actual MIME, dimensions, byte size and SHA-256, then registers the asset in `command_center.visual_assets`.
 - **Abandon path:** if the upload succeeded but the lease or metadata registration fails, the paired web editor calls `POST /v1/command-center/visual/uploads/abandon`. The relay verifies workspace, command ownership and that no asset references the key before deleting the unregistered object. Registered assets cannot be removed through this route.
 - **Download path:** authorized clients retrieve bytes through `GET /v1/command-center/visual/assets/{asset_id}/content`. The relay checks device role and workspace ownership before reading from the private bucket.
-- Legacy presigned upload/download routes remain in `visual_storage.py` for compatibility; they are not the client flow described here and must not be used by the browser/Godot Web client.
+- Legacy presigned upload/download routes remain only as disabled compatibility stubs and return HTTP 410 after authentication/lease checks. They never generate or return S3 URLs. Uploads must use the relay proxy; downloads must use the authenticated `/content` endpoint.
+- The relay currently has `VISUAL_COMMANDS_ENABLED = False`; all visual commands are rejected before enqueueing. Do not change this to `True` for testing. A separately scoped, one-shot test authorization must be implemented and reviewed after the isolated editor is paired.
 - Automated proxy tests mock the S3 client. They prove relay routing and validation behavior, not a real Neon round trip. Live upload/download verification remains pending.
 - Results return asset IDs, dimensions, hashes, timestamps and sequence metadata only.
 

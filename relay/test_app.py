@@ -379,6 +379,39 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(download.status_code, 401)
 
+    def test_legacy_presigned_visual_routes_never_expose_s3_urls(self):
+        identity = {
+            "id": "web-editor-test",
+            "workspace_id": "11111111-1111-4111-8111-111111111111",
+            "device_kind": "web_editor",
+        }
+        command = {"id": "22222222-2222-4222-8222-222222222222", "action": "visual.capture"}
+        with patch(
+            "visual_storage.leased_visual_command",
+            new=AsyncMock(return_value=(identity, command, {"target": "editor_2d"}, object())),
+        ), patch("visual_storage.storage_client") as storage_factory:
+            upload = self.client.post(
+                "/v1/command-center/visual/uploads/presign",
+                headers={"Authorization": "Bearer test-web-editor"},
+                json={
+                    "command_id": "22222222-2222-4222-8222-222222222222",
+                    "content_type": "image/png",
+                },
+            )
+            self.assertEqual(upload.status_code, 410)
+            storage_factory.assert_not_called()
+
+        with patch(
+            "visual_storage.authenticate_device",
+            new=AsyncMock(return_value=identity),
+        ), patch("visual_storage.storage_client") as storage_factory:
+            download = self.client.get(
+                "/v1/command-center/visual/assets/33333333-3333-4333-8333-333333333333/download",
+                headers={"Authorization": "Bearer test-web-editor"},
+            )
+            self.assertEqual(download.status_code, 410)
+            storage_factory.assert_not_called()
+
     def test_visual_proxy_upload_and_download_require_authentication(self):
         upload = self.client.post(
             "/v1/command-center/visual/uploads/proxy",

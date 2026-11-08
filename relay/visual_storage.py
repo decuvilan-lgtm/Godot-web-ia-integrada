@@ -219,56 +219,13 @@ async def presign_upload(
 ):
     if body.content_type not in MIME_EXTENSIONS:
         raise HTTPException(status_code=422, detail="Unsupported image MIME type")
-    identity, command, args, pool = await leased_visual_command(request, authorization, body.command_id)
-    action = command["action"]
-    target = args.get("target")
-    if action == "visual.zoom_to":
-        if body.frame_index is not None:
-            raise HTTPException(status_code=422, detail="zoom_to does not accept frame_index")
-        capture_kind = "zoom_detail"
-        expected_target = args.get("target")
-    else:
-        capture_kind = target
-        expected_target = target
-    if capture_kind not in CAPTURE_KINDS and capture_kind != "zoom_detail":
-        raise HTTPException(status_code=422, detail="Visual command target is invalid")
-    if action == "visual.capture_sequence":
-        frames = args.get("frames")
-        if not isinstance(frames, int) or body.frame_index is None or body.frame_index >= frames:
-            raise HTTPException(status_code=422, detail="A valid frame_index is required for this sequence")
-        if frames < 2 or frames > 24:
-            raise HTTPException(status_code=422, detail="Sequence frame count is invalid")
-        sequence_id = await pool.fetchval(
-            """INSERT INTO command_center.visual_sequences
-               (workspace_id, command_id, source, requested_frames, interval_ms, status, started_at)
-               VALUES ($1,$2,$3,$4,$5,'capturing',now())
-               ON CONFLICT (command_id) DO UPDATE SET status='capturing'
-               RETURNING id""",
-            identity["workspace_id"], command["id"], expected_target, frames, args["interval_ms"],
-        )
-    else:
-        if body.frame_index is not None:
-            raise HTTPException(status_code=422, detail="frame_index is only valid for capture_sequence")
-        sequence_id = None
-
-    key = f'{identity["workspace_id"]}/{command["id"]}/{body.frame_index if body.frame_index is not None else "single"}/{uuid.uuid4()}.{MIME_EXTENSIONS[body.content_type]}'
-    client = storage_client()
-    try:
-        url = await run_in_threadpool(
-            client.generate_presigned_url,
-            "put_object",
-            Params={"Bucket": BUCKET, "Key": key, "ContentType": body.content_type},
-            ExpiresIn=URL_TTL,
-            HttpMethod="PUT",
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="Could not issue private upload URL") from exc
-    return {
-        "upload_url": url, "object_key": key, "method": "PUT",
-        "headers": {"Content-Type": body.content_type},
-        "expires_in_seconds": URL_TTL,
-        "sequence_id": str(sequence_id) if sequence_id else None,
-    }
+    # Authenticate and validate ownership/lease, but never return a direct Neon S3 URL
+    # to the browser-based editor. Binary transfers must pass through the relay proxy.
+    await leased_visual_command(request, authorization, body.command_id)
+    raise HTTPException(
+        status_code=410,
+        detail="Direct presigned uploads are disabled; use the authenticated relay proxy",
+    )
 
 
 @router.post("/uploads/complete", status_code=201)
@@ -349,27 +306,9 @@ async def presign_download(
     identity = await authenticate_device(request, authorization)
     if identity["device_kind"] not in {"agent_controller", "web_editor"}:
         raise HTTPException(status_code=403, detail="This device role cannot retrieve visual assets")
-    try:
-        parsed_id = uuid.UUID(asset_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid asset ID") from exc
-    pool = await get_pool(request)
-    row = await pool.fetchrow(
-        """SELECT object_key, mime_type FROM command_center.visual_assets
-           WHERE id=$1 AND workspace_id=$2""",
-        parsed_id, identity["workspace_id"],
+    # Keep the legacy route recognizable, but never expose a presigned S3 URL.
+    # Authorized downloads must use /content so the relay enforces workspace scope.
+    raise HTTPException(
+        status_code=410,
+        detail="Direct presigned downloads are disabled; use the authenticated relay content endpoint",
     )
-    if row is None:
-        raise HTTPException(status_code=404, detail="Visual asset not found")
-    try:
-        client = storage_client()
-        url = await run_in_threadpool(
-            client.generate_presigned_url,
-            "get_object",
-            Params={"Bucket": BUCKET, "Key": row["object_key"]},
-            ExpiresIn=URL_TTL,
-            HttpMethod="GET",
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="Could not issue private download URL") from exc
-    return {"download_url": url, "method": "GET", "mime_type": row["mime_type"], "expires_in_seconds": URL_TTL}
