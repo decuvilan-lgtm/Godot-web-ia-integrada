@@ -228,6 +228,76 @@ async def presign_upload(
     )
 
 
+@router.post("/uploads/complete", status_code=201)
+async def complete_upload(
+    body: CompleteRequest, request: Request,
+    authorization: str | None = Header(default=None),
+):
+    match = KEY_RE.fullmatch(body.object_key)
+    if match is None:
+        raise HTTPException(status_code=422, detail="Object key is not a valid relay-issued key")
+    workspace_in_key, command_in_key, frame_in_key, nonce, extension = match.groups()
+    identity, command, args, pool = await leased_visual_command(request, authorization, command_in_key)
+    if workspace_in_key != str(identity["workspace_id"]):
+        raise HTTPException(status_code=403, detail="Object key belongs to another workspace")
+    if len(json.dumps(body.metadata, separators=(",", ":")).encode()) > 4096:
+        raise HTTPException(status_code=413, detail="Capture metadata exceeds limit")
+    client = storage_client()
+    try:
+        mime, size, digest = await run_in_threadpool(
+            verify_uploaded_object, client, body.object_key, extension, body.width, body.height
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Uploaded object is missing or unreadable") from exc
+
+    target = args.get("target")
+    capture_kind = "zoom_detail" if command["action"] == "visual.zoom_to" else target
+    sequence_id = None
+    frame_index = None
+    if command["action"] == "visual.capture_sequence":
+        frame_index = int(frame_in_key) if frame_in_key != "single" else None
+        frames = args.get("frames", 0)
+        if frame_index is None or not 0 <= frame_index < frames:
+            raise HTTPException(status_code=422, detail="Sequence completion requires a valid frame_index")
+        sequence_id = await pool.fetchval(
+            "SELECT id FROM command_center.visual_sequences WHERE command_id=$1",
+            command["id"],
+        )
+        if sequence_id is None:
+            raise HTTPException(status_code=409, detail="Sequence metadata was not initialized")
+    if capture_kind not in CAPTURE_KINDS and capture_kind != "zoom_detail":
+        raise HTTPException(status_code=422, detail="Capture target is invalid")
+
+    if command["action"] != "visual.capture_sequence" and frame_in_key != "single":
+        raise HTTPException(status_code=422, detail="Single capture key has an unexpected frame index")
+    captured_at = body.captured_at or datetime.now(timezone.utc)
+    asset_id, reused = await _insert_asset_idempotently(
+        pool, client,
+        workspace_id=identity["workspace_id"], command_id=command["id"],
+        sequence_id=sequence_id, frame_index=frame_index, capture_kind=capture_kind,
+        object_key=body.object_key, mime=mime, width=body.width, height=body.height,
+        size=size, digest=digest, captured_at=captured_at, metadata=body.metadata,
+    )
+    if reused:
+        return {"asset_id": asset_id, "sequence_id": str(sequence_id) if sequence_id else None, "reused": True}
+    if sequence_id:
+        completed = await pool.fetchval(
+            "SELECT count(*) FROM command_center.visual_assets WHERE sequence_id=$1",
+            sequence_id,
+        )
+        if completed >= args["frames"]:
+            await pool.execute(
+                "UPDATE command_center.visual_sequences SET status='completed', finished_at=now() WHERE id=$1",
+                sequence_id,
+            )
+    return {
+        "asset_id": asset_id, "sequence_id": str(sequence_id) if sequence_id else None,
+        "frame_index": frame_index, "byte_size": size, "sha256": digest, "reused": False,
+    }
+
+
 @router.get("/assets/{asset_id}/download")
 async def presign_download(
     asset_id: str, request: Request,
