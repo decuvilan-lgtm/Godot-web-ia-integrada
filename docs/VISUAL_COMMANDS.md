@@ -55,8 +55,8 @@ Required:
 
 Optional:
 - `viewport_index`: integer 0–3; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
-- Contract formats: `jpeg`, `webp`, or `png`; default `webp`. Current Godot plugin implementation supports only `jpeg` and `png`; `webp` is not yet implemented there.
-- `output.max_width`, `output.max_height`: each 320–8192; defaults 2560 and 1440.
+- Contract formats: `jpeg`, `webp`, or `png`. Current Godot plugin implementation supports only `jpeg` and `png`, and defaults to `jpeg` when format is omitted; `webp` is not yet implemented there.
+- `output.max_width`, `output.max_height`: each 320–8192. Contract defaults are 2560 and 1440; the current plugin defaults to 4096 × 4096 and clamps each requested dimension to 320–8192.
 - `output.quality`: integer 40–100; applies to JPEG/WebP in the contract. The current plugin applies quality only to JPEG; PNG ignores quality.
 - `include_metadata`: boolean; default true.
 
@@ -144,7 +144,7 @@ Each frame records a zero-based `frame_index`, capture timestamp, elapsed time, 
 
 ### 3.3 `visual.zoom_to`
 
-Temporarily focuses a coordinate in a supported viewport, captures one still, then restores the original view.
+Contract only for now: the current Godot plugin explicitly rejects this action with `VISUAL_ZOOM_BACKEND_UNAVAILABLE`. Do not enqueue it until exact view restoration is implemented and tested. The intended behavior is to focus a coordinate in a supported viewport, capture one still, then restore the original view.
 
 Required:
 - `target`: `editor_2d` or `editor_3d`.
