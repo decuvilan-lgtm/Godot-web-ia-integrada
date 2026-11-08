@@ -365,6 +365,21 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(download.status_code, 401)
 
+    def test_visual_proxy_upload_and_download_require_authentication(self):
+        upload = self.client.post(
+            "/v1/command-center/visual/uploads/proxy",
+            headers={
+                "Content-Type": "image/png",
+                "X-Command-Id": "00000000-0000-0000-0000-000000000001",
+            },
+            content=b"not-a-real-image",
+        )
+        self.assertEqual(upload.status_code, 401)
+        download = self.client.get(
+            "/v1/command-center/visual/assets/00000000-0000-0000-0000-000000000001/content"
+        )
+        self.assertEqual(download.status_code, 401)
+
     def test_visual_storage_fails_closed_without_neon_storage_credentials(self):
         from visual_storage import storage_client
         with patch.dict(os.environ, {}, clear=True):
