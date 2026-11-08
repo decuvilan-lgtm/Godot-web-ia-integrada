@@ -3,6 +3,8 @@
 Version: 1.0  
 Status: normative specification; proxy implementation deployed; live end-to-end transfer verification pending.
 
+For the operator pairing steps and controlled acceptance procedure, see [LIVE_VISUAL_TRANSFER_RUNBOOK.md](LIVE_VISUAL_TRANSFER_RUNBOOK.md).
+
 This document is the canonical contract for visual observation commands sent through Neon Command Center. Human requests must be translated into one of these exact command objects before they enter the queue. The relay validates them; the web editor executes only the requested observation.
 
 ## 1. Non-negotiable rules
