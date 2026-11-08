@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from command_center import router as command_center_router
 from admin import router as command_center_admin_router
 from visual_storage import router as visual_storage_router
+from visual_proxy import router as visual_proxy_router
 
 APP_VERSION = "0.2.1"
 logger = logging.getLogger("godot_web_ia_relay")
@@ -50,6 +51,7 @@ app.state.session_cleanup_task = None
 app.include_router(command_center_router)
 app.include_router(command_center_admin_router)
 app.include_router(visual_storage_router)
+app.include_router(visual_proxy_router)
 
 @app.middleware("http")
 async def prevent_command_center_response_caching(request, call_next):
