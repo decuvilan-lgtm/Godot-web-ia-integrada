@@ -380,6 +380,75 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(download.status_code, 401)
 
+    def test_visual_proxy_upload_stores_bytes_only_through_relay(self):
+        from visual_proxy import router
+        workspace_id = "11111111-1111-4111-8111-111111111111"
+        command_id = "22222222-2222-4222-8222-222222222222"
+        identity = {"id": "web-editor-1", "device_kind": "web_editor", "workspace_id": workspace_id}
+        command = {"id": command_id, "action": "visual.capture", "target": "web_editor"}
+        args = {"target": "editor_2d"}
+        pool = object()
+        client = types.SimpleNamespace(put_object=unittest.mock.Mock(return_value={}))
+        payload = b"test-image-payload"
+
+        with patch("visual_proxy.leased_visual_command", new=AsyncMock(return_value=(identity, command, args, pool))), \\
+             patch("visual_proxy.storage_client", return_value=client):
+            response = self.client.post(
+                "/v1/command-center/visual/uploads/proxy",
+                headers={
+                    "Authorization": "Bearer test",
+                    "Content-Type": "image/png",
+                    "X-Command-Id": command_id,
+                },
+                content=payload,
+            )
+
+        self.assertEqual(response.status_code, 201)
+        result = response.json()
+        self.assertEqual(result["transfer"], "relay")
+        self.assertEqual(result["byte_size"], len(payload))
+        self.assertRegex(
+            result["object_key"],
+            rf"^{workspace_id}/{command_id}/single/[0-9a-f-]{{36}}\\.png$",
+        )
+        client.put_object.assert_called_once()
+        stored = client.put_object.call_args.kwargs
+        self.assertEqual(stored["Bucket"], "godot-visual-captures")
+        self.assertEqual(stored["Key"], result["object_key"])
+        self.assertEqual(stored["Body"], payload)
+        self.assertEqual(stored["ContentType"], "image/png")
+
+    def test_visual_proxy_download_returns_private_asset_bytes(self):
+        from visual_proxy import router
+        asset_id = "33333333-3333-4333-8333-333333333333"
+        identity = {"id": "web-editor-1", "device_kind": "web_editor", "workspace_id": "11111111-1111-4111-8111-111111111111"}
+        payload = b"verified-image-content"
+        pool = types.SimpleNamespace(fetchrow=AsyncMock(return_value={
+            "object_key": "workspace/command/single/nonce.png",
+            "mime_type": "image/png",
+            "byte_size": len(payload),
+        }))
+        stream = io.BytesIO(payload)
+        client = types.SimpleNamespace(get_object=unittest.mock.Mock(return_value={"Body": stream}))
+
+        with patch("visual_proxy.authenticate_device", new=AsyncMock(return_value=identity)), \\
+             patch("visual_proxy.get_pool", new=AsyncMock(return_value=pool)), \\
+             patch("visual_proxy.storage_client", return_value=client):
+            response = self.client.get(
+                f"/v1/command-center/visual/assets/{asset_id}/content",
+                headers={"Authorization": "Bearer test"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, payload)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertIn("no-store", response.headers["cache-control"])
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        client.get_object.assert_called_once_with(
+            Bucket="godot-visual-captures",
+            Key="workspace/command/single/nonce.png",
+        )
+
     def test_visual_storage_fails_closed_without_neon_storage_credentials(self):
         from visual_storage import storage_client
         with patch.dict(os.environ, {}, clear=True):
