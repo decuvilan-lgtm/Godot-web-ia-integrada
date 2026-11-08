@@ -348,7 +348,6 @@ func _send_pending_result() -> void:
 	_command_busy = true
 	_request_kind = "result"
 
-
 func _execute_command(action: String, args: Variant) -> Dictionary:
 	if action.begins_with("visual."):
 		return await _execute_visual_action(action, args)
@@ -417,25 +416,28 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 		bytes = image.save_jpg_to_buffer(float(quality) / 100.0)
 	if bytes.is_empty() or bytes.size() > 12 * 1024 * 1024:
 		return {"ok": false, "error_code": "VISUAL_IMAGE_SIZE", "message": "La imagen comprimida está vacía o supera 12 MiB."}
-	var upload_payload := {"command_id": command_id, "content_type": content_type}
+	var upload_headers := PackedStringArray([
+		"Authorization: Bearer " + _credential,
+		"Content-Type: " + content_type,
+		"X-Command-Id: " + command_id
+	])
 	if frame_index >= 0:
-		upload_payload["frame_index"] = frame_index
-	var presign: Dictionary = await _request_visual_json("/v1/command-center/visual/uploads/presign", HTTPClient.METHOD_POST, upload_payload)
-	if not bool(presign.get("ok", false)):
-		return {"ok": false, "error_code": "VISUAL_UPLOAD_URL_FAILED", "message": "El relay no autorizó la subida de esta imagen."}
-	var upload_data: Dictionary = presign.get("data", {})
-	var upload_url := str(upload_data.get("upload_url", ""))
-	var object_key := str(upload_data.get("object_key", ""))
-	if upload_url.is_empty() or object_key.is_empty():
-		return {"ok": false, "error_code": "VISUAL_UPLOAD_URL_INVALID", "message": "El relay devolvió datos de subida incompletos."}
+		upload_headers.append("X-Frame-Index: " + str(frame_index))
 	var upload_response: Dictionary = await _perform_visual_request(
-		upload_url,
-		HTTPClient.METHOD_PUT,
-		PackedStringArray(["Content-Type: " + content_type]),
+		_api_base() + "/v1/command-center/visual/uploads/proxy",
+		HTTPClient.METHOD_POST,
+		upload_headers,
 		bytes
 	)
-	if not bool(upload_response.get("ok", false)) or int(upload_response.get("code", 0)) not in [200, 201, 204]:
-		return {"ok": false, "error_code": "VISUAL_OBJECT_UPLOAD_FAILED", "message": "Neon Object Storage rechazó la subida."}
+	if not bool(upload_response.get("ok", false)) or int(upload_response.get("code", 0)) != 201:
+		return {"ok": false, "error_code": "VISUAL_PROXY_UPLOAD_FAILED", "message": "El relay no pudo guardar la imagen en Neon."}
+	var upload_body: PackedByteArray = upload_response.get("body", PackedByteArray())
+	var upload_data: Variant = JSON.parse_string(upload_body.get_string_from_utf8())
+	if not upload_data is Dictionary:
+		return {"ok": false, "error_code": "VISUAL_PROXY_RESPONSE_INVALID", "message": "El relay devolvió una respuesta de subida inválida."}
+	var object_key := str(upload_data.get("object_key", ""))
+	if object_key.is_empty():
+		return {"ok": false, "error_code": "VISUAL_PROXY_KEY_MISSING", "message": "El relay no confirmó la ubicación privada de la imagen."}
 	var metadata := {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
 	var lease_before_complete: Dictionary = await _request_visual_json("/v1/command-center/commands/" + command_id + "/heartbeat", HTTPClient.METHOD_POST, {})
 	if not bool(lease_before_complete.get("ok", false)):
@@ -490,10 +492,7 @@ func _request_visual_json(path: String, method: int, payload: Dictionary) -> Dic
 
 func _perform_visual_request(url: String, method: int, headers: PackedStringArray, body: PackedByteArray) -> Dictionary:
 	var error: Error
-	if method == HTTPClient.METHOD_PUT:
-		error = _visual_request.request_raw(url, headers, method, body)
-	else:
-		error = _visual_request.request(url, headers, method, body.get_string_from_utf8())
+	error = _visual_request.request_raw(url, headers, method, body)
 	if error != OK:
 		return {"ok": false, "code": 0, "body": PackedByteArray()}
 	var response: Array = await _visual_request.request_completed
@@ -516,8 +515,7 @@ func _execute_read_only(action: String, args: Variant) -> Dictionary:
 			}}
 		"project.get_state":
 			var root := EditorInterface.get_edited_scene_root()
-			return {"ok": true, "result": {
-				"project_name": str(ProjectSettings.get_setting("application/config/name", "Godot Project")),
+			return {"ok": true, "result": {				"project_name": str(ProjectSettings.get_setting("application/config/name", "Godot Project")),
 				"current_scene": root.scene_file_path if root != null else "",
 				"godot_version": Engine.get_version_info(),
 				"platform": OS.get_name(),
