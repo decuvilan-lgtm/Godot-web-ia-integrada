@@ -2,6 +2,11 @@ name: Configure Neon Storage CORS
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/configure-neon-storage-cors.yml
 
 permissions:
   contents: read
@@ -34,6 +39,10 @@ jobs:
           COMMAND_CENTER_STORAGE_CORS_ORIGIN: https://godot-web-ia-integrada-rt2l.onrender.com
         shell: bash
         run: |
+          # Remove accidental leading/trailing whitespace or copied line breaks.
+          export AWS_ACCESS_KEY_ID="$(python -c 'import os; print(os.environ.get("AWS_ACCESS_KEY_ID", "").strip())')"
+          export AWS_SECRET_ACCESS_KEY="$(python -c 'import os; print(os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip())')"
+
           if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" ]]; then
             echo "::error::Missing repository secrets NEON_S3_ACCESS_KEY_ID and/or NEON_S3_SECRET_ACCESS_KEY."
             exit 1
@@ -43,8 +52,8 @@ jobs:
           actual = os.environ.get("AWS_ACCESS_KEY_ID", "")
           expected = os.environ["EXPECTED_NEON_ACCESS_KEY_ID"]
           if not hmac.compare_digest(actual, expected):
-              print("::error::NEON_S3_ACCESS_KEY_ID does not match the active Neon credential for this branch.")
+              print("::error::NEON_S3_ACCESS_KEY_ID does not match the active Neon credential after whitespace normalization.")
               sys.exit(1)
-          print("Access key ID matches the active Neon credential for this branch.")
+          print("Access key ID matches the active Neon credential.")
           PY
           python -m storage_cors
