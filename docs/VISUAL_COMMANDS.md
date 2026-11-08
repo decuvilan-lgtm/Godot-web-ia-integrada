@@ -1,7 +1,7 @@
 # Visual Command Contract
 
 Version: 1.0  
-Status: normative specification; implementation pending.
+Status: normative specification; proxy implementation deployed; live end-to-end transfer verification pending.
 
 This document is the canonical contract for visual observation commands sent through Neon Command Center. Human requests must be translated into one of these exact command objects before they enter the queue. The relay validates them; the web editor executes only the requested observation.
 
@@ -13,7 +13,7 @@ This document is the canonical contract for visual observation commands sent thr
 4. Visual commands target only `web_editor` (the AI's Godot Web workspace). They never target the user's Android editor.
 5. Captures are read-only. Temporary camera/focus changes must be restored even when capture fails.
 6. No command may request arbitrary filesystem paths, arbitrary URLs, shell commands, or capture of another device's screen.
-7. Image bytes go directly to the private Neon Object Storage bucket. Command results contain asset IDs and metadata, never base64 image data.
+7. Image bytes travel from the authenticated Godot Web client to the Render relay, which writes them to the private Neon Object Storage bucket using server-side credentials. The client never receives Neon S3 credentials or a direct S3 URL. Command results contain asset IDs and metadata, never base64 image data.
 8. Missing required fields, unknown fields, unsupported target/coordinate combinations, or out-of-range values are rejected before execution.
 
 ## 2. Persistent project and multiple queries
@@ -196,8 +196,11 @@ Example — focus a 3D world point:
 - Formats: JPEG, WebP, PNG.
 - Sequence size: 2–24 frames; interval: 50–5000 ms.
 - Object keys are server-generated and scoped to workspace/command/asset IDs. Clients cannot choose arbitrary object keys.
-- Presigned upload/download URLs are short-lived, private, never logged and never returned to unrelated devices.
-- The relay validates actual object size, MIME type and SHA-256 before inserting `visual_assets`.
+- **Upload path:** the Godot Web client sends raw image bytes to `POST /v1/command-center/visual/uploads/proxy` with its Bearer credential and command headers. Render validates the active command lease and size limit, then writes to the private bucket. The client never talks to Neon S3.
+- **Registration path:** after upload, the client calls `POST /v1/command-center/visual/uploads/complete`. The relay rechecks the lease, reads the stored object, verifies actual MIME, dimensions, byte size and SHA-256, then registers the asset in `command_center.visual_assets`.
+- **Download path:** authorized clients retrieve bytes through `GET /v1/command-center/visual/assets/{asset_id}/content`. The relay checks device role and workspace ownership before reading from the private bucket.
+- Legacy presigned upload/download routes remain in `visual_storage.py` for compatibility; they are not the client flow described here and must not be used by the browser/Godot Web client.
+- Automated proxy tests mock the S3 client. They prove relay routing and validation behavior, not a real Neon round trip. Live upload/download verification remains pending.
 - Results return asset IDs, dimensions, hashes, timestamps and sequence metadata only.
 
 ## 6. Sequence semantics
