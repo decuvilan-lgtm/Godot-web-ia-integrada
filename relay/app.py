@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import os
 import secrets
 import time
@@ -11,8 +12,12 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from command_center import router as command_center_router
+from admin import router as command_center_admin_router
+from visual_storage import router as visual_storage_router
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.1"
+logger = logging.getLogger("godot_web_ia_relay")
 ADMIN_TOKEN = os.environ.get("RELAY_ADMIN_TOKEN", "")
 SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 MAX_PENDING = 64
@@ -25,7 +30,7 @@ app.add_middleware(
     allow_origins=os.environ.get("ALLOWED_ORIGINS", "https://godot-web-ia-integrada-rt2l.onrender.com").split(","),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin"],
 )
 
 @dataclass
@@ -39,6 +44,21 @@ class Session:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 sessions: dict[str, Session] = {}
+app.state.command_center_db = None
+app.state.session_cleanup_task = None
+
+app.include_router(command_center_router)
+app.include_router(command_center_admin_router)
+app.include_router(visual_storage_router)
+
+@app.middleware("http")
+async def prevent_command_center_response_caching(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/v1/command-center/", "/command-center/admin")):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 class CreateSession(BaseModel):
     label: str = Field(default="Godot project", max_length=80)
@@ -61,7 +81,7 @@ def get_session(session_id: str) -> Session:
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "godot-web-ia-relay", "version": APP_VERSION}
+    return {"ok": True, "service": "godot-web-ia-relay", "version": APP_VERSION, "command_center_ready": app.state.command_center_db is not None}
 
 @app.post("/v1/sessions")
 async def create_session(body: CreateSession, x_admin_token: str | None = Header(default=None)):
@@ -175,6 +195,22 @@ async def editor_socket(websocket: WebSocket, session_id: str):
 
 @app.on_event("startup")
 async def cleanup_expired_sessions():
+    database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
+    app.state.command_center_db = None
+    app.state.command_center_db_lock = asyncio.Lock()
+    app.state.command_center_db_retry_after = 0.0
+    if database_url:
+        try:
+            import asyncpg
+            app.state.command_center_db = await asyncpg.create_pool(
+                dsn=database_url, min_size=1, max_size=5, timeout=5, command_timeout=10
+            )
+        except Exception:
+            # A Neon outage or missing driver must not take down the existing
+            # WebSocket relay. Command Center routes remain fail-closed (503).
+            app.state.command_center_db_retry_after = time.monotonic() + 5.0
+            logger.exception("Command Center database pool could not be initialized")
+
     async def cleanup_loop():
         while True:
             now = time.time()
@@ -190,4 +226,14 @@ async def cleanup_expired_sessions():
                             future.set_exception(RuntimeError("Session expired"))
                     sessions.pop(key, None)
             await asyncio.sleep(30)
-    asyncio.create_task(cleanup_loop())
+    app.state.session_cleanup_task = asyncio.create_task(cleanup_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_services():
+    task = app.state.session_cleanup_task
+    if task is not None:
+        task.cancel()
+    pool = app.state.command_center_db
+    if pool is not None:
+        await pool.close()

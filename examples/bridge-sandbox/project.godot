@@ -1,14 +1,14 @@
-; Godot AI Bridge sandbox project.
-; This project is a safe test target for the browser-to-agent bridge.
+; Godot Web AI workspace sandbox.
+; This project is the agent-side web workspace, never the user's Android editor.
 
 config_version=5
 
 [application]
-config/name="Godot AI Bridge Sandbox"
+config/name="Godot Web AI Workspace"
 run/main_scene="res://scenes/main.tscn"
 
 [editor_plugins]
-enabled=PackedStringArray("res://addons/godot_ai_bridge/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_command_center/plugin.cfg")
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
