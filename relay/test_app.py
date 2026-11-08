@@ -300,6 +300,20 @@ class RelayApiTests(unittest.TestCase):
         self.assertEqual(authenticated.status_code, 200)
         self.assertIn("authorization", authenticated.headers.get("access-control-allow-headers", "").lower())
 
+        visual_upload = self.client.options(
+            "/v1/command-center/visual/uploads/proxy",
+            headers={
+                "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type,x-command-id,x-frame-index",
+            },
+        )
+        self.assertEqual(visual_upload.status_code, 200)
+        allowed_visual_headers = visual_upload.headers.get("access-control-allow-headers", "").lower()
+        self.assertIn("x-command-id", allowed_visual_headers)
+        self.assertIn("x-frame-index", allowed_visual_headers)
+        self.assertIn("authorization", allowed_visual_headers)
+
         denied = self.client.options(
             "/v1/command-center/pair",
             headers={
