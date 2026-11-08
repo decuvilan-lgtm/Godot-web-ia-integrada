@@ -9,6 +9,7 @@ import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
+from command_center import authenticate_device, get_pool
 from starlette.responses import Response
 
 from visual_storage import (
@@ -32,9 +33,21 @@ async def proxy_upload(
     if frame_index is not None and not 0 <= frame_index <= 23:
         raise HTTPException(status_code=422, detail="Frame index is outside the allowed range")
 
-    body = await request.body()
-    if not body or len(body) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Image is empty or exceeds the 12 MiB limit")
+    declared_length = request.headers.get("content-length")
+    if declared_length:
+        try:
+            if int(declared_length) > MAX_BYTES:
+                raise HTTPException(status_code=413, detail="Image exceeds the 12 MiB limit")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from exc
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Image exceeds the 12 MiB limit")
+    body = bytes(chunks)
+    if not body:
+        raise HTTPException(status_code=400, detail="Image body is empty")
 
     identity, command, args, pool = await leased_visual_command(request, authorization, command_id)
     action = command["action"]
@@ -90,7 +103,7 @@ async def proxy_download(
     request: Request,
     authorization: str | None = Header(default=None),
 ):
-    identity = await __import__("command_center").authenticate_device(request, authorization)
+    identity = await authenticate_device(request, authorization)
     if identity["device_kind"] not in {"agent_controller", "web_editor"}:
         raise HTTPException(status_code=403, detail="This device role cannot retrieve visual assets")
     try:
@@ -98,7 +111,7 @@ async def proxy_download(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid asset ID") from exc
 
-    pool = await __import__("command_center").get_pool(request)
+    pool = await get_pool(request)
     row = await pool.fetchrow(
         """SELECT object_key, mime_type, byte_size FROM command_center.visual_assets
            WHERE id=$1 AND workspace_id=$2""",
