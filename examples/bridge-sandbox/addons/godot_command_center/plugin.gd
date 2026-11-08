@@ -441,6 +441,7 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 	var metadata := {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
 	var lease_before_complete: Dictionary = await _request_visual_json("/v1/command-center/commands/" + command_id + "/heartbeat", HTTPClient.METHOD_POST, {})
 	if not bool(lease_before_complete.get("ok", false)):
+		await _abandon_visual_upload(object_key)
 		return {"ok": false, "error_code": "COMMAND_LEASE_LOST", "message": "El lease expiró antes de registrar la imagen."}
 	var complete_payload := {
 		"object_key": object_key,
@@ -450,9 +451,22 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 	}
 	var completed: Dictionary = await _request_visual_json("/v1/command-center/visual/uploads/complete", HTTPClient.METHOD_POST, complete_payload)
 	if not bool(completed.get("ok", false)):
+		await _abandon_visual_upload(object_key)
 		return {"ok": false, "error_code": "VISUAL_UPLOAD_REGISTER_FAILED", "message": "La imagen llegó al almacenamiento, pero Neon no confirmó sus metadatos."}
 	var completed_data: Dictionary = completed.get("data", {})
 	return {"ok": true, "asset_id": str(completed_data.get("asset_id", ""))}
+
+
+func _abandon_visual_upload(object_key: String) -> void:
+	if object_key.is_empty():
+		return
+	# Cleanup is workspace- and command-scoped on the relay. A registered asset
+	# is protected server-side, so a delayed retry cannot delete a valid capture.
+	await _request_visual_json(
+		"/v1/command-center/visual/uploads/abandon",
+		HTTPClient.METHOD_POST,
+		{"object_key": object_key}
+	)
 
 
 func _capture_editor_viewport(target: String, args: Dictionary) -> Image:
