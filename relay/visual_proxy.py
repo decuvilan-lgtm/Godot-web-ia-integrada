@@ -33,6 +33,8 @@ async def proxy_upload(
     if frame_index is not None and not 0 <= frame_index <= 23:
         raise HTTPException(status_code=422, detail="Frame index is outside the allowed range")
 
+    identity, command, args, pool = await leased_visual_command(request, authorization, command_id)
+
     declared_length = request.headers.get("content-length")
     if declared_length:
         try:
@@ -49,7 +51,6 @@ async def proxy_upload(
     if not body:
         raise HTTPException(status_code=400, detail="Image body is empty")
 
-    identity, command, args, pool = await leased_visual_command(request, authorization, command_id)
     action = command["action"]
     target = args.get("target")
     capture_kind = "zoom_detail" if action == "visual.zoom_to" else target
