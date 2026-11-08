@@ -181,13 +181,18 @@ async def abandon_upload(
     if workspace_in_key != str(identity["workspace_id"]):
         raise HTTPException(status_code=403, detail="Object key belongs to another workspace")
 
+    try:
+        command_uuid = uuid.UUID(command_in_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Object key contains an invalid command ID") from exc
+
     pool = await get_pool(request)
     command = await pool.fetchrow(
         """SELECT id FROM command_center.commands
            WHERE id=$1 AND workspace_id=$2 AND target='web_editor'
              AND claimed_by_device=$3
              AND action IN ('visual.capture', 'visual.capture_sequence', 'visual.zoom_to')""",
-        uuid.UUID(command_in_key), identity["workspace_id"], identity["id"],
+        command_uuid, identity["workspace_id"], identity["id"],
     )
     if command is None:
         raise HTTPException(status_code=404, detail="Visual upload does not belong to this editor command")
