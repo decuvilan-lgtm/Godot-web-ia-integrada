@@ -63,6 +63,7 @@ def configure_bucket_cors(client, bucket: str, origin: str) -> dict:
 def main() -> None:
     try:
         import boto3
+        from botocore.config import Config
     except ImportError as exc:
         raise SystemExit("Install relay/requirements.txt before configuring storage CORS.") from exc
 
@@ -82,6 +83,7 @@ def main() -> None:
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         region_name=region,
+        config=Config(s3={"addressing_style": "path"}),
     )
     configure_bucket_cors(client, BUCKET, origin)
     print(f"CORS configured and verified for {validate_origin(origin)} on private bucket {BUCKET}.")
