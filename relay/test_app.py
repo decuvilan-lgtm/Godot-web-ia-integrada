@@ -389,6 +389,11 @@ class RelayApiTests(unittest.TestCase):
             content=b"not-a-real-image",
         )
         self.assertEqual(upload.status_code, 401)
+        abandon = self.client.post(
+            "/v1/command-center/visual/uploads/abandon",
+            json={"object_key": "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/single/33333333-3333-4333-8333-333333333333.png"},
+        )
+        self.assertEqual(abandon.status_code, 401)
         download = self.client.get(
             "/v1/command-center/visual/assets/00000000-0000-0000-0000-000000000001/content"
         )
@@ -428,6 +433,50 @@ class RelayApiTests(unittest.TestCase):
         self.assertEqual(stored["Key"], result["object_key"])
         self.assertEqual(stored["Body"], payload)
         self.assertEqual(stored["ContentType"], "image/png")
+
+    def test_visual_upload_abandon_removes_only_unregistered_object_owned_by_editor(self):
+        workspace_id = "11111111-1111-4111-8111-111111111111"
+        command_id = "22222222-2222-4222-8222-222222222222"
+        object_key = f"{workspace_id}/{command_id}/single/33333333-3333-4333-8333-333333333333.png"
+        identity = {"id": "web-editor-1", "device_kind": "web_editor", "workspace_id": workspace_id}
+        pool = types.SimpleNamespace(
+            fetchrow=AsyncMock(return_value={"id": command_id}),
+            fetchval=AsyncMock(return_value=False),
+        )
+        client = types.SimpleNamespace(delete_object=unittest.mock.Mock(return_value={}))
+        with patch("visual_storage.authenticate_device", new=AsyncMock(return_value=identity)):
+            with patch("visual_storage.get_pool", new=AsyncMock(return_value=pool)):
+                with patch("visual_storage.storage_client", return_value=client):
+                    with patch("visual_storage.run_in_threadpool", new=AsyncMock(return_value={})) as threaded:
+                        response = self.client.post(
+                            "/v1/command-center/visual/uploads/abandon",
+                            headers={"Authorization": "Bearer test"},
+                            json={"object_key": object_key},
+                        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"abandoned": True})
+        threaded.assert_awaited_once_with(client.delete_object, Bucket="godot-visual-captures", Key=object_key)
+
+    def test_visual_upload_abandon_never_deletes_registered_asset(self):
+        workspace_id = "11111111-1111-4111-8111-111111111111"
+        command_id = "22222222-2222-4222-8222-222222222222"
+        object_key = f"{workspace_id}/{command_id}/single/33333333-3333-4333-8333-333333333333.png"
+        identity = {"id": "web-editor-1", "device_kind": "web_editor", "workspace_id": workspace_id}
+        pool = types.SimpleNamespace(
+            fetchrow=AsyncMock(return_value={"id": command_id}),
+            fetchval=AsyncMock(return_value=True),
+        )
+        client = types.SimpleNamespace(delete_object=unittest.mock.Mock(return_value={}))
+        with patch("visual_storage.authenticate_device", new=AsyncMock(return_value=identity)):
+            with patch("visual_storage.get_pool", new=AsyncMock(return_value=pool)):
+                with patch("visual_storage.storage_client", return_value=client):
+                    response = self.client.post(
+                        "/v1/command-center/visual/uploads/abandon",
+                        headers={"Authorization": "Bearer test"},
+                        json={"object_key": object_key},
+                    )
+        self.assertEqual(response.status_code, 409)
+        client.delete_object.assert_not_called()
 
     def test_visual_proxy_download_returns_private_asset_bytes(self):
         asset_id = "33333333-3333-4333-8333-333333333333"

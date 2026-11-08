@@ -40,6 +40,10 @@ class CompleteRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AbandonRequest(BaseModel):
+    object_key: str = Field(min_length=1, max_length=1024)
+
+
 
 def verify_uploaded_object(client, key: str, extension: str, width: int, height: int):
     head = client.head_object(Bucket=BUCKET, Key=key)
@@ -158,6 +162,54 @@ async def leased_visual_command(request: Request, authorization: str | None, com
     if isinstance(args, str):
         args = json.loads(args)
     return identity, row, args, pool
+
+
+@router.post("/uploads/abandon", status_code=200)
+async def abandon_upload(
+    body: AbandonRequest, request: Request,
+    authorization: str | None = Header(default=None),
+):
+    """Delete an unregistered upload owned by the same paired web editor."""
+    match = KEY_RE.fullmatch(body.object_key)
+    if match is None:
+        raise HTTPException(status_code=422, detail="Object key is not a valid relay-issued key")
+    workspace_in_key, command_in_key, _frame_in_key, _nonce, _extension = match.groups()
+
+    identity = await authenticate_device(request, authorization)
+    if identity["device_kind"] != "web_editor":
+        raise HTTPException(status_code=403, detail="Only the paired AI web editor can abandon visual uploads")
+    if workspace_in_key != str(identity["workspace_id"]):
+        raise HTTPException(status_code=403, detail="Object key belongs to another workspace")
+
+    try:
+        command_uuid = uuid.UUID(command_in_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Object key contains an invalid command ID") from exc
+
+    pool = await get_pool(request)
+    command = await pool.fetchrow(
+        """SELECT id FROM command_center.commands
+           WHERE id=$1 AND workspace_id=$2 AND target='web_editor'
+             AND claimed_by_device=$3
+             AND action IN ('visual.capture', 'visual.capture_sequence', 'visual.zoom_to')""",
+        command_uuid, identity["workspace_id"], identity["id"],
+    )
+    if command is None:
+        raise HTTPException(status_code=404, detail="Visual upload does not belong to this editor command")
+
+    referenced = await pool.fetchval(
+        "SELECT EXISTS(SELECT 1 FROM command_center.visual_assets WHERE object_key=$1)",
+        body.object_key,
+    )
+    if referenced:
+        raise HTTPException(status_code=409, detail="Registered visual assets cannot be abandoned")
+
+    client = storage_client()
+    try:
+        await run_in_threadpool(client.delete_object, Bucket=BUCKET, Key=body.object_key)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Relay could not remove the unregistered visual upload") from exc
+    return {"abandoned": True}
 
 
 @router.post("/uploads/presign", status_code=201)
