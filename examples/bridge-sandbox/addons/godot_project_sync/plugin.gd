@@ -308,7 +308,7 @@ func _sync_now() -> void:
 		_busy = false
 		_set_status("Hay " + str(plan.operations.size()) + " operaciones. El límite seguro por tanda es " + str(MAX_OPERATIONS_PER_SYNC) + "; vuelve a analizar después de cada tanda.")
 		return
-	var total := plan.operations.size()
+	var total: int = plan.operations.size()
 	var completed := 0
 	for operation in plan.operations:
 		_set_status("Sincronizando " + str(completed + 1) + "/" + str(total) + " · " + str(operation.path))
