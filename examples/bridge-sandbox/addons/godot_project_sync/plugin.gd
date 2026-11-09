@@ -243,6 +243,10 @@ func _forget_editor() -> void:
 	_device_id = ""
 	_analyzed_project_id = ""
 	_analyzed_plan_fingerprint = ""
+	_clone_project_id = ""
+	_clone_manifest = {}
+	if is_instance_valid(_clone_confirmation):
+		_clone_confirmation.hide()
 	_pair_code_input.editable = true
 	_api_input.editable = true
 	_label_input.editable = true
