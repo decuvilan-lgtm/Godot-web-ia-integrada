@@ -476,21 +476,20 @@ func _apply_operation(project_id: String, operation: Dictionary) -> Dictionary:
 			return {"ok": false, "error": "El archivo local cambió durante la sincronización: " + path}
 		var headers := PackedStringArray([
 			"Content-Type: application/octet-stream",
-			"X-Project-Path: " + path,
 			"X-File-SHA256: " + digest
 		])
 		var base_sha := str(operation.remote_sha)
 		if not base_sha.is_empty():
 			headers.append("X-Base-SHA256: " + base_sha)
-		var uploaded: Dictionary = await _request("/v1/command-center/projects/" + project_id + "/files", HTTPClient.METHOD_POST, bytes, headers)
+		var uploaded: Dictionary = await _request("/v1/command-center/projects/" + project_id + "/files?path=" + path.uri_encode(), HTTPClient.METHOD_POST, bytes, headers)
 		if not uploaded.ok:
 			return {"ok": false, "error": _response_error(uploaded)}
 		return {"ok": true}
 	if kind == "delete_remote":
 		var deleted: Dictionary = await _request(
-			"/v1/command-center/projects/" + project_id + "/files/delete",
+			"/v1/command-center/projects/" + project_id + "/files/delete?path=" + path.uri_encode(),
 			HTTPClient.METHOD_POST, PackedByteArray(),
-			PackedStringArray(["X-Project-Path: " + path, "X-Base-SHA256: " + str(operation.remote_sha)])
+			PackedStringArray(["X-Base-SHA256: " + str(operation.remote_sha)])
 		)
 		if not deleted.ok:
 			return {"ok": false, "error": _response_error(deleted)}
