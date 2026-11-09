@@ -44,56 +44,56 @@ func _build_ui() -> void:
 	_dock.add_child(_panel)
 	var title := Label.new()
 	title.text = "Shared Projects · Web / Android"
-	_dock.add_child(title)
+	_panel.add_child(title)
 	_api_input = LineEdit.new()
 	_api_input.text = API_DEFAULT
-	_dock.add_child(_field("Relay HTTPS", _api_input))
+	_panel.add_child(_field("Relay HTTPS", _api_input))
 	_label_input = LineEdit.new()
 	_label_input.text = "Godot Editor"
 	_label_input.max_length = 80
-	_dock.add_child(_field("Nombre de este editor", _label_input))
+	_panel.add_child(_field("Nombre de este editor", _label_input))
 	_pair_code_input = LineEdit.new()
 	_pair_code_input.secret = true
 	_pair_code_input.placeholder_text = "Código temporal de emparejamiento"
-	_dock.add_child(_field("Código de emparejamiento", _pair_code_input))
+	_panel.add_child(_field("Código de emparejamiento", _pair_code_input))
 	_pair_button = Button.new()
 	_pair_button.text = "Emparejar este editor"
 	_pair_button.pressed.connect(_pair_editor)
-	_dock.add_child(_pair_button)
-	_dock.add_child(HSeparator.new())
+	_panel.add_child(_pair_button)
+	_panel.add_child(HSeparator.new())
 	_slug_input = LineEdit.new()
 	_slug_input.placeholder_text = "mi-proyecto"
-	_dock.add_child(_field("Identificador del proyecto nuevo", _slug_input))
+	_panel.add_child(_field("Identificador del proyecto nuevo", _slug_input))
 	_name_input = LineEdit.new()
 	_name_input.placeholder_text = "Mi proyecto"
-	_dock.add_child(_field("Nombre visible", _name_input))
+	_panel.add_child(_field("Nombre visible", _name_input))
 	var create_button := Button.new()
 	create_button.text = "Crear proyecto compartido"
 	create_button.pressed.connect(_create_project)
-	_dock.add_child(create_button)
+	_panel.add_child(create_button)
 	_project_select = OptionButton.new()
 	_project_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_dock.add_child(_field("Proyecto compartido", _project_select))
+	_panel.add_child(_field("Proyecto compartido", _project_select))
 	_refresh_button = Button.new()
 	_refresh_button.text = "Actualizar lista"
 	_refresh_button.pressed.connect(_refresh_projects)
-	_dock.add_child(_refresh_button)
+	_panel.add_child(_refresh_button)
 	_analyze_button = Button.new()
 	_analyze_button.text = "Analizar cambios"
 	_analyze_button.pressed.connect(_analyze_changes)
-	_dock.add_child(_analyze_button)
+	_panel.add_child(_analyze_button)
 	_sync_button = Button.new()
 	_sync_button.text = "Sincronizar ahora"
 	_sync_button.pressed.connect(_sync_now)
-	_dock.add_child(_sync_button)
+	_panel.add_child(_sync_button)
 	var forget := Button.new()
 	forget.text = "Desconectar editor"
 	forget.pressed.connect(_forget_editor)
-	_dock.add_child(forget)
+	_panel.add_child(forget)
 	_status = Label.new()
 	_status.text = "Sin emparejar. Los dos editores deben usar el mismo workspace."
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_dock.add_child(_status)
+	_panel.add_child(_status)
 
 func _field(caption: String, control: Control) -> VBoxContainer:
 	var box := VBoxContainer.new()
