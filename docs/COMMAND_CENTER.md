@@ -56,6 +56,16 @@ Rutas bajo `/v1/command-center`:
 
 El relay conserva endpoints WebSocket heredados, pero el flujo durable nuevo es HTTP + Neon. No confundir ambos protocolos.
 
+## Proyectos compartidos Web ↔ Android
+
+El contrato de sincronización de archivos y revisiones está en [SHARED_PROJECT_SYNC.md](SHARED_PROJECT_SYNC.md). La migración `007_shared_project_sync.sql` crea un catálogo de proyectos por workspace, manifiestos SHA-256, tombstones y un cursor de cambios.
+
+- Cada editor se empareja por separado como `web_editor` o `android_editor` en el mismo workspace.
+- Los bytes pasan exclusivamente por Render y el bucket privado; no se entregan URLs S3 a los clientes.
+- El complemento **Shared Projects** permite listar/crear proyectos, analizar y sincronizar manualmente.
+- Los conflictos detienen el lote; las copias locales reemplazadas o eliminadas se guardan en `user://godot_project_sync/rescue`.
+- La migración de Neon ya está aplicada en la rama de producción. El código del relay sigue pendiente de desplegar desde la rama de trabajo y de una prueba real entre dos dispositivos.
+
 ## Clientes de editor
 
 ### Godot Web — puesto de IA
