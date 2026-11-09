@@ -47,12 +47,16 @@ Renames are represented as a delete plus an add in the first implementation. Tex
 3. In the modified Android editor, select the existing game project in Project Manager and press **Shared Sync**. This installs or repairs all three integration add-ons: Shared Projects, the read-only AI Bridge and Command Center. Open the project and pair its Shared Projects dock using a separate `android_editor` code in the same workspace.
 4. In Android's Shared Projects dock, create a shared project, select it, Analyze the local-to-remote plan and press Synchronize to seed the remote project from the Android project.
 5. In the Web sandbox, select that same shared project and press **Clonar remoto aquí**. Confirm only after checking the file count and size. This replaces the sandbox's syncable files with the Android project and saves local rescue copies under `user://godot_project_sync/rescue`.
-6. The AI can now work in the cloned Web project. Analyze and Synchronize from Web to publish its changes to the shared store.
+6. Once an AI runtime is connected to the Web project, it can work in the cloned project. Analyze and Synchronize from Web to publish its changes to the shared store.
 7. On Android, Analyze the incoming changes, review every listed path and press Synchronize only to approve that exact plan.
 
 For an already-open Web project other than the connector sandbox, the two add-ons must also be installed and enabled in that project before pairing. The Web launcher downloads the connector sandbox; it does not silently modify another open project's files.
 
 The separate `godot_command_center` dock has its own pairing flow for remote AI commands; pair it only on the Web editor. It is not required for file synchronization. The read-only AI Bridge WebSocket session is also separate from project-file sync.
+
+## ChatGPT agent runtime status
+
+The Relay API accepts the `agent_controller` device role, but that is only server-side authorization. It does not itself connect this ChatGPT conversation to the Relay, create a paired agent device, or provide a binary file-transfer tool to the assistant. No ChatGPT agent device is currently paired. A supported runtime/connector must still be implemented and connected before ChatGPT can download project files, edit them, and upload them through the revision/hash checks. Do not treat the `agent_controller` API allowance as a working ChatGPT integration.
 
 Pairing credentials are kept in memory by each add-on and must be re-entered after an editor restart. Never paste admin credentials or pairing codes into a public issue or commit them to a project.
 
@@ -62,4 +66,5 @@ Pairing credentials are kept in memory by each add-on and must be re-entered aft
 - Relay API, project manifest/revision schema, editor add-on and Android Project Manager add-on installer are implemented in the feature branches.
 - The web sandbox has the add-on enabled by default.
 - The native Godot headless smoke test is included in both repositories' validation workflows.
-- This does **not** yet prove a live two-device transfer. The feature must not be described as end-to-end validated until CI passes, the new relay commit is deployed, and one web editor plus one Android editor complete a real upload/download/hash round trip.
+- This does **not** yet prove a live two-device transfer. The feature must not be described as end-to-end validated until the current Relay commit is deployed and one Web editor plus one Android editor complete a real upload/download/hash round trip.
+- ChatGPT-to-Relay agent file transfer is a separate, unfinished integration milestone; the `agent_controller` API role alone does not complete it.
