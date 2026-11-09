@@ -19,7 +19,7 @@ jobs:
       - name: Validate shell and Python scripts
         run: |
           bash -n scripts/build-web.sh
-          python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/agent_github_bridge.py relay/test_app.py relay/test_agent_github_bridge.py relay/storage_cors.py scripts/agent_binary_bridge.py tests/live_link/test_storage_cors.py
+          python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/agent_github_bridge.py relay/test_app.py relay/test_agent_github_bridge.py relay/test_agent_binary_bridge.py relay/storage_cors.py scripts/agent_binary_bridge.py tests/live_link/test_storage_cors.py
       - name: Validate mobile shell and sandbox package
         run: |
           mkdir -p public
@@ -51,7 +51,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run relay API tests
         run: |
-          python -m unittest -v test_app.py test_agent_github_bridge.py
+          python -m unittest -v test_app.py test_agent_github_bridge.py test_agent_binary_bridge.py
           PYTHONPATH=.. python -m unittest discover -s ../tests/live_link -p 'test_storage_cors.py' -v
 
   godot-plugin-smoke-test:
