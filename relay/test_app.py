@@ -729,5 +729,101 @@ class SharedProjectPathTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             validate_project_path("a" * 1025)
 
+
+class SharedProjectApiTests(unittest.TestCase):
+    def test_agent_controller_cannot_use_editor_project_sync_api(self):
+        identity = {"id": "controller-1", "workspace_id": "workspace-1", "device_kind": "agent_controller"}
+        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)):
+            response = self.client.get(
+                "/v1/command-center/projects",
+                headers={"Authorization": "Bearer controller-token"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_upload_creates_revisioned_file_through_private_relay_storage(self):
+        import hashlib
+
+        class AsyncContext:
+            def __init__(self, value=None):
+                self.value = value
+            async def __aenter__(self):
+                return self.value
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+        class Connection:
+            def __init__(self):
+                self.executed = []
+            def transaction(self):
+                return AsyncContext()
+            async def fetchrow(self, query, *args):
+                if "SELECT head_revision" in query:
+                    return {"head_revision": 0}
+                if "SELECT sha256" in query:
+                    return None
+                raise AssertionError("Unexpected SQL query")
+            async def execute(self, query, *args):
+                self.executed.append((query, args))
+
+        class Pool:
+            def __init__(self):
+                self.connection = Connection()
+            async def fetchrow(self, query, *args):
+                self.assertion_query = query
+                return None
+            def acquire(self):
+                return AsyncContext(self.connection)
+
+        identity = {"id": "android-device", "workspace_id": "workspace-1", "device_kind": "android_editor"}
+        project = {"id": "11111111-1111-4111-8111-111111111111", "workspace_id": "workspace-1"}
+        pool = Pool()
+        payload = b"project.godot contents"
+        digest = hashlib.sha256(payload).hexdigest()
+        with patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, pool))), \\
+             patch("project_sync._project", new=AsyncMock(return_value=project)), \\
+             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+            response = self.client.post(
+                f"/v1/command-center/projects/{project['id']}/files",
+                headers={
+                    "Authorization": "Bearer android-token",
+                    "X-Project-Path": "project.godot",
+                    "X-File-SHA256": digest,
+                    "Content-Type": "text/plain",
+                },
+                content=payload,
+            )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["sha256"], digest)
+        self.assertEqual(response.json()["revision"], 1)
+        store.assert_awaited_once()
+        self.assertEqual(len(pool.connection.executed), 3)
+
+    def test_stale_file_base_is_rejected_before_storage_write(self):
+        import hashlib
+
+        class Pool:
+            async def fetchrow(self, query, *args):
+                return {"sha256": "a" * 64}
+
+        identity = {"id": "web-device", "workspace_id": "workspace-1", "device_kind": "web_editor"}
+        project = {"id": "11111111-1111-4111-8111-111111111111", "workspace_id": "workspace-1"}
+        payload = b"stale local content"
+        with patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, Pool()))), \\
+             patch("project_sync._project", new=AsyncMock(return_value=project)), \\
+             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+            response = self.client.post(
+                f"/v1/command-center/projects/{project['id']}/files",
+                headers={
+                    "Authorization": "Bearer web-token",
+                    "X-Project-Path": "project.godot",
+                    "X-File-SHA256": hashlib.sha256(payload).hexdigest(),
+                    "Content-Type": "text/plain",
+                },
+                content=payload,
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["code"], "PROJECT_FILE_CONFLICT")
+        store.assert_not_awaited()
+
 if __name__ == "__main__":
     unittest.main()
