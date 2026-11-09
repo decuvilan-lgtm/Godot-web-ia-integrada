@@ -23,6 +23,7 @@ INBOX = ROOT / "bridge-inbox"
 RESULT_PATH = ROOT / "bridge-result.json"
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_EXPORT_BYTES = 512 * 1024 * 1024
+MAX_TOTAL_IMPORT_BYTES = 512 * 1024 * 1024
 
 
 class BridgeError(RuntimeError):
@@ -158,16 +159,27 @@ def import_project(request: dict, token: str) -> dict:
     if not isinstance(files, list) or not isinstance(deletes, list) or len(files) + len(deletes) > 500:
         raise BridgeError("Import batch must contain at most 500 operations")
     results = []
+    total_import_bytes = 0
     for entry in files:
         path = safe_project_path(entry.get("path"))
-        payload = safe_inbox_file(entry.get("payload"))
-        encoded = "".join(payload.read_text(encoding="ascii").split())
+        payload_parts = entry.get("payload_parts")
+        if payload_parts is None:
+            payload_parts = [entry.get("payload")]
+        if not isinstance(payload_parts, list) or not payload_parts or len(payload_parts) > 256:
+            raise BridgeError(f"Payload parts are invalid: {path}")
+        encoded = "".join(
+            "".join(safe_inbox_file(part).read_text(encoding="ascii").split())
+            for part in payload_parts
+        )
         try:
             data = base64.b64decode(encoded, validate=True)
         except Exception as exc:
             raise BridgeError(f"Invalid Base64 payload for {path}") from exc
         if len(data) > MAX_FILE_BYTES or len(data) != int(entry.get("byte_size", -1)):
             raise BridgeError(f"Payload size does not match manifest: {path}")
+        total_import_bytes += len(data)
+        if total_import_bytes > MAX_TOTAL_IMPORT_BYTES:
+            raise BridgeError("Import batch exceeds the 512 MiB safety limit")
         digest = hashlib.sha256(data).hexdigest()
         if digest != entry.get("sha256"):
             raise BridgeError(f"Payload SHA-256 does not match manifest: {path}")
