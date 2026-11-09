@@ -42,13 +42,17 @@ Renames are represented as a delete plus an add in the first implementation. Tex
 
 ## Pairing and use
 
-1. In the admin page, create one temporary pairing code for `web_editor` and another for `android_editor`, both using the same workspace. These codes are specifically for the **Shared Projects** add-on.
-2. In the Godot Web page, open **Compartir proyectos**, download the connector ZIP and import it into the web editor's Project Manager. Open that sandbox project; its Shared Projects dock is enabled by default. Pair it with the `web_editor` code.
-3. In the modified Android editor, select one project in Project Manager and press **Shared Sync**. This installs and enables both editor add-ons. Open the project and pair its Shared Projects dock with the `android_editor` code.
-4. Create a shared project from either editor; select the same project from the other editor's list.
-5. Use **Analyze changes** and review the listed paths before **Synchronize now**.
+1. In Godot Web, open **Compartir proyectos**, download the connector ZIP and import it into the web editor's Project Manager. Open that sandbox project; its Shared Projects dock is enabled by default.
+2. In the admin page, create a temporary `web_editor` pairing code for the Shared Projects dock. Pair the Web dock with it.
+3. In the modified Android editor, select the existing game project in Project Manager and press **Shared Sync**. This installs or repairs all three integration add-ons: Shared Projects, the read-only AI Bridge and Command Center. Open the project and pair its Shared Projects dock using a separate `android_editor` code in the same workspace.
+4. In Android's Shared Projects dock, create a shared project, select it, Analyze the local-to-remote plan and press Synchronize to seed the remote project from the Android project.
+5. In the Web sandbox, select that same shared project and press **Clonar remoto aquí**. Confirm only after checking the file count and size. This replaces the sandbox's syncable files with the Android project and saves local rescue copies under `user://godot_project_sync/rescue`.
+6. The AI can now work in the cloned Web project. Analyze and Synchronize from Web to publish its changes to the shared store.
+7. On Android, Analyze the incoming changes, review every listed path and press Synchronize only to approve that exact plan.
 
-The separate `godot_command_center` dock has its own pairing flow for remote AI commands; it is not required for file synchronization and uses a separate `web_editor` device credential. The read-only AI Bridge WebSocket session is also separate from project-file sync.
+For an already-open Web project other than the connector sandbox, the two add-ons must also be installed and enabled in that project before pairing. The Web launcher downloads the connector sandbox; it does not silently modify another open project's files.
+
+The separate `godot_command_center` dock has its own pairing flow for remote AI commands; pair it only on the Web editor. It is not required for file synchronization. The read-only AI Bridge WebSocket session is also separate from project-file sync.
 
 Pairing credentials are kept in memory by each add-on and must be re-entered after an editor restart. Never paste admin credentials or pairing codes into a public issue or commit them to a project.
 
