@@ -1,6 +1,6 @@
 # Live Visual Transfer Runbook
 
-Status: relay deployed; mocked tests and web-editor build checks pass; live Neon transfer is still gated on a paired `web_editor` device.
+Status: 2D/3D capture commands enabled in main; branch-scoped Neon storage credential configured on Render; relay deployment and live capture round-trip still require verification with a paired `web_editor`.
 
 ## Safety boundaries
 
@@ -8,7 +8,7 @@ Status: relay deployed; mocked tests and web-editor build checks pass; live Neon
 - Keep the Neon bucket `godot-visual-captures` private.
 - Never paste the Render administrator secret, device credential, or one-time pairing code into source control, issues, screenshots, or chat.
 - The pairing code is single-use and expires after 120 seconds.
-- Do not set `VISUAL_COMMANDS_ENABLED=true` just to see whether the feature works. The controlled acceptance test must be prepared first, then run only against the paired AI web editor.
+- The feature flag is enabled only for `editor_2d` and `editor_3d`. Do not broaden it to `editor_ui`, `game_preview`, or `visual.zoom_to` before those capture backends are implemented and tested.
 - The relay may sleep on Render's free plan. The first request can take time while it wakes; this does not mean the service was deleted.
 
 ## Pair the isolated Godot Web editor
@@ -30,7 +30,7 @@ The operator/maintainer should run these checks after the web editor is paired a
 1. Confirm Neon has exactly the expected active `web_editor` device for workspace `default`; confirm no Android device was added or modified.
 2. Confirm the Render relay is live and its Neon connection is healthy.
 3. Prepare one short-lived, explicitly targeted `visual.capture` command for `editor_2d` on that paired device only. Keep the visual command gate closed for all other commands.
-4. Confirm the command is claimed, its lease heartbeat succeeds, and the upload goes to `POST /v1/command-center/visual/uploads/proxy`.
+4. Confirm the command is claimed, its lease heartbeat succeeds, and the image bytes are sent to `POST /v1/command-center/visual/uploads/proxy`.
 5. Confirm the object appears in the private Neon bucket and registration records its MIME, dimensions, byte size, and SHA-256.
 6. Retrieve the same asset through `GET /v1/command-center/visual/assets/{asset_id}/content` using an authorized controller credential. Compare exact bytes and SHA-256 with the registered metadata.
 7. Repeat with a small `visual.capture_sequence` (2–3 frames). Verify unique frame indexes, expected count, and final sequence state.
@@ -50,8 +50,8 @@ The operator/maintainer should run these checks after the web editor is paired a
 
 ## Current known implementation limits
 
-- The Godot plugin captures `editor_2d` and `editor_3d` SubViewports.
-- `editor_ui` and `game_preview` require a browser-level capture backend and are explicitly rejected by the plugin; they must not be substituted with a partial viewport image.
+- The Godot plugin captures `editor_2d` and `editor_3d` SubViewports; only these targets are enabled.
+- `editor_ui` and `game_preview` require a browser-level capture backend and are rejected by the API; they must not be substituted with a partial viewport image.
 - `visual.zoom_to` remains unavailable until exact view restoration is implemented and tested.
 - A still-image sequence is a sequence of images, not a video.
 - Automated tests mock S3. They do not replace the live Neon round-trip acceptance test.
