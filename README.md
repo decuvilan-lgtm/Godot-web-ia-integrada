@@ -8,7 +8,7 @@ Entorno de desarrollo con **dos puestos de trabajo separados** que comparten un 
 
 La regla central es que el agente trabaja en su copia web. Nunca sobrescribe directamente el proyecto aceptado en Android. Los cambios futuros se presentarán como propuestas con diff, validación y snapshot; solo se aplicarán tras aprobación explícita.
 
-> **Estado real:** editor Godot Web 4.7.2 publicado; cliente experimental del Command Center añadido al proyecto sandbox web y validado con Godot headless; cliente Android experimental en PR #3; API FastAPI del relay implementada en PR #1. Aún no hay conexión Neon real, dispositivos emparejados ni operación de extremo a extremo. No hay escritura remota habilitada.
+> **Estado real (9 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
 
 ## Acceso
 
@@ -112,7 +112,7 @@ El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada 
 
 El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). Cada solicitud debe indicar un objetivo exacto (`editor_ui`, `editor_2d`, `editor_3d` o `game_preview`); las secuencias indican cantidad e intervalo, y el zoom declara el sistema de coordenadas. No se permite adivinar el objetivo ni sustituir una fuente por otra.
 
-Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migración 004 ya está aplicada y verificada en producción. Falta implementar endpoints firmados de transferencia, capturadores reales y la inspección de imágenes por el agente. Por tanto, **la captura visual aún no está operativa**.
+Neon Object Storage tiene el bucket privado `godot-visual-captures`; el Relay tiene credenciales de almacenamiento con alcance `storage:read`/`storage:write`, transferencia binaria autenticada a través del Relay y validación de imagen/metadatos. La API permite `editor_2d` y `editor_3d`, además de secuencias realtime. **El código está habilitado, pero la operación real sigue pendiente de emparejar el editor web y validar el ciclo captura → almacenamiento → recuperación**. `editor_ui`, `game_preview` y `visual.zoom_to` no se consideran disponibles.
 
 ## Desarrollo
 
