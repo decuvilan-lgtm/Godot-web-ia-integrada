@@ -217,8 +217,6 @@ async def upload_file(project_id: str, request: Request,
         if len(chunks) > MAX_FILE_BYTES:
             raise HTTPException(status_code=413, detail="Project file exceeds the 32 MiB limit")
     data = bytes(chunks)
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty project files are not accepted by this endpoint")
     digest = hashlib.sha256(data).hexdigest()
     if file_sha256 and not hmac.compare_digest(digest, file_sha256):
         raise HTTPException(status_code=422, detail="Uploaded file SHA-256 does not match")
@@ -244,6 +242,8 @@ async def upload_file(project_id: str, request: Request,
                 "SELECT head_revision FROM command_center.projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
                 project["id"], identity["workspace_id"],
             )
+            if locked is None:
+                raise HTTPException(status_code=404, detail="Shared project no longer exists")
             latest = await connection.fetchrow(
                 """SELECT sha256 FROM command_center.project_files
                    WHERE project_id=$1 AND path=$2 AND deleted_at IS NULL""",
@@ -262,7 +262,7 @@ async def upload_file(project_id: str, request: Request,
                    ON CONFLICT (project_id,path) DO UPDATE SET sha256=EXCLUDED.sha256,
                     byte_size=EXCLUDED.byte_size, mime_type=EXCLUDED.mime_type,
                     object_key=EXCLUDED.object_key, revision=EXCLUDED.revision,
-                    updated_by_device=EXCLUDED.updated_by_device, deleted_at=NULL""",
+                    updated_by_device=EXCLUDED.updated_by_device, updated_at=now(), deleted_at=NULL""",
                 project["id"], path, digest, len(data), content_type, key, revision, identity["id"],
             )
             await connection.execute(
