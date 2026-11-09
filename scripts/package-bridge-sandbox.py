@@ -21,7 +21,11 @@ with ZipFile(output) as archive:
         "bridge-sandbox/project.godot",
         "bridge-sandbox/addons/godot_ai_bridge/plugin.cfg",
         "bridge-sandbox/addons/godot_ai_bridge/plugin.gd",
+        "bridge-sandbox/addons/godot_ai_bridge/plugin.cfg",
         "bridge-sandbox/addons/godot_project_sync/plugin.cfg",
+        "bridge-sandbox/addons/godot_project_sync/plugin.gd",
+        "bridge-sandbox/addons/godot_command_center/plugin.cfg",
+        "bridge-sandbox/addons/godot_command_center/plugin.gd",
         "bridge-sandbox/addons/godot_project_sync/plugin.gd",
         "bridge-sandbox/scenes/main.tscn",
     }
@@ -30,7 +34,12 @@ with ZipFile(output) as archive:
         raise SystemExit("ERROR: sandbox package is incomplete: " + ", ".join(sorted(missing)))
 
 project_settings = (source / "project.godot").read_text(encoding="utf-8")
-if "res://addons/godot_project_sync/plugin.cfg" not in project_settings:
-    raise SystemExit("ERROR: shared project sync plugin is not enabled in the sandbox project")
+for plugin_path in (
+    "res://addons/godot_ai_bridge/plugin.cfg",
+    "res://addons/godot_command_center/plugin.cfg",
+    "res://addons/godot_project_sync/plugin.cfg",
+):
+    if plugin_path not in project_settings:
+        raise SystemExit(f"ERROR: required editor plugin is not enabled in the sandbox project: {plugin_path}")
 
 print(f"Sandbox package ready: {output} ({output.stat().st_size} bytes)")
