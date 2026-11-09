@@ -289,6 +289,8 @@ func _analyze_changes() -> void:
 	if project_id.is_empty():
 		_set_status("Selecciona un proyecto compartido.")
 		return
+	_analyzed_project_id = project_id
+	_analyzed_plan_fingerprint = ""
 	_busy = true
 	var plan: Dictionary = await _build_plan(project_id)
 	_busy = false
