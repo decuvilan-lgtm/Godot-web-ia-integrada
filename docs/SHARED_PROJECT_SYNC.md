@@ -54,9 +54,52 @@ For an already-open Web project other than the connector sandbox, the two add-on
 
 The separate `godot_command_center` dock has its own pairing flow for remote AI commands; pair it only on the Web editor. It is not required for file synchronization. The read-only AI Bridge WebSocket session is also separate from project-file sync.
 
+## GitHub Actions binary bridge (no custom MCP)
+
+The project includes a GitHub Actions transport path for an assistant that can use the connected GitHub repository tools:
+
+- The assistant creates a short-lived branch named `agent-transfer/<task-id>` and commits a request under `bridge-inbox/request.json`.
+- For imports, binary payloads are Base64 text files under `bridge-inbox/payload/`. Large payloads may be split into multiple Base64 parts; each part must be a multiple-of-four Base64 segment and the request lists them in order.
+- A push to the transfer branch triggers `.github/workflows/agent-binary-bridge.yml`.
+- GitHub Actions obtains a short-lived OIDC assertion from GitHub. Render verifies the signature against GitHub's published JWKS and checks the fixed repository ID, owner ID, actor ID, workflow path, push event and `agent-transfer/*` ref before issuing a rotating `agent_controller` credential.
+- The workflow uses that temporary credential with the existing project manifest/content/upload/delete routes. It never receives Neon database or Object Storage credentials.
+- The temporary bridge device is revoked at the end of the workflow. Its token is also rotated on the next exchange and rejected after 30 minutes of inactivity.
+- The workflow uploads a one-day GitHub Actions artifact. For exports, the artifact contains `bridge-export.zip` plus `bridge-result.json`; for imports, it contains the result report.
+
+Export request:
+
+```json
+{"operation":"export","project_id":"<shared-project-uuid>"}
+```
+
+Import request:
+
+```json
+{
+  "operation": "import",
+  "project_id": "<shared-project-uuid>",
+  "base_revision": 12,
+  "files": [
+    {
+      "path": "scenes/player.tscn",
+      "payload_parts": ["bridge-inbox/payload/player.part000.b64"],
+      "base_sha256": "<previous-sha256-or-null>",
+      "sha256": "<new-sha256>",
+      "byte_size": 1234,
+      "mime_type": "text/plain"
+    }
+  ],
+  "deletes": []
+}
+```
+
+The import script checks the whole-project base revision before changing anything, then checks every file's expected base hash and payload SHA-256. The existing Relay still enforces path restrictions, per-file 32 MiB limits, workspace ownership and revision conflict checks. The transfer script caps a batch at 500 operations and 512 MiB total. An interrupted multi-file import can leave earlier files committed; the returned report and the existing Analyze/reconcile workflow are used to recover safely.
+
+This bridge does not use a custom MCP server and does not expose Neon credentials. It uses the existing GitHub connector for the request commit and artifact download, with GitHub Actions as an ephemeral transport worker.
+
 ## ChatGPT agent runtime status
 
-The Relay API accepts the `agent_controller` device role, but that is only server-side authorization. It does not itself connect this ChatGPT conversation to the Relay, create a paired agent device, or provide a binary file-transfer tool to the assistant. No ChatGPT agent device is currently paired. A supported runtime/connector must still be implemented and connected before ChatGPT can download project files, edit them, and upload them through the revision/hash checks. Do not treat the `agent_controller` API allowance as a working ChatGPT integration.
+The original direct ChatGPT-to-Relay runtime is still not present. The GitHub Actions bridge is a separate, connector-mediated path: it is available only after its Relay code and workflow are merged/deployed and its end-to-end project transfer is tested. A successful small binary fixture test does not prove a full Godot project import/export.
 
 Pairing credentials are kept in memory by each add-on and must be re-entered after an editor restart. Never paste admin credentials or pairing codes into a public issue or commit them to a project.
 
