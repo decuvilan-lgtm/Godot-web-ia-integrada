@@ -11,6 +11,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 from pathlib import Path, PurePosixPath
 import sys
 import urllib.error
@@ -38,8 +39,14 @@ def safe_project_path(value: str) -> str:
     parts = value.split("/")
     if any(part in {"", ".", ".."} for part in parts):
         raise BridgeError("Project path contains an invalid segment")
-    if any(part.lower() in {".git", ".godot"} for part in parts):
+    lowered = [part.lower() for part in parts]
+    if any(part in {".git", ".godot"} for part in lowered):
         raise BridgeError("Git metadata and Godot cache files are not transferable")
+    forbidden_names = {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}
+    forbidden_suffixes = (".pem", ".key", ".p8", ".asc", ".gpg", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision")
+    name = lowered[-1]
+    if name in forbidden_names or name.endswith(forbidden_suffixes) or name.endswith(".env") or name.startswith(".env."):
+        raise BridgeError("Credential and signing files are not transferable")
     return value
 
 
@@ -190,6 +197,8 @@ def import_project(request: dict, token: str) -> dict:
         }
         base_sha = entry.get("base_sha256")
         if base_sha is not None:
+            if not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha):
+                raise BridgeError(f"Invalid base SHA-256 for {path}")
             headers["X-Base-SHA256"] = base_sha
         response = api_request(
             "POST", f"/v1/command-center/projects/{project_id}/files?{query}",
@@ -206,8 +215,8 @@ def import_project(request: dict, token: str) -> dict:
     for entry in deletes:
         path = safe_project_path(entry.get("path"))
         base_sha = entry.get("base_sha256")
-        if not isinstance(base_sha, str) or len(base_sha) != 64:
-            raise BridgeError(f"Delete operation is missing its base hash: {path}")
+        if not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha):
+            raise BridgeError(f"Delete operation is missing a valid base hash: {path}")
         query = urllib.parse.urlencode({"path": path})
         response = api_request(
             "POST", f"/v1/command-center/projects/{project_id}/files/delete?{query}",
