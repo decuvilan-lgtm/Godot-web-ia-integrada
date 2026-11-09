@@ -425,7 +425,7 @@ func _is_syncable_path(path: String) -> bool:
 	for suffix in [".pem", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision"]:
 		if name.ends_with(suffix):
 			return false
-	return not name.ends_with(".env") and not name.begins_with(".env.")
+	return not name.ends_with(".env") and not name.begins_with(".env.") and not name.ends_with(".godot_sync_tmp") and not name.ends_with(".godot_sync_backup")
 
 func _hash_file(path: String) -> String:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -607,7 +607,7 @@ func _count_operations(operations: Array) -> String:
 	]
 
 func _summarize_paths(paths: Array) -> String:
-	var sample: Array[String] = []
+	var sample := PackedStringArray()
 	for index in range(mini(paths.size(), 8)):
 		sample.append(str(paths[index]))
 	return "Archivos: " + ", ".join(sample) + ("…" if paths.size() > sample.size() else "")
