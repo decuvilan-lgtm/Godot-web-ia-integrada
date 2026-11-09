@@ -488,10 +488,19 @@ func _scan_local_project() -> Dictionary:
 				continue
 			if not _is_syncable_path(relative):
 				continue
-			var digest := _hash_file("res://" + relative)
-			if digest.is_empty() and FileAccess.get_file_as_bytes("res://" + relative).size() != 0:
+			var source_file := FileAccess.open("res://" + relative, FileAccess.READ)
+			if source_file == null:
 				dir.list_dir_end()
-				return {"ok": false, "error": "No se pudo leer o calcular el hash de " + relative}
+				return {"ok": false, "error": "No se pudo abrir " + relative}
+			var source_size: int = source_file.get_length()
+			source_file.close()
+			if source_size > MAX_FILE_BYTES:
+				dir.list_dir_end()
+				return {"ok": false, "error": relative + " supera el límite de 32 MiB por archivo."}
+			var digest := _hash_file("res://" + relative)
+			if digest.is_empty():
+				dir.list_dir_end()
+				return {"ok": false, "error": "No se pudo calcular el hash de " + relative}
 			output[relative] = digest
 			if output.size() > MAX_FILES:
 				dir.list_dir_end()
