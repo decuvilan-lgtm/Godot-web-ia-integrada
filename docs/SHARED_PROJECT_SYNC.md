@@ -24,6 +24,7 @@ All routes are under `/v1/command-center/projects` and require a paired Bearer c
 - `POST /{project_id}/files?path=...`: upload one file. Optional `X-Base-SHA256` is the expected current remote hash; `X-File-SHA256` is verified by the relay.
 - `POST /{project_id}/files/delete?path=...`: create a tombstone using required `X-Base-SHA256`.
 - `GET /{project_id}/files/content?path=...`: download bytes through the relay and verify the stored hash.
+- `POST /{project_id}/batch`: apply a ZIP containing `manifest.json` and `files/<path>` as one revision-checked database transaction; used by the GitHub Actions agent bridge.
 
 The server checks workspace ownership on every operation, rejects stale file bases with HTTP 409, validates relative POSIX paths, and excludes Git metadata, Godot cache data, environment files and common signing credentials. Maximums: 32 MiB per file, 10,000 files per project, 2,000 change rows per request. The editor plug-in applies at most 500 operations per manual sync.
 
@@ -59,7 +60,7 @@ The separate `godot_command_center` dock has its own pairing flow for remote AI 
 The project includes a GitHub Actions transport path for an assistant that can use the connected GitHub repository tools:
 
 - The assistant creates a short-lived branch named `agent-transfer/<task-id>` and commits a request under `bridge-inbox/request.json`.
-- For imports, binary payloads are Base64 text files under `bridge-inbox/payload/`. Large payloads may be split into multiple Base64 parts; each part must be a multiple-of-four Base64 segment and the request lists them in order.
+- For imports, binary payloads are Base64 text files under `bridge-inbox/payloads/`. Large payloads may be split into multiple Base64 parts; each part must be a multiple-of-four Base64 segment and the request lists them in order.
 - A push to the transfer branch triggers `.github/workflows/agent-binary-bridge.yml`.
 - GitHub Actions obtains a short-lived OIDC assertion from GitHub. Render verifies the signature against GitHub's published JWKS and checks the fixed repository ID, owner ID, actor ID, workflow path, push event and `agent-transfer/*` ref before issuing a rotating `agent_controller` credential.
 - The workflow uses that temporary credential with the project manifest/content routes and the dedicated ZIP batch endpoint (`POST /{project_id}/batch`). It never receives Neon database or Object Storage credentials.
@@ -82,7 +83,7 @@ Import request:
   "files": [
     {
       "path": "scenes/player.tscn",
-      "payload_parts": ["bridge-inbox/payload/player.part000.b64"],
+      "payload_parts": ["bridge-inbox/payloads/player.part000.b64"],
       "base_sha256": "<previous-sha256-or-null>",
       "sha256": "<new-sha256>",
       "byte_size": 1234,
