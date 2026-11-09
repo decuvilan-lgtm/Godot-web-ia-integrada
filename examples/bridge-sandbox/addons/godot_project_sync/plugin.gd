@@ -15,6 +15,7 @@ var _slug_input: LineEdit
 var _name_input: LineEdit
 var _project_select: OptionButton
 var _status: Label
+var _preview: TextEdit
 var _pair_button: Button
 var _refresh_button: Button
 var _analyze_button: Button
@@ -23,6 +24,8 @@ var _credential := ""
 var _device_id := ""
 var _installation_id := ""
 var _busy := false
+var _analyzed_project_id := ""
+var _analyzed_plan_fingerprint := ""
 
 func _enter_tree() -> void:
 	_build_ui()
@@ -82,6 +85,12 @@ func _build_ui() -> void:
 	_analyze_button.text = "Analizar cambios"
 	_analyze_button.pressed.connect(_analyze_changes)
 	_panel.add_child(_analyze_button)
+	_preview = TextEdit.new()
+	_preview.editable = false
+	_preview.custom_minimum_size = Vector2(0, 150)
+	_preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_preview.text = "El análisis mostrará aquí los archivos que se subirán, descargarán o eliminarán."
+	_panel.add_child(_preview)
 	_sync_button = Button.new()
 	_sync_button.text = "Sincronizar ahora"
 	_sync_button.pressed.connect(_sync_now)
@@ -217,6 +226,8 @@ func _pair_editor() -> void:
 func _forget_editor() -> void:
 	_credential = ""
 	_device_id = ""
+	_analyzed_project_id = ""
+	_analyzed_plan_fingerprint = ""
 	_pair_code_input.editable = true
 	_api_input.editable = true
 	_label_input.editable = true
@@ -278,6 +289,9 @@ func _analyze_changes() -> void:
 	if project_id.is_empty():
 		_set_status("Selecciona un proyecto compartido.")
 		return
+	if _analyzed_project_id != project_id or _analyzed_plan_fingerprint.is_empty():
+		_set_status("Analiza los cambios y revisa la lista antes de sincronizar.")
+		return
 	_busy = true
 	var plan: Dictionary = await _build_plan(project_id)
 	_busy = false
@@ -286,10 +300,14 @@ func _analyze_changes() -> void:
 		return
 	var operations: Array = plan.operations
 	var conflicts: Array = plan.conflicts
+	_analyzed_project_id = project_id
+	_analyzed_plan_fingerprint = ""
+	_preview.text = _format_plan(plan)
 	if not conflicts.is_empty():
 		_set_status("Conflictos: " + str(conflicts.size()) + ". No se modificó ningún archivo. " + _summarize_paths(conflicts))
 	else:
-		_set_status("Análisis listo · " + str(operations.size()) + " operación(es): " + _count_operations(operations) + ". No se modificó ningún archivo.")
+		_analyzed_plan_fingerprint = _plan_fingerprint(plan)
+		_set_status("Plan listo para revisar · " + str(operations.size()) + " operación(es): " + _count_operations(operations) + ". Pulsa Sincronizar solo si aceptas esta lista.")
 
 func _sync_now() -> void:
 	if _busy:
@@ -302,14 +320,23 @@ func _sync_now() -> void:
 	var plan: Dictionary = await _build_plan(project_id)
 	if not plan.ok:
 		_busy = false
+		_analyzed_plan_fingerprint = ""
 		_set_status("No se pudo preparar la sincronización: " + str(plan.error))
+		return
+	if _plan_fingerprint(plan) != _analyzed_plan_fingerprint:
+		_busy = false
+		_analyzed_plan_fingerprint = ""
+		_preview.text = _format_plan(plan)
+		_set_status("El proyecto cambió desde el análisis. Revisa el nuevo plan y vuelve a analizar antes de sincronizar.")
 		return
 	if not plan.conflicts.is_empty():
 		_busy = false
+		_analyzed_plan_fingerprint = ""
 		_set_status("Sincronización detenida: " + str(plan.conflicts.size()) + " conflicto(s). No se modificó ningún archivo. " + _summarize_paths(plan.conflicts))
 		return
 	if plan.operations.size() > MAX_OPERATIONS_PER_SYNC:
 		_busy = false
+		_analyzed_plan_fingerprint = ""
 		_set_status("Hay " + str(plan.operations.size()) + " operaciones. El límite seguro por tanda es " + str(MAX_OPERATIONS_PER_SYNC) + "; vuelve a analizar después de cada tanda.")
 		return
 	var total: int = plan.operations.size()
@@ -319,19 +346,25 @@ func _sync_now() -> void:
 		var applied: Dictionary = await _apply_operation(project_id, operation)
 		if not applied.ok:
 			_busy = false
+			_analyzed_plan_fingerprint = ""
 			_set_status("Sincronización parcial detenida en " + str(operation.path) + ": " + str(applied.error) + ". El punto de control no avanzó; vuelve a analizar.")
 			return
 		completed += 1
 	var manifest: Dictionary = await _fetch_manifest(project_id)
 	if not manifest.ok:
 		_busy = false
+		_analyzed_plan_fingerprint = ""
 		_set_status("Los cambios se aplicaron, pero no se pudo confirmar el manifiesto final. Vuelve a analizar antes de continuar.")
 		return
 	if not _save_baseline(project_id, manifest.files, manifest.head_revision):
 		_busy = false
+		_analyzed_plan_fingerprint = ""
 		_set_status("No se pudo guardar el punto de control local. Vuelve a analizar antes de continuar.")
 		return
 	_busy = false
+	_analyzed_project_id = ""
+	_analyzed_plan_fingerprint = ""
+	_preview.text = "Sincronización completada. Analiza de nuevo para revisar nuevos cambios."
 	_set_status("Sincronización completada · " + str(completed) + " operación(es) · revisión " + str(manifest.head_revision) + ".")
 	await _refresh_projects()
 
@@ -391,6 +424,40 @@ func _build_plan(project_id: String) -> Dictionary:
 				operations.append({"type": "pull", "path": path, "remote_sha": remote_sha})
 	return {"ok": true, "operations": operations, "conflicts": conflicts,
 		"head_revision": remote_result.head_revision, "files": remote_files}
+
+
+func _plan_fingerprint(plan: Dictionary) -> String:
+	var parts := PackedStringArray()
+	parts.append("head=" + str(plan.get("head_revision", 0)))
+	for operation in plan.get("operations", []):
+		parts.append("%s|%s|%s|%s" % [
+			str(operation.get("type", "")), str(operation.get("path", "")),
+			str(operation.get("local_sha", "")), str(operation.get("remote_sha", ""))
+		])
+	for conflict in plan.get("conflicts", []):
+		parts.append("conflict|" + str(conflict))
+	return _hash_bytes("\n".join(parts).to_utf8_buffer())
+
+
+func _format_plan(plan: Dictionary) -> String:
+	var lines := PackedStringArray()
+	lines.append("Revisión remota: " + str(plan.get("head_revision", 0)))
+	var operations: Array = plan.get("operations", [])
+	var conflicts: Array = plan.get("conflicts", [])
+	lines.append("Operaciones: " + str(operations.size()) + " · Conflictos: " + str(conflicts.size()))
+	if operations.is_empty() and conflicts.is_empty():
+		lines.append("No hay cambios pendientes.")
+	for operation in operations:
+		var kind := str(operation.get("type", ""))
+		var prefix := "↑ Subir local" if kind == "push" else "↓ Descargar remoto" if kind == "pull" else "− Eliminar remoto" if kind == "delete_remote" else "− Eliminar local (con rescate)"
+		lines.append(prefix + " · " + str(operation.get("path", "")))
+	for conflict in conflicts:
+		lines.append("⚠ Conflicto · " + str(conflict))
+	if lines.size() > 45:
+		lines.resize(45)
+		lines.append("… Lista truncada en pantalla; el plan completo sigue protegido por el control de conflictos.")
+	return "\n".join(lines)
+
 
 func _scan_local_project() -> Dictionary:
 	var output: Dictionary = {}
