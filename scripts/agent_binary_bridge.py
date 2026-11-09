@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-ROOT = Path.cwd().resolve()
+ROOT = Path(os.environ.get("GITHUB_WORKSPACE", Path(__file__).resolve().parents[1])).resolve()
 INBOX = ROOT / "bridge-inbox"
 RESULT_PATH = ROOT / "bridge-result.json"
 MAX_FILE_BYTES = 32 * 1024 * 1024
