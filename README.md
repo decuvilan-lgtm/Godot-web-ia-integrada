@@ -127,7 +127,7 @@ Neon Object Storage tiene el bucket privado `godot-visual-captures` y la migraci
 
 The project-sync layer lets the two editors work with the same selected project while keeping separate local copies. It uses a workspace-scoped project catalog, per-file SHA-256 manifests, revisions and conflict checks. File bytes pass through the authenticated Render relay to private Neon Object Storage.
 
-- The web sandbox includes and enables the **Shared Projects** editor dock.
+- The web editor shows a **Compartir proyectos** launcher to download the connector ZIP; importing and opening that sandbox enables the **Shared Projects** dock.
 - The modified Android editor source includes the **Shared Sync** Project Manager installer, which installs and enables the same project add-on in a selected project.
 - Pair both editors separately into the same workspace, then select the same shared project.
 - Analyze is read-only; Sync is manual, incremental and conflict-blocking. Local files are rescued before remote overwrites or deletions.
