@@ -720,7 +720,7 @@ class SharedProjectPathTests(unittest.TestCase):
 
     def test_environment_and_signing_material_are_excluded(self):
         from project_sync import validate_project_path
-        for path in (".env", ".env.production", "secrets/id_rsa", "android/release.keystore", "certs/upload.p12"):
+        for path in (".env", ".env.production", "secrets/id_rsa", "android/release.keystore", "certs/upload.p12", "certs/server.key", "certs/signing.p8", "certs/signing.asc", "certs/signing.gpg"):
             with self.subTest(path=path), self.assertRaises(HTTPException):
                 validate_project_path(path)
 
