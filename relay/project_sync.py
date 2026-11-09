@@ -310,7 +310,7 @@ async def apply_project_batch(
     try:
         zf = zipfile.ZipFile(io.BytesIO(archive_bytes))
         infos = zf.infolist()
-        if len(infos) > 1002 or len(infos) < 2:
+        if len(infos) > 1002 or len(infos) < 1:
             raise ValueError("invalid archive entry count")
         names = [info.filename for info in infos]
         if len(names) != len(set(names)) or "manifest.json" not in names:
