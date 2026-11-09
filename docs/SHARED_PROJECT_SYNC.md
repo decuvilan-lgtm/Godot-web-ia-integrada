@@ -44,7 +44,7 @@ Renames are represented as a delete plus an add in the first implementation. Tex
 
 1. In the admin page, create one temporary pairing code for `web_editor` and another for `android_editor`, both using the same workspace.
 2. In the Godot Web page, open **Compartir proyectos**, download the connector ZIP and import it into the web editor's Project Manager. Open that sandbox project; its Shared Projects dock is enabled by default. Pair it with the web code.
-3. In the modified Android editor, select one project in Project Manager and press **Shared Sync**. This installs and enables the same add-on in that project. Open the project and pair it with the Android code.
+3. In the modified Android editor, select one project in Project Manager and press **Shared Sync**. This installs and enables both editor add-ons. Open the project and pair it with the Android code.
 4. Create a shared project from either editor; select the same project from the other editor's list.
 5. Use **Analyze changes** before **Synchronize now**.
 
