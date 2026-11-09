@@ -315,6 +315,9 @@ async def apply_project_batch(
         names = [info.filename for info in infos]
         if len(names) != len(set(names)) or "manifest.json" not in names:
             raise ValueError("duplicate entries or missing manifest")
+        manifest_info = zf.getinfo("manifest.json")
+        if manifest_info.file_size > 1024 * 1024:
+            raise ValueError("manifest exceeds the 1 MiB limit")
         if any(info.is_dir() or (info.flag_bits & 0x1) for info in infos):
             raise ValueError("directories and encrypted entries are not supported")
         for info in infos:
