@@ -50,6 +50,9 @@ def validate_github_claims(claims: dict[str, Any]) -> None:
     ref = claims.get("ref", "")
     if not isinstance(ref, str) or not ref.startswith("refs/heads/agent-transfer/"):
         raise HTTPException(status_code=403, detail="Git ref is outside the agent-transfer namespace")
+    expected_subject = f"repo:{TRUSTED_REPOSITORY}:ref:{ref}"
+    if claims.get("sub") != expected_subject:
+        raise HTTPException(status_code=403, detail="GitHub OIDC subject does not match the transfer ref")
     workflow_ref = claims.get("workflow_ref", "")
     expected_prefix = f"{TRUSTED_REPOSITORY}/{TRUSTED_WORKFLOW}@refs/heads/agent-transfer/"
     if not isinstance(workflow_ref, str) or not workflow_ref.startswith(expected_prefix):
