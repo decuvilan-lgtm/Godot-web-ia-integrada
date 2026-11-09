@@ -209,5 +209,82 @@ class ProjectBatchAtomicityTests(unittest.TestCase):
         self.assertEqual(connection.executions, [])
 
 
+    def test_file_base_hash_conflict_rolls_back_the_entire_batch(self):
+        remote_sha = hashlib.sha256(b"remote edit").hexdigest()
+        connection = FakeConnection(5, [{"path": "data/existing.bin", "sha256": remote_sha}])
+        pool = FakePool(connection)
+        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=self.identity)), \
+             patch("project_sync.get_pool", new=AsyncMock(return_value=pool)), \
+             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+            response = self.client.post(
+                f"/v1/command-center/projects/{PROJECT_ID}/batch",
+                content=make_archive(5),
+                headers={"Authorization": "Bearer test-token", "Content-Type": "application/zip"},
+            )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(connection.executions, [])
+        self.assertTrue(connection.rolled_back)
+        self.assertEqual(store.await_count, 2)
+
+    def test_delete_operation_commits_as_one_revision(self):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "base_revision": 5, "files": [],
+                "deletes": [{"path": "data/existing.bin", "base_sha256": self.original_sha}],
+            }))
+        connection = FakeConnection(5, [{"path": "data/existing.bin", "sha256": self.original_sha}])
+        pool = FakePool(connection)
+        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=self.identity)), \
+             patch("project_sync.get_pool", new=AsyncMock(return_value=pool)), \
+             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+            response = self.client.post(
+                f"/v1/command-center/projects/{PROJECT_ID}/batch",
+                content=archive.getvalue(),
+                headers={"Authorization": "Bearer test-token", "Content-Type": "application/zip"},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["atomic"])
+        self.assertEqual(payload["head_revision"], 6)
+        self.assertEqual(payload["operations"], [
+            {"path": "data/existing.bin", "deleted": True, "revision": 6},
+        ])
+        self.assertEqual(len(connection.executions), 3)
+        self.assertFalse(connection.rolled_back)
+        store.assert_not_awaited()
+
+    def test_zip_symlink_entries_are_rejected_before_storage(self):
+        archive = io.BytesIO()
+        payload = b"link-target"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "base_revision": 5,
+                "files": [{
+                    "path": "assets/link.bin", "byte_size": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "mime_type": "application/octet-stream", "base_sha256": None,
+                }],
+                "deletes": [],
+            }))
+            info = zipfile.ZipInfo("files/assets/link.bin")
+            info.create_system = 3
+            info.external_attr = 0o120777 << 16
+            zf.writestr(info, payload)
+        connection = FakeConnection(5, [])
+        pool = FakePool(connection)
+        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=self.identity)), \
+             patch("project_sync.get_pool", new=AsyncMock(return_value=pool)), \
+             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+            response = self.client.post(
+                f"/v1/command-center/projects/{PROJECT_ID}/batch",
+                content=archive.getvalue(),
+                headers={"Authorization": "Bearer test-token", "Content-Type": "application/zip"},
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        store.assert_not_awaited()
+        self.assertEqual(connection.executions, [])
+
+
 if __name__ == "__main__":
     unittest.main()
