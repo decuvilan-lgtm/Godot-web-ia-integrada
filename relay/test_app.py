@@ -747,14 +747,26 @@ class SharedProjectApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
 
-    def test_agent_controller_cannot_use_editor_project_sync_api(self):
+    def test_agent_controller_can_list_shared_projects_in_its_workspace(self):
         identity = {"id": "controller-1", "workspace_id": "workspace-1", "device_kind": "agent_controller"}
-        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)):
+
+        class Pool:
+            async def fetch(self, query, *args):
+                self.workspace_id = args[0]
+                return []
+
+        pool = Pool()
+        with (
+            patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)),
+            patch("project_sync.get_pool", new=AsyncMock(return_value=pool)),
+        ):
             response = self.client.get(
                 "/v1/command-center/projects",
                 headers={"Authorization": "Bearer controller-token"},
             )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"projects": []})
+        self.assertEqual(pool.workspace_id, "workspace-1")
 
     def test_upload_creates_revisioned_file_through_private_relay_storage(self):
         import hashlib
