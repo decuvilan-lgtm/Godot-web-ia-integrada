@@ -28,7 +28,7 @@ MAX_CHANGES = 2000
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
 FORBIDDEN_NAMES = {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}
-FORBIDDEN_SUFFIXES = (".pem", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision")
+FORBIDDEN_SUFFIXES = (".pem", ".key", ".p8", ".asc", ".gpg", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision")
 
 
 class CreateProjectRequest(BaseModel):
