@@ -1,0 +1,66 @@
+name: Agent binary bridge
+
+on:
+  push:
+    branches:
+      - "agent-transfer/**"
+    paths:
+      - "bridge-inbox/**"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: godot-agent-binary-bridge
+  cancel-in-progress: false
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELAY_BASE_URL: https://godot-web-ia-relay.onrender.com
+    steps:
+      - name: Checkout transfer request
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Exchange GitHub OIDC identity for a temporary Relay device
+        shell: bash
+        run: |
+          set -euo pipefail
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=godot-relay-agent-bridge")"
+          oidc_token="$(printf '%s' "$oidc_response" | jq -er '.value')"
+          exchange="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $oidc_token" \
+            -H "Accept: application/json" \
+            -X POST "$RELAY_BASE_URL/v1/agent-bridge/github/exchange")"
+          device_token="$(printf '%s' "$exchange" | jq -er '.access_token')"
+          echo "::add-mask::$device_token"
+          echo "RELAY_DEVICE_TOKEN=$device_token" >> "$GITHUB_ENV"
+
+      - name: Execute binary project transfer
+        run: python scripts/agent_binary_bridge.py
+
+      - name: Upload transfer result and exported project
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-agent-transfer-${{ github.run_id }}
+          path: |
+            bridge-result.json
+            bridge-export.zip
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Revoke temporary Relay device credential
+        if: always() && env.RELAY_DEVICE_TOKEN != ''
+        shell: bash
+        run: |
+          curl --silent --show-error --fail \
+            -H "Authorization: Bearer $RELAY_DEVICE_TOKEN" \
+            -X POST "$RELAY_BASE_URL/v1/agent-bridge/github/revoke"
