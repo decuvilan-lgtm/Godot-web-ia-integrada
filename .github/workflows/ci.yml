@@ -19,7 +19,7 @@ jobs:
       - name: Validate shell and Python scripts
         run: |
           bash -n scripts/build-web.sh
-          python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
+          python -m py_compile scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
       - name: Validate mobile shell and sandbox package
         run: |
           mkdir -p public

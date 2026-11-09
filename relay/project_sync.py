@@ -38,8 +38,8 @@ class CreateProjectRequest(BaseModel):
 
 async def _editor_identity(request: Request, authorization: str | None) -> tuple[dict[str, Any], Any]:
     identity = await authenticate_device(request, authorization)
-    if identity["device_kind"] not in {"web_editor", "android_editor"}:
-        raise HTTPException(status_code=403, detail="Only paired Godot editors can sync project files")
+    if identity["device_kind"] not in {"web_editor", "android_editor", "agent_controller"}:
+        raise HTTPException(status_code=403, detail="Only paired Godot editors or the paired agent controller can sync project files")
     return identity, await get_pool(request)
 
 

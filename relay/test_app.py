@@ -747,14 +747,26 @@ class SharedProjectApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
 
-    def test_agent_controller_cannot_use_editor_project_sync_api(self):
+    def test_agent_controller_can_list_shared_projects_in_its_workspace(self):
         identity = {"id": "controller-1", "workspace_id": "workspace-1", "device_kind": "agent_controller"}
-        with patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)):
+
+        class Pool:
+            async def fetch(self, query, *args):
+                self.workspace_id = args[0]
+                return []
+
+        pool = Pool()
+        with (
+            patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)),
+            patch("project_sync.get_pool", new=AsyncMock(return_value=pool)),
+        ):
             response = self.client.get(
                 "/v1/command-center/projects",
                 headers={"Authorization": "Bearer controller-token"},
             )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"projects": []})
+        self.assertEqual(pool.workspace_id, "workspace-1")
 
     def test_upload_creates_revisioned_file_through_private_relay_storage(self):
         import hashlib
@@ -897,6 +909,48 @@ class SharedProjectApiTests(unittest.TestCase):
                 headers={"Authorization": "Bearer web-token"},
             )
         self.assertEqual(response.status_code, 502)
+
+    def test_paired_agent_controller_can_use_shared_project_sync_identity(self):
+        from project_sync import _editor_identity
+
+        identity = {
+            "id": "agent-device",
+            "workspace_id": "workspace-1",
+            "device_kind": "agent_controller",
+        }
+        pool = object()
+        async def resolve():
+            return await _editor_identity(object(), "Bearer agent-token")
+
+        with (
+            patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)),
+            patch("project_sync.get_pool", new=AsyncMock(return_value=pool)),
+        ):
+            resolved_identity, resolved_pool = asyncio.run(resolve())
+
+        self.assertEqual(resolved_identity["device_kind"], "agent_controller")
+        self.assertEqual(resolved_identity["workspace_id"], "workspace-1")
+        self.assertIs(resolved_pool, pool)
+
+    def test_unrecognized_device_kind_cannot_use_shared_project_sync(self):
+        from project_sync import _editor_identity
+
+        identity = {
+            "id": "unknown-device",
+            "workspace_id": "workspace-1",
+            "device_kind": "unknown",
+        }
+        async def resolve():
+            return await _editor_identity(object(), "Bearer unknown-token")
+
+        with (
+            patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)),
+            patch("project_sync.get_pool", new=AsyncMock(return_value=object())),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(resolve())
+
+        self.assertEqual(raised.exception.status_code, 403)
 
 if __name__ == "__main__":
     unittest.main()
