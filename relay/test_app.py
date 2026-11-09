@@ -314,6 +314,19 @@ class RelayApiTests(unittest.TestCase):
         self.assertIn("x-frame-index", allowed_visual_headers)
         self.assertIn("authorization", allowed_visual_headers)
 
+        project_upload = self.client.options(
+            "/v1/command-center/projects/11111111-1111-4111-8111-111111111111/files?path=project.godot",
+            headers={
+                "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type,x-base-sha256,x-file-sha256",
+            },
+        )
+        self.assertEqual(project_upload.status_code, 200)
+        allowed_project_headers = project_upload.headers.get("access-control-allow-headers", "").lower()
+        self.assertIn("x-base-sha256", allowed_project_headers)
+        self.assertIn("x-file-sha256", allowed_project_headers)
+
         denied = self.client.options(
             "/v1/command-center/pair",
             headers={
@@ -850,11 +863,15 @@ class SharedProjectApiTests(unittest.TestCase):
         ):
             response = self.client.get(
                 f"/v1/command-center/projects/{project['id']}/files/content?path=scenes/main.tscn",
-                headers={"Authorization": "Bearer android-token"},
+                headers={
+                    "Authorization": "Bearer android-token",
+                    "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
+                },
             )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.content, payload)
         self.assertEqual(response.headers["x-file-sha256"], digest)
+        self.assertIn("x-file-sha256", response.headers.get("access-control-expose-headers", "").lower())
         self.assertIn("no-store", response.headers["cache-control"])
 
     def test_download_rejects_content_that_does_not_match_manifest_hash(self):
