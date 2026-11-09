@@ -41,11 +41,16 @@ with ZipFile(sandbox_zip) as archive:
     required = {
         "bridge-sandbox/project.godot",
         "bridge-sandbox/addons/godot_ai_bridge/plugin.gd",
+        "bridge-sandbox/addons/godot_project_sync/plugin.cfg",
+        "bridge-sandbox/addons/godot_project_sync/plugin.gd",
         "bridge-sandbox/scenes/main.tscn",
     }
     missing_sandbox_files = required - set(archive.namelist())
     if missing_sandbox_files:
         fail("sandbox package is missing: " + ", ".join(sorted(missing_sandbox_files)))
+    project_text = archive.read("bridge-sandbox/project.godot").decode("utf-8")
+    if "res://addons/godot_project_sync/plugin.cfg" not in project_text:
+        fail("shared project sync plugin is not enabled in the sandbox project")
 
 wasm = list(ROOT.rglob("*.wasm"))
 js = list(ROOT.rglob("*.js"))
