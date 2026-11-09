@@ -714,7 +714,7 @@ class SharedProjectPathTests(unittest.TestCase):
 
     def test_engine_cache_and_git_metadata_are_excluded(self):
         from project_sync import validate_project_path
-        for path in (".git/config", ".godot/editor/project_metadata.cfg", "Scenes/.GODOT/cache"):
+        for path in (".git/config", ".godot/editor/project_metadata.cfg", "Scenes/.GODOT/cache", "scenes/level.godot_sync_tmp", "scenes/level.godot_sync_backup"):
             with self.subTest(path=path), self.assertRaises(HTTPException):
                 validate_project_path(path)
 
