@@ -447,6 +447,14 @@ async def create_command(
     if body.action in VISUAL_ACTIONS:
         if body.target != "web_editor":
             raise HTTPException(status_code=403, detail="Visual commands are restricted to the AI web_editor workspace")
+        if body.action == "visual.zoom_to":
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "VISUAL_ZOOM_BACKEND_UNAVAILABLE",
+                    "message": "Coordinate zoom remains disabled until exact editor-view restoration is implemented and tested",
+                },
+            )
         validate_visual_command(body.action, body.args)
         if not VISUAL_COMMANDS_ENABLED:
             raise HTTPException(
