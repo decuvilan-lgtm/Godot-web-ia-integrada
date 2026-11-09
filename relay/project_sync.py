@@ -193,13 +193,13 @@ async def get_changes(project_id: str, request: Request,
 
 @router.post("/{project_id}/files", status_code=201)
 async def upload_file(project_id: str, request: Request,
-                      project_path: str = Header(..., alias="X-Project-Path"),
+                      path: str = Query(..., min_length=1, max_length=MAX_PATH_BYTES),
                       base_sha256: str | None = Header(default=None, alias="X-Base-SHA256"),
                       file_sha256: str | None = Header(default=None, alias="X-File-SHA256"),
                       authorization: str | None = Header(default=None)):
     identity, pool = await _editor_identity(request, authorization)
     project = await _project(pool, project_id, identity["workspace_id"])
-    path = validate_project_path(project_path)
+    path = validate_project_path(path)
     if base_sha256 is not None and not SHA_RE.fullmatch(base_sha256):
         raise HTTPException(status_code=422, detail="X-Base-SHA256 must be a lowercase SHA-256 digest")
     if file_sha256 is not None and not SHA_RE.fullmatch(file_sha256):
@@ -282,12 +282,12 @@ async def upload_file(project_id: str, request: Request,
 
 @router.post("/{project_id}/files/delete", status_code=200)
 async def delete_file(project_id: str, request: Request,
-                      project_path: str = Header(..., alias="X-Project-Path"),
+                      path: str = Query(..., min_length=1, max_length=MAX_PATH_BYTES),
                       base_sha256: str = Header(..., alias="X-Base-SHA256"),
                       authorization: str | None = Header(default=None)):
     identity, pool = await _editor_identity(request, authorization)
     project = await _project(pool, project_id, identity["workspace_id"])
-    path = validate_project_path(project_path)
+    path = validate_project_path(path)
     if not SHA_RE.fullmatch(base_sha256):
         raise HTTPException(status_code=422, detail="X-Base-SHA256 must be a lowercase SHA-256 digest")
     async with pool.acquire() as connection:
