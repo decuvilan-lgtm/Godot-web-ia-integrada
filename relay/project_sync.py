@@ -5,6 +5,7 @@ All project bytes pass through Render; Neon S3 credentials never reach clients.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import mimetypes
 import re
@@ -219,7 +220,7 @@ async def upload_file(project_id: str, request: Request,
     if not data:
         raise HTTPException(status_code=400, detail="Empty project files are not accepted by this endpoint")
     digest = hashlib.sha256(data).hexdigest()
-    if file_sha256 and not hashlib.compare_digest(digest, file_sha256):
+    if file_sha256 and not hmac.compare_digest(digest, file_sha256):
         raise HTTPException(status_code=422, detail="Uploaded file SHA-256 does not match")
     current = await pool.fetchrow(
         """SELECT sha256 FROM command_center.project_files
