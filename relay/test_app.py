@@ -171,6 +171,37 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("script.write", READ_ONLY_ACTIONS)
         self.assertNotIn("shell.execute", READ_ONLY_ACTIONS)
 
+    def test_visual_zoom_is_rejected_before_queue_until_restoration_is_ready(self):
+        identity = {
+            "id": "agent-controller-test",
+            "workspace_id": "11111111-1111-4111-8111-111111111111",
+            "device_kind": "agent_controller",
+        }
+        with patch(
+            "command_center.authenticate_device",
+            new=AsyncMock(return_value=identity),
+        ):
+            response = self.client.post(
+                "/v1/command-center/commands",
+                headers={"Authorization": "Bearer test"},
+                json={
+                    "target": "web_editor",
+                    "action": "visual.zoom_to",
+                    "args": {
+                        "target": "editor_2d",
+                        "focus": {
+                            "coordinate_space": "world_2d",
+                            "position": [320.0, 180.0],
+                            "zoom": 2.0,
+                        },
+                        "restore_view": True,
+                    },
+                    "idempotency_key": "unsupported-zoom-test",
+                },
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["code"], "VISUAL_ZOOM_BACKEND_UNAVAILABLE")
+
     def test_visual_capture_requires_an_exact_target(self):
         from command_center import validate_visual_command
         with self.assertRaises(HTTPException) as raised:
