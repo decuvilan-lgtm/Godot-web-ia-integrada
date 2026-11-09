@@ -779,9 +779,11 @@ class SharedProjectApiTests(unittest.TestCase):
         pool = Pool()
         payload = b"project.godot contents"
         digest = hashlib.sha256(payload).hexdigest()
-        with patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, pool))), \\
-             patch("project_sync._project", new=AsyncMock(return_value=project)), \\
-             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+        with (
+            patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, pool))),
+            patch("project_sync._project", new=AsyncMock(return_value=project)),
+            patch("project_sync._store_bytes", new=AsyncMock()) as store,
+        ):
             response = self.client.post(
                 f"/v1/command-center/projects/{project['id']}/files",
                 headers={
@@ -808,9 +810,11 @@ class SharedProjectApiTests(unittest.TestCase):
         identity = {"id": "web-device", "workspace_id": "workspace-1", "device_kind": "web_editor"}
         project = {"id": "11111111-1111-4111-8111-111111111111", "workspace_id": "workspace-1"}
         payload = b"stale local content"
-        with patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, Pool()))), \\
-             patch("project_sync._project", new=AsyncMock(return_value=project)), \\
-             patch("project_sync._store_bytes", new=AsyncMock()) as store:
+        with (
+            patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, Pool()))),
+            patch("project_sync._project", new=AsyncMock(return_value=project)),
+            patch("project_sync._store_bytes", new=AsyncMock()) as store,
+        ):
             response = self.client.post(
                 f"/v1/command-center/projects/{project['id']}/files",
                 headers={
