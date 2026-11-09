@@ -130,7 +130,7 @@ The project-sync layer lets the two editors work with the same selected project 
 - The web editor shows a **Compartir proyectos** launcher to download the connector ZIP; importing and opening that sandbox enables the **Shared Projects** dock.
 - The modified Android editor source includes the **Shared Sync** Project Manager installer, which installs and enables the same project add-on in a selected project.
 - Pair both editors separately into the same workspace, then select the same shared project.
-- Analyze is read-only; Sync is manual, incremental and conflict-blocking. Local files are rescued before remote overwrites or deletions.
+- Analyze is read-only; Sync is manual, incremental and conflict-blocking. The Web sandbox can clone the Android-seeded remote project after explicit confirmation, with rescue copies. Local files are rescued before remote overwrites or deletions.
 - See [docs/SHARED_PROJECT_SYNC.md](docs/SHARED_PROJECT_SYNC.md) for the API, limits and setup.
 
 The shared-project schema migration is applied to production Neon. The new relay code and Android editor installer still require CI, deployment/build and a real two-editor transfer test before end-to-end readiness can be claimed.
