@@ -156,8 +156,8 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("insert into command_center.sessions", sql)
         self.assertNotIn("insert into command_center.projects", sql)
 
-    def test_command_center_policy_keeps_visual_commands_separate_and_disabled(self):
-        from command_center import READ_ONLY_ACTIONS, VISUAL_ACTIONS, VISUAL_COMMANDS_ENABLED
+    def test_command_center_policy_enables_supported_visual_captures_only(self):
+        from command_center import READ_ONLY_ACTIONS, VISUAL_ACTIONS, VISUAL_COMMANDS_ENABLED, VISUAL_TARGETS
         self.assertEqual(
             READ_ONLY_ACTIONS,
             {"ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"},
@@ -166,7 +166,8 @@ class RelayApiTests(unittest.TestCase):
             VISUAL_ACTIONS,
             {"visual.capture", "visual.capture_sequence", "visual.zoom_to"},
         )
-        self.assertFalse(VISUAL_COMMANDS_ENABLED)
+        self.assertTrue(VISUAL_COMMANDS_ENABLED)
+        self.assertEqual(VISUAL_TARGETS, {"editor_2d", "editor_3d"})
         self.assertNotIn("script.write", READ_ONLY_ACTIONS)
         self.assertNotIn("shell.execute", READ_ONLY_ACTIONS)
 
@@ -184,11 +185,14 @@ class RelayApiTests(unittest.TestCase):
     def test_visual_capture_sequence_validates_target_count_and_interval(self):
         from command_center import validate_visual_command
         validate_visual_command("visual.capture_sequence", {
-            "target": "editor_ui",
+            "target": "editor_2d",
             "frames": 12,
             "interval_ms": 250,
             "timing_mode": "realtime",
         })
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {"target": "editor_ui"})
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_TARGET_REQUIRED")
         with self.assertRaises(HTTPException) as raised:
             validate_visual_command("visual.capture_sequence", {
                 "target": "editor_3d",
