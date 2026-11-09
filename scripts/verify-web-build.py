@@ -60,6 +60,8 @@ if not js:
     fail("no JavaScript runtime was found")
 
 html_text = ENTRY.read_text(encoding="utf-8", errors="replace")
+if 'id="shared-project-sync-launcher"' not in html_text or "./bridge-sandbox.zip" not in html_text:
+    fail("shared project connector launcher or sandbox download link is missing")
 if 'name="viewport"' not in html_text.lower():
     fail("mobile viewport metadata is missing")
 
