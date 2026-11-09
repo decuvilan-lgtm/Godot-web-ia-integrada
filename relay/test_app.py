@@ -830,5 +830,56 @@ class SharedProjectApiTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"]["code"], "PROJECT_FILE_CONFLICT")
         store.assert_not_awaited()
 
+
+    def test_download_returns_only_workspace_scoped_hash_verified_project_bytes(self):
+        import hashlib
+        payload = b"scene data"
+        digest = hashlib.sha256(payload).hexdigest()
+
+        class Pool:
+            async def fetchrow(self, query, *args):
+                return {"object_key": "projects/workspace/project/" + digest,
+                        "sha256": digest, "byte_size": len(payload), "mime_type": "text/plain"}
+
+        identity = {"id": "android-device", "workspace_id": "workspace-1", "device_kind": "android_editor"}
+        project = {"id": "11111111-1111-4111-8111-111111111111", "workspace_id": "workspace-1"}
+        with (
+            patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, Pool()))),
+            patch("project_sync._project", new=AsyncMock(return_value=project)),
+            patch("project_sync._load_bytes", new=AsyncMock(return_value=payload)),
+        ):
+            response = self.client.get(
+                f"/v1/command-center/projects/{project['id']}/files/content?path=scenes/main.tscn",
+                headers={"Authorization": "Bearer android-token"},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, payload)
+        self.assertEqual(response.headers["x-file-sha256"], digest)
+        self.assertIn("no-store", response.headers["cache-control"])
+
+    def test_download_rejects_content_that_does_not_match_manifest_hash(self):
+        import hashlib
+        expected = b"expected scene"
+        tampered = b"tampered scene"
+
+        class Pool:
+            async def fetchrow(self, query, *args):
+                return {"object_key": "projects/workspace/project/file",
+                        "sha256": hashlib.sha256(expected).hexdigest(),
+                        "byte_size": len(tampered), "mime_type": "text/plain"}
+
+        identity = {"id": "web-device", "workspace_id": "workspace-1", "device_kind": "web_editor"}
+        project = {"id": "11111111-1111-4111-8111-111111111111", "workspace_id": "workspace-1"}
+        with (
+            patch("project_sync._editor_identity", new=AsyncMock(return_value=(identity, Pool()))),
+            patch("project_sync._project", new=AsyncMock(return_value=project)),
+            patch("project_sync._load_bytes", new=AsyncMock(return_value=tampered)),
+        ):
+            response = self.client.get(
+                f"/v1/command-center/projects/{project['id']}/files/content?path=scenes/main.tscn",
+                headers={"Authorization": "Bearer web-token"},
+            )
+        self.assertEqual(response.status_code, 502)
+
 if __name__ == "__main__":
     unittest.main()
