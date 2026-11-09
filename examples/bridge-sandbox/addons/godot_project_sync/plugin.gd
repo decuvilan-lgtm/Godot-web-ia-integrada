@@ -466,24 +466,37 @@ func _scan_local_project() -> Dictionary:
 	var queue: Array[String] = ["res://"]
 	while not queue.is_empty():
 		var directory: String = queue.pop_back()
-		var dirs := DirAccess.get_directories_at(directory)
-		dirs.sort()
-		for subdir in dirs:
-			if subdir in [".git", ".godot"]:
+		var dir := DirAccess.open(directory)
+		if dir == null:
+			return {"ok": false, "error": "No se pudo abrir la carpeta " + directory}
+		dir.list_dir_begin()
+		while true:
+			var entry := dir.get_next()
+			if entry.is_empty():
+				break
+			if entry in [".", ".."] or dir.is_link(entry):
 				continue
-			queue.append(directory.path_join(subdir))
-		var files := DirAccess.get_files_at(directory)
-		files.sort()
-		for file_name in files:
-			var relative := directory.trim_prefix("res://").path_join(file_name)
+			var relative := directory.trim_prefix("res://")
+			if not relative.is_empty():
+				relative = relative.path_join(entry)
+			else:
+				relative = entry
+			if dir.current_is_dir():
+				if entry.to_lower() in [".git", ".godot"]:
+					continue
+				queue.append("res://" + relative)
+				continue
 			if not _is_syncable_path(relative):
 				continue
 			var digest := _hash_file("res://" + relative)
 			if digest.is_empty() and FileAccess.get_file_as_bytes("res://" + relative).size() != 0:
+				dir.list_dir_end()
 				return {"ok": false, "error": "No se pudo leer o calcular el hash de " + relative}
 			output[relative] = digest
 			if output.size() > MAX_FILES:
+				dir.list_dir_end()
 				return {"ok": false, "error": "El proyecto supera el límite de " + str(MAX_FILES) + " archivos."}
+		dir.list_dir_end()
 	return {"ok": true, "files": output}
 
 func _is_syncable_path(path: String) -> bool:
