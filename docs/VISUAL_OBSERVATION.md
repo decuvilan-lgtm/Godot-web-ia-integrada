@@ -105,20 +105,20 @@ Uploads and completion must be idempotent. Sequence frames are unique by `(seque
 - [x] Migration 004 applied to production and verified.
 - [x] Migration 005 applied to production and verified.
 - [x] Canonical visual command contract documented in `VISUAL_COMMANDS.md`.
-- [x] Add relay endpoints for presigned upload, upload completion and authenticated download (implemented on the draft branch; not deployed).
+- [x] Add authenticated relay-proxy upload, completion, and private content-download endpoints; browser/editor bytes never go directly to Neon S3.
 - [x] Make single-capture metadata registration idempotent in code and add duplicate-object cleanup on retries.
-- [ ] Apply migration 006 (partial unique index for one standalone capture per command) to production after explicit authorization.
+- [x] Apply the partial unique index for one standalone capture per command to production.
 - [x] Apply migration 005 allowing `editor_ui` sequence sources; production verification completed.
-- [ ] Provision a narrowly scoped storage credential for the Render relay and configure it securely.
+- [x] Provision a branch-scoped Neon credential with only `storage:read` and `storage:write`; configure it as Render secrets.
 - [x] Add a manual, non-startup CORS setup utility with exact-origin validation and unit tests; no bucket CORS rules have been changed yet.
-- [ ] Run the CORS utility with the dedicated storage credential and verify browser preflight + presigned PUT from the deployed Godot Web origin.
-- [x] Implement 2D/3D viewport capture in the Godot Web plugin (CI smoke-tested; live capture not yet demonstrated).
+- [x] Use the authenticated relay proxy for visual uploads; bucket CORS is not required by this transfer path.
+- [x] Implement 2D/3D viewport capture in the Godot Web plugin; CI headless smoke test passed.
 - [ ] Implement temporary coordinate zoom with guaranteed restoration.
 - [ ] Connect browser-level screenshot capture for full editor UI and game preview.
-- [x] Implement realtime timed still-image sequences and per-frame upload metadata (CI-tested; live storage transfer pending).
+- [x] Implement realtime timed still-image sequences and per-frame upload metadata.
 - [ ] Add deterministic frame stepping only after a tested preview control hook exists.
 - [ ] Connect agent-side asset retrieval and visual inspection.
-- [ ] Test real images end-to-end; CI parser checks alone are not sufficient.
+- [ ] Pair the isolated Godot Web editor and test a real image round-trip through Neon; CI tests are not a substitute.
 
 ## Security and safety
 
@@ -149,7 +149,7 @@ Neon Object Storage supports `GetBucketCors`, `PutBucketCors`, `DeleteBucketCors
 - `tests/live_link/test_storage_cors.py` covers origin validation, least-privilege rule shape and provider read-back verification.
 - It is never invoked at application startup and no production CORS configuration has been changed.
 
-After the dedicated Neon storage credential and the exact deployed web origin are configured in the relay environment, run:
+This utility is not part of the active capture path: Godot sends image bytes to the authenticated Render relay, which stores them in the private bucket. Do not configure bucket CORS unless a future design intentionally changes to direct browser-to-S3 uploads.
 
 ```bash
 cd relay
@@ -170,7 +170,7 @@ The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/comm
 - S3 calls use path-style SigV4 against the branch endpoint and fail closed unless the four AWS-standard Neon storage environment variables are present.
 - New dependencies are pinned in the relay requirements: boto3 and Pillow.
 
-The API has not yet been configured in Render or exercised against production Object Storage. The visual command feature flag remains off. The Godot plugin contains 2D/3D viewport capture and realtime sequence upload code, but no live capture or storage transfer has yet been demonstrated. Browser-level full-UI/game-preview capture, safe zoom restoration and agent-side image inspection remain pending.
+Render now has the Neon storage endpoint and a branch-scoped read/write credential. The API feature flag is enabled only for `editor_2d` and `editor_3d`; the plugin uploads through the authenticated relay proxy. Live image capture and retrieval remain unverified until the isolated editor is paired and a command is executed. Browser-level full-UI/game-preview capture, safe zoom restoration and agent-side image inspection remain pending.
 
 ## Implementation order and acceptance gates
 
