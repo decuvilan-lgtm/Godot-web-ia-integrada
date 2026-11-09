@@ -818,10 +818,9 @@ class SharedProjectApiTests(unittest.TestCase):
             patch("project_sync._store_bytes", new=AsyncMock()) as store,
         ):
             response = self.client.post(
-                f"/v1/command-center/projects/{project['id']}/files",
+                f"/v1/command-center/projects/{project['id']}/files?path=project.godot",
                 headers={
                     "Authorization": "Bearer web-token",
-                    "X-Project-Path": "project.godot",
                     "X-File-SHA256": hashlib.sha256(payload).hexdigest(),
                     "Content-Type": "text/plain",
                 },
