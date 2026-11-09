@@ -5,6 +5,7 @@ credential. No long-lived GitHub or Neon secret is stored in GitHub Actions.
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from typing import Any
@@ -125,7 +126,7 @@ async def exchange_github_oidc(
            VALUES ($1,$2,'agent.github_actions_authenticated',$3::jsonb)""",
         workspace_id,
         device_id,
-        __import__("json").dumps({
+        json.dumps({
             "repository": TRUSTED_REPOSITORY,
             "ref": claims["ref"],
             "run_id": str(claims["run_id"]),
