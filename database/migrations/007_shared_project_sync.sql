@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS command_center.project_files (
   project_id uuid NOT NULL REFERENCES command_center.projects(id) ON DELETE CASCADE,
   path text NOT NULL,
   sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
-  byte_size bigint NOT NULL CHECK (byte_size > 0 AND byte_size <= 33554432),
+  byte_size bigint NOT NULL CHECK (byte_size >= 0 AND byte_size <= 33554432),
   mime_type text NOT NULL,
   object_key text NOT NULL,
   revision bigint NOT NULL CHECK (revision > 0),
