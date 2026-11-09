@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import io
 import json
 import mimetypes
 import re
 import uuid
+import zipfile
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -280,6 +282,196 @@ async def upload_file(project_id: str, request: Request,
             )
     return {"project_id": str(project["id"]), "path": path, "sha256": digest,
             "byte_size": len(data), "revision": revision}
+
+
+
+@router.post("/{project_id}/batch", status_code=200)
+async def apply_project_batch(
+    project_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    """Apply a complete ZIP batch atomically against one project revision."""
+    identity, pool = await _editor_identity(request, authorization)
+    project = await _project(pool, project_id, identity["workspace_id"])
+    declared = request.headers.get("content-length")
+    if declared:
+        try:
+            if int(declared) > 550 * 1024 * 1024:
+                raise HTTPException(status_code=413, detail="Batch archive exceeds the 550 MiB limit")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from exc
+    archive_bytes = bytearray()
+    async for chunk in request.stream():
+        archive_bytes.extend(chunk)
+        if len(archive_bytes) > 550 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Batch archive exceeds the 550 MiB limit")
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(archive_bytes))
+        infos = zf.infolist()
+        if len(infos) > 1002 or len(infos) < 2:
+            raise ValueError("invalid archive entry count")
+        names = [info.filename for info in infos]
+        if len(names) != len(set(names)) or "manifest.json" not in names:
+            raise ValueError("duplicate entries or missing manifest")
+        if any(info.is_dir() or (info.flag_bits & 0x1) for info in infos):
+            raise ValueError("directories and encrypted entries are not supported")
+        for info in infos:
+            mode = (info.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise ValueError("symbolic links are not supported")
+        manifest = json.loads(zf.read("manifest.json"))
+    except (zipfile.BadZipFile, KeyError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=422, detail="Batch archive or manifest is invalid") from exc
+
+    if not isinstance(manifest, dict):
+        raise HTTPException(status_code=422, detail="Batch manifest must be an object")
+    base_revision = manifest.get("base_revision")
+    files = manifest.get("files", [])
+    deletes = manifest.get("deletes", [])
+    if (not isinstance(base_revision, int) or isinstance(base_revision, bool) or base_revision < 0
+            or not isinstance(files, list) or not isinstance(deletes, list)
+            or not files and not deletes or len(files) + len(deletes) > 500):
+        raise HTTPException(status_code=422, detail="Batch manifest has invalid revision or operation count")
+
+    operations = []
+    seen_paths = set()
+    total_bytes = 0
+    expected_zip_names = {"manifest.json"}
+    for entry in files:
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=422, detail="File operation must be an object")
+        path = validate_project_path(entry.get("path", ""))
+        if path in seen_paths:
+            raise HTTPException(status_code=422, detail="Batch contains duplicate project paths")
+        seen_paths.add(path)
+        archive_name = f"files/{path}"
+        expected_zip_names.add(archive_name)
+        try:
+            info = zf.getinfo(archive_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=422, detail=f"Batch payload is missing: {path}") from exc
+        size = entry.get("byte_size")
+        digest = entry.get("sha256")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0 or size > MAX_FILE_BYTES:
+            raise HTTPException(status_code=422, detail=f"Invalid file size: {path}")
+        if info.file_size != size or not isinstance(digest, str) or not SHA_RE.fullmatch(digest):
+            raise HTTPException(status_code=422, detail=f"File metadata is invalid: {path}")
+        total_bytes += size
+        if total_bytes > 512 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Batch expands beyond the 512 MiB limit")
+        data = zf.read(info)
+        if len(data) != size or not hmac.compare_digest(hashlib.sha256(data).hexdigest(), digest):
+            raise HTTPException(status_code=422, detail=f"File payload failed SHA-256 verification: {path}")
+        base_sha = entry.get("base_sha256")
+        if base_sha is not None and (not isinstance(base_sha, str) or not SHA_RE.fullmatch(base_sha)):
+            raise HTTPException(status_code=422, detail=f"Invalid base SHA-256: {path}")
+        mime = entry.get("mime_type") or mimetypes.guess_type(path)[0] or "application/octet-stream"
+        if not isinstance(mime, str) or len(mime) > 128 or any(ord(ch) < 32 for ch in mime):
+            raise HTTPException(status_code=422, detail=f"Invalid MIME type: {path}")
+        operations.append({"kind": "file", "path": path, "data": data, "sha256": digest,
+                           "byte_size": size, "mime_type": mime, "base_sha256": base_sha})
+
+    for entry in deletes:
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=422, detail="Delete operation must be an object")
+        path = validate_project_path(entry.get("path", ""))
+        base_sha = entry.get("base_sha256")
+        if path in seen_paths or not isinstance(base_sha, str) or not SHA_RE.fullmatch(base_sha):
+            raise HTTPException(status_code=422, detail=f"Invalid or duplicate delete operation: {path}")
+        seen_paths.add(path)
+        operations.append({"kind": "delete", "path": path, "base_sha256": base_sha})
+
+    if set(names) != expected_zip_names:
+        raise HTTPException(status_code=422, detail="Batch archive contains unexpected files")
+
+    # Store immutable content-addressed objects first. They are not visible in the
+    # project manifest until the single database transaction below commits.
+    stored_keys = []
+    for operation in operations:
+        if operation["kind"] != "file":
+            continue
+        key = f"projects/{project['workspace_id']}/{project['id']}/{operation['sha256']}"
+        await _store_bytes(key, operation["data"], operation["mime_type"])
+        operation["object_key"] = key
+        stored_keys.append(key)
+
+    try:
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                locked = await connection.fetchrow(
+                    "SELECT head_revision FROM command_center.projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
+                    project["id"], identity["workspace_id"],
+                )
+                if locked is None:
+                    raise HTTPException(status_code=404, detail="Shared project no longer exists")
+                current_revision = int(locked["head_revision"])
+                if current_revision != base_revision:
+                    raise HTTPException(status_code=409, detail={
+                        "code": "PROJECT_REVISION_CONFLICT", "expected_revision": base_revision,
+                        "remote_revision": current_revision,
+                    })
+                rows = await connection.fetch(
+                    """SELECT path, sha256 FROM command_center.project_files
+                       WHERE project_id=$1 AND path = ANY($2::text[]) AND deleted_at IS NULL FOR UPDATE""",
+                    project["id"], list(seen_paths),
+                )
+                current_hashes = {row["path"]: row["sha256"] for row in rows}
+                for operation in operations:
+                    remote_hash = current_hashes.get(operation["path"])
+                    if remote_hash != operation["base_sha256"]:
+                        raise HTTPException(status_code=409, detail={
+                            "code": "PROJECT_FILE_CONFLICT", "path": operation["path"],
+                            "expected_base": operation["base_sha256"], "remote_sha256": remote_hash,
+                        })
+                revision = current_revision
+                results = []
+                for operation in operations:
+                    revision += 1
+                    path = operation["path"]
+                    old_sha = current_hashes.get(path)
+                    if operation["kind"] == "file":
+                        await connection.execute(
+                            """INSERT INTO command_center.project_files
+                               (project_id,path,sha256,byte_size,mime_type,object_key,revision,updated_by_device,deleted_at)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL)
+                               ON CONFLICT (project_id,path) DO UPDATE SET sha256=EXCLUDED.sha256,
+                                 byte_size=EXCLUDED.byte_size,mime_type=EXCLUDED.mime_type,
+                                 object_key=EXCLUDED.object_key,revision=EXCLUDED.revision,
+                                 updated_by_device=EXCLUDED.updated_by_device,updated_at=now(),deleted_at=NULL""",
+                            project["id"], path, operation["sha256"], operation["byte_size"],
+                            operation["mime_type"], operation["object_key"], revision, identity["id"],
+                        )
+                        await connection.execute(
+                            """INSERT INTO command_center.project_changes
+                               (project_id,revision,path,operation,old_sha256,new_sha256,byte_size,mime_type,actor_device_id)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
+                            project["id"], revision, path, "modify" if old_sha else "add", old_sha,
+                            operation["sha256"], operation["byte_size"], operation["mime_type"], identity["id"],
+                        )
+                        results.append({"path": path, "sha256": operation["sha256"], "revision": revision})
+                    else:
+                        await connection.execute(
+                            """UPDATE command_center.project_files SET deleted_at=now(),revision=$3,
+                               updated_by_device=$4 WHERE project_id=$1 AND path=$2""",
+                            project["id"], path, revision, identity["id"],
+                        )
+                        await connection.execute(
+                            """INSERT INTO command_center.project_changes
+                               (project_id,revision,path,operation,old_sha256,new_sha256,byte_size,mime_type,actor_device_id)
+                               VALUES ($1,$2,$3,'delete',$4,NULL,NULL,NULL,$5)""",
+                            project["id"], revision, path, old_sha, identity["id"],
+                        )
+                        results.append({"path": path, "deleted": True, "revision": revision})
+                await connection.execute(
+                    "UPDATE command_center.projects SET head_revision=$2,updated_at=now() WHERE id=$1",
+                    project["id"], revision,
+                )
+    except HTTPException:
+        raise
+    return {"project_id": str(project["id"]), "base_revision": base_revision,
+            "head_revision": revision, "operations": results, "atomic": True}
 
 
 @router.post("/{project_id}/files/delete", status_code=200)

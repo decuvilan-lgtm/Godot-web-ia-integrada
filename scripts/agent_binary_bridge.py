@@ -151,86 +151,98 @@ def export_project(request: dict, token: str) -> dict:
 
 
 def import_project(request: dict, token: str) -> dict:
+    """Validate every payload locally, then submit one atomic revisioned batch."""
     project_id = request.get("project_id")
     base_revision = request.get("base_revision")
     if not isinstance(project_id, str) or not project_id:
         raise BridgeError("project_id is required")
-    if not isinstance(base_revision, int) or base_revision < 0:
+    if not isinstance(base_revision, int) or isinstance(base_revision, bool) or base_revision < 0:
         raise BridgeError("base_revision is required")
+
     current = project_manifest(project_id, token)
     if current.get("head_revision") != base_revision:
         raise BridgeError("Project revision changed since the agent exported it; no files were uploaded")
 
     files = request.get("files", [])
     deletes = request.get("deletes", [])
-    if not isinstance(files, list) or not isinstance(deletes, list) or len(files) + len(deletes) > 500:
+    if not isinstance(files, list) or not isinstance(deletes, list) or not files and not deletes:
+        raise BridgeError("Import must contain at least one file or delete operation")
+    if len(files) + len(deletes) > 500:
         raise BridgeError("Import batch must contain at most 500 operations")
-    results = []
+
+    manifest = {"base_revision": base_revision, "files": [], "deletes": []}
+    archive_buffer = __import__("io").BytesIO()
+    seen_paths = set()
     total_import_bytes = 0
-    for entry in files:
-        path = safe_project_path(entry.get("path"))
-        payload_parts = entry.get("payload_parts")
-        if payload_parts is None:
-            payload_parts = [entry.get("payload")]
-        if not isinstance(payload_parts, list) or not payload_parts or len(payload_parts) > 256:
-            raise BridgeError(f"Payload parts are invalid: {path}")
-        encoded = "".join(
-            "".join(safe_inbox_file(part).read_text(encoding="ascii").split())
-            for part in payload_parts
-        )
-        try:
-            data = base64.b64decode(encoded, validate=True)
-        except Exception as exc:
-            raise BridgeError(f"Invalid Base64 payload for {path}") from exc
-        if len(data) > MAX_FILE_BYTES or len(data) != int(entry.get("byte_size", -1)):
-            raise BridgeError(f"Payload size does not match manifest: {path}")
-        total_import_bytes += len(data)
-        if total_import_bytes > MAX_TOTAL_IMPORT_BYTES:
-            raise BridgeError("Import batch exceeds the 512 MiB safety limit")
-        digest = hashlib.sha256(data).hexdigest()
-        if digest != entry.get("sha256"):
-            raise BridgeError(f"Payload SHA-256 does not match manifest: {path}")
-        query = urllib.parse.urlencode({"path": path})
-        headers = {
-            "Content-Type": entry.get("mime_type") or mimetypes.guess_type(path)[0] or "application/octet-stream",
-            "X-File-SHA256": digest,
-        }
-        base_sha = entry.get("base_sha256")
-        if base_sha is not None:
-            if not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha):
+    with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_STORED) as zf:
+        for entry in files:
+            if not isinstance(entry, dict):
+                raise BridgeError("Each file operation must be an object")
+            path = safe_project_path(entry.get("path"))
+            if path in seen_paths:
+                raise BridgeError(f"Duplicate path in import batch: {path}")
+            seen_paths.add(path)
+            payload_parts = entry.get("payload_parts")
+            if payload_parts is None:
+                payload_parts = [entry.get("payload")]
+            if not isinstance(payload_parts, list) or not payload_parts or len(payload_parts) > 256:
+                raise BridgeError(f"Payload parts are invalid: {path}")
+            encoded_parts = []
+            for part in payload_parts:
+                payload_file = safe_inbox_file(part)
+                encoded_parts.append("".join(payload_file.read_text(encoding="ascii").split()))
+            try:
+                data = base64.b64decode("".join(encoded_parts), validate=True)
+            except Exception as exc:
+                raise BridgeError(f"Invalid Base64 payload for {path}") from exc
+            expected_size = entry.get("byte_size")
+            if (not isinstance(expected_size, int) or isinstance(expected_size, bool)
+                    or len(data) > MAX_FILE_BYTES or len(data) != expected_size):
+                raise BridgeError(f"Payload size does not match manifest: {path}")
+            total_import_bytes += len(data)
+            if total_import_bytes > MAX_TOTAL_IMPORT_BYTES:
+                raise BridgeError("Import batch exceeds the 512 MiB safety limit")
+            digest = hashlib.sha256(data).hexdigest()
+            if digest != entry.get("sha256"):
+                raise BridgeError(f"Payload SHA-256 does not match manifest: {path}")
+            base_sha = entry.get("base_sha256")
+            if base_sha is not None and (not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha)):
                 raise BridgeError(f"Invalid base SHA-256 for {path}")
-            headers["X-Base-SHA256"] = base_sha
-        response = api_request(
-            "POST", f"/v1/command-center/projects/{project_id}/files?{query}",
-            token, data, headers,
-        )
-        try:
-            saved = json.loads(response)
-        except ValueError as exc:
-            raise BridgeError(f"Relay returned invalid upload response for {path}") from exc
-        if saved.get("sha256") != digest:
-            raise BridgeError(f"Relay stored a different SHA-256 for {path}")
-        results.append({"path": path, "sha256": digest, "revision": saved.get("revision")})
+            mime_type = entry.get("mime_type") or mimetypes.guess_type(path)[0] or "application/octet-stream"
+            manifest["files"].append({
+                "path": path, "byte_size": len(data), "sha256": digest,
+                "mime_type": mime_type, "base_sha256": base_sha,
+            })
+            zf.writestr(f"files/{path}", data)
 
-    for entry in deletes:
-        path = safe_project_path(entry.get("path"))
-        base_sha = entry.get("base_sha256")
-        if not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha):
-            raise BridgeError(f"Delete operation is missing a valid base hash: {path}")
-        query = urllib.parse.urlencode({"path": path})
-        response = api_request(
-            "POST", f"/v1/command-center/projects/{project_id}/files/delete?{query}",
-            token, None, {"X-Base-SHA256": base_sha},
-        )
-        deleted = json.loads(response)
-        results.append({"path": path, "deleted": deleted.get("deleted"),
-                        "revision": deleted.get("revision")})
+        for entry in deletes:
+            if not isinstance(entry, dict):
+                raise BridgeError("Each delete operation must be an object")
+            path = safe_project_path(entry.get("path"))
+            base_sha = entry.get("base_sha256")
+            if path in seen_paths or not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", base_sha):
+                raise BridgeError(f"Invalid or duplicate delete operation: {path}")
+            seen_paths.add(path)
+            manifest["deletes"].append({"path": path, "base_sha256": base_sha})
 
-    latest = project_manifest(project_id, token)
-    return {"ok": True, "operation": "import", "project_id": project_id,
-            "base_revision": base_revision, "head_revision": latest.get("head_revision"),
-            "operations": results}
+        zf.writestr("manifest.json", json.dumps(manifest, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
+    archive_bytes = archive_buffer.getvalue()
+    response = api_request(
+        "POST", f"/v1/command-center/projects/{project_id}/batch",
+        token, archive_bytes, {"Content-Type": "application/zip"},
+    )
+    try:
+        saved = json.loads(response)
+    except ValueError as exc:
+        raise BridgeError("Relay returned invalid batch response") from exc
+    if saved.get("atomic") is not True or not isinstance(saved.get("operations"), list):
+        raise BridgeError("Relay did not confirm an atomic batch commit")
+    return {
+        "ok": True, "operation": "import", "project_id": project_id,
+        "base_revision": base_revision, "head_revision": saved.get("head_revision"),
+        "atomic": True, "operations": saved["operations"],
+    }
 
 def main() -> int:
     token = os.environ.get("RELAY_DEVICE_TOKEN", "")
