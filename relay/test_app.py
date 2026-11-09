@@ -255,7 +255,7 @@ class RelayApiTests(unittest.TestCase):
 
         with self.assertRaises(HTTPException) as raised:
             validate_visual_command("visual.capture_sequence", {
-                "target": "game_preview",
+                "target": "editor_2d",
                 "frames": 4,
                 "interval_ms": 100,
                 "timing_mode": "frame_step",
