@@ -333,7 +333,9 @@ async def authenticate_device(request: Request, authorization: str | None):
     row = await pool.fetchrow(
         """SELECT id, workspace_id, device_kind, label
            FROM command_center.devices
-           WHERE token_hash=$1 AND revoked_at IS NULL""",
+           WHERE token_hash=$1 AND revoked_at IS NULL
+             AND NOT (installation_id='github-actions:1448988160:agent-binary-bridge'
+                      AND last_seen_at < now() - interval '30 minutes')""",
         digest_secret(token),
     )
     if row is None:
