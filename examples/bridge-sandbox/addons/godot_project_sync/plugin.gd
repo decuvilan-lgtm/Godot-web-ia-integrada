@@ -6,7 +6,8 @@ const MAX_FILE_BYTES := 32 * 1024 * 1024
 const MAX_FILES := 10000
 const MAX_OPERATIONS_PER_SYNC := 500
 
-var _dock: VBoxContainer
+var _dock: ScrollContainer
+var _panel: VBoxContainer
 var _api_input: LineEdit
 var _label_input: LineEdit
 var _pair_code_input: LineEdit
@@ -35,9 +36,12 @@ func _exit_tree() -> void:
 		_dock.queue_free()
 
 func _build_ui() -> void:
-	_dock = VBoxContainer.new()
+	_dock = ScrollContainer.new()
 	_dock.name = "Shared Projects"
-	_dock.custom_minimum_size = Vector2(300, 300)
+	_dock.custom_minimum_size = Vector2(280, 300)
+	_panel = VBoxContainer.new()
+	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_dock.add_child(_panel)
 	var title := Label.new()
 	title.text = "Shared Projects · Web / Android"
 	_dock.add_child(title)
