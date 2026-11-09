@@ -15,7 +15,7 @@ Godot Web and the modified Godot Android editor can open the same named project 
 
 ## API
 
-All routes are under `/v1/command-center/projects` and require a paired editor Bearer credential.
+All routes are under `/v1/command-center/projects` and require a paired Bearer credential from `web_editor`, `android_editor`, or the separately paired `agent_controller`. The agent role is scoped to the same workspace and uses the same revision, hash, and conflict checks; it does not bypass the relay or receive Neon storage credentials.
 
 - `GET /`: list projects in the authenticated workspace.
 - `POST /`: create a project with a workspace-scoped slug.
