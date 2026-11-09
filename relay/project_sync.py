@@ -74,6 +74,8 @@ def validate_project_path(raw: str) -> str:
         raise HTTPException(status_code=422, detail="Credential and signing files cannot be synchronized")
     if name.endswith(".env") or name.startswith(".env."):
         raise HTTPException(status_code=422, detail="Environment files cannot be synchronized")
+    if name.endswith((".godot_sync_tmp", ".godot_sync_backup")):
+        raise HTTPException(status_code=422, detail="Temporary synchronization files cannot be uploaded")
     return "/".join(parts)
 
 
