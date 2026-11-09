@@ -495,7 +495,7 @@ func _is_syncable_path(path: String) -> bool:
 	var name := parts[parts.size() - 1]
 	if name in [".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"]:
 		return false
-	for suffix in [".pem", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision"]:
+	for suffix in [".pem", ".key", ".p8", ".asc", ".gpg", ".p12", ".pfx", ".keystore", ".jks", ".mobileprovision"]:
 		if name.ends_with(suffix):
 			return false
 	return not name.ends_with(".env") and not name.begins_with(".env.") and not name.ends_with(".godot_sync_tmp") and not name.ends_with(".godot_sync_backup")
