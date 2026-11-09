@@ -42,13 +42,15 @@ Renames are represented as a delete plus an add in the first implementation. Tex
 
 ## Pairing and use
 
-1. In the admin page, create one temporary pairing code for `web_editor` and another for `android_editor`, both using the same workspace.
-2. In the Godot Web page, open **Compartir proyectos**, download the connector ZIP and import it into the web editor's Project Manager. Open that sandbox project; its Shared Projects dock is enabled by default. Pair it with the web code.
-3. In the modified Android editor, select one project in Project Manager and press **Shared Sync**. This installs and enables both editor add-ons. Open the project and pair it with the Android code.
+1. In the admin page, create one temporary pairing code for `web_editor` and another for `android_editor`, both using the same workspace. These codes are specifically for the **Shared Projects** add-on.
+2. In the Godot Web page, open **Compartir proyectos**, download the connector ZIP and import it into the web editor's Project Manager. Open that sandbox project; its Shared Projects dock is enabled by default. Pair it with the `web_editor` code.
+3. In the modified Android editor, select one project in Project Manager and press **Shared Sync**. This installs and enables both editor add-ons. Open the project and pair its Shared Projects dock with the `android_editor` code.
 4. Create a shared project from either editor; select the same project from the other editor's list.
-5. Use **Analyze changes** before **Synchronize now**.
+5. Use **Analyze changes** and review the listed paths before **Synchronize now**.
 
-Pairing credentials are kept in memory by the add-on and must be re-entered after an editor restart. Never paste admin credentials or pairing codes into a public issue or commit them to a project.
+The separate `godot_command_center` dock has its own pairing flow for remote AI commands; it is not required for file synchronization and uses a separate `web_editor` device credential. The read-only AI Bridge WebSocket session is also separate from project-file sync.
+
+Pairing credentials are kept in memory by each add-on and must be re-entered after an editor restart. Never paste admin credentials or pairing codes into a public issue or commit them to a project.
 
 ## Current implementation / verification status
 
