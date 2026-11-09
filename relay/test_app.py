@@ -698,5 +698,36 @@ class VisualAssetIdempotencyTests(unittest.IsolatedAsyncioTestCase):
         threaded.assert_awaited_once_with(client.delete_object, Bucket="godot-visual-captures", Key="workspace/command/0/new.png")
 
 
+
+class SharedProjectPathTests(unittest.TestCase):
+    def test_safe_relative_project_paths_are_preserved(self):
+        from project_sync import validate_project_path
+        self.assertEqual(validate_project_path("project.godot"), "project.godot")
+        self.assertEqual(validate_project_path("scenes/level_01.tscn"), "scenes/level_01.tscn")
+        self.assertEqual(validate_project_path("assets/characters/hero.png"), "assets/characters/hero.png")
+
+    def test_traversal_absolute_and_windows_paths_are_rejected(self):
+        from project_sync import validate_project_path
+        for path in ("../project.godot", "scenes/../../secret", "/etc/passwd", "C:/project.godot", "assets\\\\hero.png", "a//b", "a/./b"):
+            with self.subTest(path=path), self.assertRaises(HTTPException):
+                validate_project_path(path)
+
+    def test_engine_cache_and_git_metadata_are_excluded(self):
+        from project_sync import validate_project_path
+        for path in (".git/config", ".godot/editor/project_metadata.cfg", "Scenes/.GODOT/cache"):
+            with self.subTest(path=path), self.assertRaises(HTTPException):
+                validate_project_path(path)
+
+    def test_environment_and_signing_material_are_excluded(self):
+        from project_sync import validate_project_path
+        for path in (".env", ".env.production", "secrets/id_rsa", "android/release.keystore", "certs/upload.p12"):
+            with self.subTest(path=path), self.assertRaises(HTTPException):
+                validate_project_path(path)
+
+    def test_path_length_is_bounded(self):
+        from project_sync import validate_project_path
+        with self.assertRaises(HTTPException):
+            validate_project_path("a" * 1025)
+
 if __name__ == "__main__":
     unittest.main()
