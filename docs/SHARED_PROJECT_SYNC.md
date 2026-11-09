@@ -29,13 +29,14 @@ The server checks workspace ownership on every operation, rejects stale file bas
 
 ## Client synchronization algorithm
 
-1. Analyze hashes local files and fetches the remote manifest. It does not write files.
+1. Analyze hashes local files and fetches the remote manifest. It does not write files and displays the exact paths and directions in a review panel.
 2. Each editor stores its own last-successful per-project baseline under `user://godot_project_sync/baselines`.
 3. The plan compares local, remote and baseline hashes to distinguish local-only changes, remote-only changes, converged files and conflicts.
 4. If both sides changed one path differently, the whole plan stops. No automatic last-writer-wins behavior is used.
-5. Sync recomputes the plan immediately before applying it. Before a remote overwrite or deletion, the local copy is rescued under `user://godot_project_sync/rescue/<project-id>/`.
-6. Uploads, downloads and deletes use expected remote hashes. Downloads are hash-verified and staged before replacement.
-7. The baseline advances only after all operations succeed and a fresh remote manifest is read. If a batch fails partway through, the baseline remains unchanged and a subsequent Analyze can reconcile completed operations.
+5. Sync is an explicit approval of the reviewed plan. Immediately before applying, the client recomputes a fingerprint containing the remote head revision and every operation. If anything changed since Analyze, Sync is blocked and the user must review a fresh plan.
+6. Before a remote overwrite or deletion, the local copy is rescued under `user://godot_project_sync/rescue/<project-id>/`.
+7. Uploads, downloads and deletes use expected remote hashes. Downloads are hash-verified and staged before replacement.
+8. The baseline advances only after all operations succeed and a fresh remote manifest is read. If a batch fails partway through, the baseline remains unchanged and a subsequent Analyze can reconcile completed operations.
 
 Renames are represented as a delete plus an add in the first implementation. Text merge and automatic conflict resolution are intentionally out of scope.
 
