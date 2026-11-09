@@ -731,6 +731,9 @@ class SharedProjectPathTests(unittest.TestCase):
 
 
 class SharedProjectApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+
     def test_agent_controller_cannot_use_editor_project_sync_api(self):
         identity = {"id": "controller-1", "workspace_id": "workspace-1", "device_kind": "agent_controller"}
         with patch("project_sync.authenticate_device", new=AsyncMock(return_value=identity)):
