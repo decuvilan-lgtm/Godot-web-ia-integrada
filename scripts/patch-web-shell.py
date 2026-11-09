@@ -43,7 +43,7 @@ if 'id="shared-project-sync-launcher"' not in html:
   <button type="button" id="shared-project-sync-toggle" aria-expanded="false" aria-controls="shared-project-sync-panel">Compartir proyectos</button>
   <div id="shared-project-sync-panel" data-open="false">
     <p><strong>Conectar Godot Web y Android</strong></p>
-    <p>Importa y abre este proyecto conector para empezar a compartirlo. Para un proyecto Web existente, instala también los dos add-ons en su carpeta addons y actívalos en Project Settings > Plugins. Empareja ambos editores en el mismo workspace y selecciona el mismo proyecto compartido.</p>
+    <p>Importa y abre este proyecto conector para empezar a compartirlo. Para un proyecto Web existente, instala también los tres add-ons de integración en su carpeta addons y actívalos en Project Settings > Plugins. Empareja ambos editores en el mismo workspace y selecciona el mismo proyecto compartido.</p>
     <a href="./bridge-sandbox.zip" download="godot-shared-project-connector.zip">Descargar proyecto conector</a>
     <a href="https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/blob/main/docs/SHARED_PROJECT_SYNC.md" target="_blank" rel="noopener noreferrer">Abrir guía de sincronización</a>
   </div>
