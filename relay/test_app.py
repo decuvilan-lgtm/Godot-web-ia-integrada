@@ -952,5 +952,20 @@ class SharedProjectApiTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 403)
 
+
+    def test_project_paths_reject_windows_separators_and_keep_posix_paths(self):
+        from project_sync import validate_project_path
+
+        self.assertEqual(validate_project_path("scenes/main.tscn"), "scenes/main.tscn")
+        for invalid in (
+            r"scenes\main.tscn",
+            r"..\outside.txt",
+            r"scenes\\main.tscn",
+        ):
+            with self.subTest(path=invalid):
+                with self.assertRaises(HTTPException) as raised:
+                    validate_project_path(invalid)
+                self.assertEqual(raised.exception.status_code, 422)
+
 if __name__ == "__main__":
     unittest.main()

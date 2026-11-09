@@ -61,7 +61,7 @@ async def _project(pool, project_id: str, workspace_id: str):
 def validate_project_path(raw: str) -> str:
     if not raw or len(raw.encode("utf-8")) > MAX_PATH_BYTES:
         raise HTTPException(status_code=422, detail="Project path is empty or too long")
-    if raw.startswith("/") or "\\\\" in raw or "\x00" in raw or ":" in raw:
+    if raw.startswith("/") or "\\" in raw or "\x00" in raw or ":" in raw:
         raise HTTPException(status_code=422, detail="Project path must be a relative POSIX path")
     parts = raw.split("/")
     if any(part in {"", ".", ".."} for part in parts):
