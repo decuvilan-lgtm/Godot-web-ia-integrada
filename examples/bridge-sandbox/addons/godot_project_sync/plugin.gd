@@ -20,6 +20,10 @@ var _pair_button: Button
 var _refresh_button: Button
 var _analyze_button: Button
 var _sync_button: Button
+var _clone_button: Button
+var _clone_confirmation: ConfirmationDialog
+var _clone_project_id := ""
+var _clone_manifest: Dictionary = {}
 var _credential := ""
 var _device_id := ""
 var _installation_id := ""
@@ -95,6 +99,17 @@ func _build_ui() -> void:
 	_sync_button.text = "Sincronizar ahora"
 	_sync_button.pressed.connect(_sync_now)
 	_panel.add_child(_sync_button)
+	_clone_button = Button.new()
+	_clone_button.text = "Clonar remoto aquí (reemplaza archivos)"
+	_clone_button.tooltip_text = "Crea una copia de rescate y reemplaza los archivos del proyecto con la versión compartida."
+	_clone_button.pressed.connect(_prepare_remote_clone)
+	_panel.add_child(_clone_button)
+	_clone_confirmation = ConfirmationDialog.new()
+	_clone_confirmation.title = "Clonar proyecto compartido"
+	_clone_confirmation.ok_button_text = "Clonar y reemplazar"
+	_clone_confirmation.cancel_button_text = "Cancelar"
+	_clone_confirmation.confirmed.connect(_execute_remote_clone)
+	add_child(_clone_confirmation)
 	var forget := Button.new()
 	forget.text = "Desconectar editor"
 	forget.pressed.connect(_forget_editor)
@@ -428,6 +443,153 @@ func _build_plan(project_id: String) -> Dictionary:
 		"head_revision": remote_result.head_revision, "files": remote_files}
 
 
+
+func _prepare_remote_clone() -> void:
+	if _busy or _credential.is_empty():
+		_set_status("Empareja este editor antes de clonar un proyecto.")
+		return
+	var project_id := _selected_project_id()
+	if project_id.is_empty():
+		_set_status("Selecciona un proyecto compartido.")
+		return
+	_busy = true
+	var remote: Dictionary = await _fetch_manifest(project_id)
+	var local: Dictionary = _scan_local_project()
+	_busy = false
+	if not remote.ok:
+		_set_status("No se pudo leer el proyecto remoto: " + str(remote.error))
+		return
+	if not local.ok:
+		_set_status("No se puede preparar el respaldo local: " + str(local.error))
+		return
+	if remote.files.is_empty():
+		_set_status("El proyecto remoto está vacío. Primero sube los archivos desde el otro editor.")
+		return
+	if remote.files.size() > MAX_FILES:
+		_set_status("El proyecto remoto supera el límite de " + str(MAX_FILES) + " archivos.")
+		return
+	var total_bytes := 0
+	for path in remote.file_sizes:
+		total_bytes += int(remote.file_sizes[path])
+	_clone_project_id = project_id
+	_clone_manifest = remote
+	_clone_confirmation.dialog_text = "Se reemplazarán los archivos sincronizables de este proyecto por la revisión remota %d (%d archivos, %.1f MiB). Antes de reemplazar o borrar cada archivo local se guardará una copia en user://godot_project_sync/rescue/. La clonación se detendrá si el proyecto remoto cambia durante la operación. ¿Continuar?" % [
+		int(remote.head_revision), remote.files.size(), float(total_bytes) / 1048576.0
+	]
+	_clone_confirmation.popup_centered(Vector2i(560, 260))
+
+
+func _execute_remote_clone() -> void:
+	if _busy or _credential.is_empty() or _clone_project_id.is_empty():
+		return
+	if _selected_project_id() != _clone_project_id:
+		_set_status("La selección cambió. Vuelve a preparar la clonación.")
+		_clone_project_id = ""
+		return
+	_busy = true
+	var local_result: Dictionary = _scan_local_project()
+	if not local_result.ok:
+		_busy = false
+		_set_status("No se pudo analizar el proyecto local: " + str(local_result.error))
+		return
+	var local_files: Dictionary = local_result.files
+	var remote_files: Dictionary = _clone_manifest.files
+	var paths: Array = remote_files.keys()
+	paths.sort()
+	var completed := 0
+	for path_value in paths:
+		var path := str(path_value)
+		var expected_sha := str(remote_files[path])
+		var local_sha := str(local_files.get(path, ""))
+		if local_sha == expected_sha:
+			completed += 1
+			continue
+		var target := "res://" + path
+		if FileAccess.file_exists(target):
+			if _hash_file(target) != local_sha:
+				_busy = false
+				_set_status("El archivo local cambió durante la clonación: " + path + ". No se sobrescribió.")
+				_clone_project_id = ""
+				return
+			if not _rescue_local_file(_clone_project_id, path, target):
+				_busy = false
+				_set_status("No se pudo respaldar el archivo local: " + path)
+				_clone_project_id = ""
+				return
+		_set_status("Clonando %d/%d · %s" % [completed + 1, paths.size(), path])
+		var url := "/v1/command-center/projects/" + _clone_project_id + "/files/content?path=" + path.uri_encode()
+		var downloaded: Dictionary = await _request(url, HTTPClient.METHOD_GET, PackedByteArray())
+		if not downloaded.ok:
+			_busy = false
+			_set_status("Descarga detenida en " + path + ": " + _response_error(downloaded) + ". Los archivos anteriores tienen respaldo; puedes volver a clonar.")
+			_clone_project_id = ""
+			return
+		var bytes: PackedByteArray = downloaded.body
+		var digest := _response_header(downloaded.headers, "X-File-SHA256")
+		if digest != expected_sha or _hash_bytes(bytes) != digest:
+			_busy = false
+			_set_status("La verificación SHA-256 falló para " + path + ". No se aplicó ese archivo.")
+			_clone_project_id = ""
+			return
+		if FileAccess.file_exists(target) and _hash_file(target) != local_sha:
+			_busy = false
+			_set_status("El archivo local cambió mientras se descargaba: " + path + ". No se sobrescribió.")
+			_clone_project_id = ""
+			return
+		if not _write_file_atomically(target, bytes):
+			_busy = false
+			_set_status("No se pudo escribir " + path + ". Los archivos anteriores tienen respaldo.")
+			_clone_project_id = ""
+			return
+		completed += 1
+	for path_value in local_files.keys():
+		var path := str(path_value)
+		if remote_files.has(path):
+			continue
+		var target := "res://" + path
+		if not FileAccess.file_exists(target):
+			continue
+		if _hash_file(target) != str(local_files[path]):
+			_busy = false
+			_set_status("El archivo local cambió durante la clonación: " + path + ". No se eliminó.")
+			_clone_project_id = ""
+			return
+		if not _rescue_local_file(_clone_project_id, path, target):
+			_busy = false
+			_set_status("No se pudo respaldar antes de eliminar " + path)
+			_clone_project_id = ""
+			return
+		if DirAccess.remove_absolute(ProjectSettings.globalize_path(target)) != OK:
+			_busy = false
+			_set_status("No se pudo eliminar el archivo local " + path)
+			_clone_project_id = ""
+			return
+	var final_manifest: Dictionary = await _fetch_manifest(_clone_project_id)
+	var final_local: Dictionary = _scan_local_project()
+	if not final_manifest.ok or not final_local.ok:
+		_busy = false
+		_set_status("La clonación terminó parcialmente, pero no se pudo verificar el estado final. Vuelve a clonar.")
+		_clone_project_id = ""
+		return
+	if int(final_manifest.head_revision) != int(_clone_manifest.head_revision) or final_manifest.files != remote_files or final_local.files != remote_files:
+		_busy = false
+		_set_status("El proyecto cambió durante la clonación o quedaron archivos locales distintos. No se avanzó el punto de control; vuelve a clonar.")
+		_clone_project_id = ""
+		return
+	if not _save_baseline(_clone_project_id, final_manifest.files, final_manifest.head_revision):
+		_busy = false
+		_set_status("La clonación terminó, pero no se pudo guardar el punto de control. Vuelve a analizar.")
+		_clone_project_id = ""
+		return
+	_busy = false
+	_analyzed_project_id = ""
+	_analyzed_plan_fingerprint = ""
+	_preview.text = "Proyecto clonado desde la nube. Reabre el proyecto para recargar escenas y configuración."
+	_set_status("Clonación completada · %d archivos verificados · revisión %d. Reabre el proyecto para recargar configuración." % [remote_files.size(), final_manifest.head_revision])
+	_clone_project_id = ""
+	_clone_manifest = {}
+
+
 func _plan_fingerprint(plan: Dictionary) -> String:
 	var parts := PackedStringArray()
 	parts.append("head=" + str(plan.get("head_revision", 0)))
@@ -556,10 +718,13 @@ func _fetch_manifest(project_id: String) -> Dictionary:
 		return {"ok": false, "error": response.error}
 	var data: Dictionary = response.data
 	var files: Dictionary = {}
+	var file_sizes: Dictionary = {}
 	for entry in data.get("files", []):
 		if entry is Dictionary:
-			files[str(entry.get("path", ""))] = str(entry.get("sha256", ""))
-	return {"ok": true, "files": files, "head_revision": int(data.get("head_revision", 0))}
+			var path := str(entry.get("path", ""))
+			files[path] = str(entry.get("sha256", ""))
+			file_sizes[path] = int(entry.get("byte_size", 0))
+	return {"ok": true, "files": files, "file_sizes": file_sizes, "head_revision": int(data.get("head_revision", 0))}
 
 func _apply_operation(project_id: String, operation: Dictionary) -> Dictionary:
 	var path := str(operation.path)
