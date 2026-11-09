@@ -37,10 +37,10 @@ VISUAL_ACTIONS = {
     "visual.zoom_to",
 }
 ALLOWED_ACTIONS = READ_ONLY_ACTIONS | VISUAL_ACTIONS
-# Keep visual commands rejected until signed storage transfer and real capture
-# backends are implemented and verified end-to-end.
-VISUAL_COMMANDS_ENABLED = False
-VISUAL_TARGETS = {"editor_ui", "editor_2d", "editor_3d", "game_preview"}
+# Enable only the Godot editor SubViewport backends that are implemented.
+# Browser chrome and game preview require a separate browser capture agent.
+VISUAL_COMMANDS_ENABLED = True
+VISUAL_TARGETS = {"editor_2d", "editor_3d"}
 VISUAL_SEQUENCE_TARGETS = VISUAL_TARGETS
 VISUAL_COORDINATE_SPACES = {
     "world_2d", "world_3d", "viewport_pixels", "viewport_normalized"
