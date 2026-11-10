@@ -1,0 +1,106 @@
+name: ChatGPT GitHub Bridge
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: chatgpt-bridge-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  execute-bridge-task:
+    if: >-
+      github.event.issue.user.login == 'decuvilan-lgtm' &&
+      startsWith(github.event.issue.title, '[CHATGPT-BRIDGE]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          submodules: false
+
+      - name: Validate task envelope
+        id: task
+        continue-on-error: true
+        run: |
+          python3 scripts/bridge/prepare_issue.py \
+            "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT" /tmp/bridge-result.json
+
+      - name: Respond to connectivity ping
+        if: steps.task.outputs.accepted == 'true' && steps.task.outputs.action == 'ping'
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          pathlib.Path('/tmp/bridge-result.json').write_text(json.dumps({
+              'accepted': True,
+              'task_id': os.environ['TASK_ID'],
+              'action': 'ping',
+              'status': 'succeeded',
+              'response': 'pong',
+              'runner': 'GitHub Actions'
+          }, indent=2) + '\n')
+          PY
+        env:
+          TASK_ID: ${{ steps.task.outputs.task_id }}
+
+      - name: Run isolated Godot engine smoke test
+        if: steps.task.outputs.accepted == 'true' && steps.task.outputs.action == 'engine_smoke'
+        env:
+          GODOT_TASK_PROFILE: engine_smoke
+          GODOT_TASK_REQUEST_ID: ${{ steps.task.outputs.task_id }}
+        run: bash scripts/ci/run-godot-task.sh
+
+      - name: Upload execution evidence
+        if: always() && steps.task.outputs.accepted == 'true' && steps.task.outputs.action == 'engine_smoke'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-bridge-${{ steps.task.outputs.task_id }}
+          path: /tmp/godot-task-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Return result to the issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          ACCEPTED: ${{ steps.task.outputs.accepted || 'false' }}
+          TASK_ID: ${{ steps.task.outputs.task_id || 'unknown' }}
+          ACTION: ${{ steps.task.outputs.action || 'unknown' }}
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const fs = require('fs');
+            let result = {};
+            try {
+              result = JSON.parse(fs.readFileSync('/tmp/bridge-result.json', 'utf8'));
+            } catch (_) {
+              result = { accepted: process.env.ACCEPTED === 'true' };
+            }
+            result.task_id = result.task_id || process.env.TASK_ID;
+            result.action = result.action || process.env.ACTION;
+            result.status = process.env.JOB_STATUS === 'success'
+              ? (result.status === 'rejected' ? 'rejected' : 'succeeded')
+              : (result.status === 'rejected' ? 'rejected' : 'failed');
+            result.workflow_run = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '## ChatGPT Bridge · resultado',
+              '',
+              '```json',
+              JSON.stringify(result, null, 2),
+              '```',
+              '',
+              'Respuesta generada automáticamente por el runner. No contiene credenciales.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
