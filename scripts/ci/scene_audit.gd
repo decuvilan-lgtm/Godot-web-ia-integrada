@@ -13,7 +13,10 @@ var _report := {
         "camera3d_count": 0,
         "light3d_count": 0,
         "skeleton3d_count": 0,
-        "animation_player_count": 0
+        "animation_player_count": 0,
+        "collision_shape3d_count": 0,
+        "physics_body3d_count": 0,
+        "multimesh_instance3d_count": 0
     },
     "scenes": [],
     "errors": []
@@ -169,20 +172,111 @@ func _inspect_node(node: Node) -> Dictionary:
             "shadow_enabled": light.shadow_enabled
         }
 
+    if node is CollisionShape3D:
+        _report["summary"]["collision_shape3d_count"] += 1
+        var collision := node as CollisionShape3D
+        data["collision_shape"] = _inspect_shape(collision.shape)
+
+    if node is CollisionObject3D:
+        var collision_object := node as CollisionObject3D
+        data["collision_layers"] = {
+            "layer": collision_object.collision_layer,
+            "mask": collision_object.collision_mask
+        }
+
+    if node is PhysicsBody3D:
+        _report["summary"]["physics_body3d_count"] += 1
+        if node is RigidBody3D:
+            var rigid := node as RigidBody3D
+            data["rigid_body"] = {
+                "mass": rigid.mass,
+                "gravity_scale": rigid.gravity_scale,
+                "linear_damp": rigid.linear_damp,
+                "angular_damp": rigid.angular_damp,
+                "freeze": rigid.freeze
+            }
+        elif node is CharacterBody3D:
+            var character := node as CharacterBody3D
+            data["character_body"] = {
+                "motion_mode": character.motion_mode,
+                "floor_max_angle": character.floor_max_angle,
+                "floor_snap_length": character.floor_snap_length,
+                "safe_margin": character.safe_margin
+            }
+
+    if node is MultiMeshInstance3D:
+        _report["summary"]["multimesh_instance3d_count"] += 1
+        var multi := node as MultiMeshInstance3D
+        data["multimesh"] = {
+            "instance_count": multi.multimesh.instance_count if multi.multimesh != null else 0
+        }
+
     if node is Skeleton3D:
         _report["summary"]["skeleton3d_count"] += 1
-        data["skeleton"] = {"bone_count": (node as Skeleton3D).get_bone_count()}
+        var skeleton := node as Skeleton3D
+        var bones: Array[String] = []
+        for bone_index in range(skeleton.get_bone_count()):
+            bones.append(skeleton.get_bone_name(bone_index))
+        data["skeleton"] = {"bone_count": bones.size(), "bone_names": bones}
 
     if node is AnimationPlayer:
         _report["summary"]["animation_player_count"] += 1
         var animation_player := node as AnimationPlayer
+        var animations: Array[Dictionary] = []
+        for animation_name in animation_player.get_animation_list():
+            var animation := animation_player.get_animation(animation_name)
+            var tracks: Array[Dictionary] = []
+            if animation != null:
+                for track_index in range(animation.get_track_count()):
+                    var keys: Array[Dictionary] = []
+                    var key_limit := mini(animation.track_get_key_count(track_index), 24)
+                    for key_index in range(key_limit):
+                        keys.append({
+                            "time": animation.track_get_key_time(track_index, key_index),
+                            "value": str(animation.track_get_key_value(track_index, key_index))
+                        })
+                    tracks.append({
+                        "path": str(animation.track_get_path(track_index)),
+                        "type": animation.track_get_type(track_index),
+                        "key_count": animation.track_get_key_count(track_index),
+                        "sampled_keys": keys
+                    })
+            animations.append({
+                "name": animation_name,
+                "length": animation.length if animation != null else 0.0,
+                "loop_mode": animation.loop_mode if animation != null else 0,
+                "tracks": tracks
+            })
         data["animations"] = {
             "current": animation_player.current_animation,
-            "available": animation_player.get_animation_list()
+            "available": animations
         }
 
     for child in node.get_children():
         data["children"].append(_inspect_node(child))
+    return data
+
+
+func _inspect_shape(shape: Shape3D) -> Dictionary:
+    if shape == null:
+        return {"class": "null"}
+    var data := {"class": shape.get_class(), "resource_path": shape.resource_path}
+    if shape is BoxShape3D:
+        data["size"] = _vector3((shape as BoxShape3D).size)
+    elif shape is SphereShape3D:
+        data["radius"] = (shape as SphereShape3D).radius
+    elif shape is CapsuleShape3D:
+        var capsule := shape as CapsuleShape3D
+        data["radius"] = capsule.radius
+        data["height"] = capsule.height
+    elif shape is CylinderShape3D:
+        var cylinder := shape as CylinderShape3D
+        data["radius"] = cylinder.radius
+        data["height"] = cylinder.height
+    elif shape is ConvexPolygonShape3D:
+        data["point_count"] = (shape as ConvexPolygonShape3D).points.size()
+    elif shape is ConcavePolygonShape3D:
+        data["face_count"] = (shape as ConcavePolygonShape3D).get_faces().size() / 3
     return data
 
 

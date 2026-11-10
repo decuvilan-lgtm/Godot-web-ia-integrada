@@ -26,7 +26,7 @@ jobs:
           name: Install minimal runner dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ca-certificates curl unzip
+            sudo apt-get install -y --no-install-recommends ca-certificates curl unzip xvfb xauth libgl1-mesa-dri libegl1 libx11-6 libxrandr2 libxcursor1 libxinerama1 libxi6 libasound2t64
       - run:
           name: Execute isolated Godot task
           command: bash scripts/ci/run-godot-task.sh

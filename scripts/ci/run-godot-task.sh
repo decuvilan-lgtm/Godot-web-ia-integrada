@@ -68,6 +68,26 @@ if [[ "$PROFILE" == "scene_audit_3d" ]]; then
     echo "Scene audit did not produce its JSON evidence." >&2
     exit 5
   fi
+
+  if ! command -v xvfb-run >/dev/null 2>&1; then
+    echo "xvfb-run is required for deterministic 3D multi-view captures." >&2
+    exit 6
+  fi
+  set +e
+  timeout 180 xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 GODOT_SILENCE_ROOT_WARNING=1 \
+    "$GODOT_BIN" --path "$PROJECT_PATH" --rendering-method gl_compatibility \
+    --script "$PWD/scripts/ci/scene_capture_3d.gd" \
+    2>&1 | tee "$RESULTS_DIR/scene-capture.log"
+  CAPTURE_STATUS=${PIPESTATUS[0]}
+  set -e
+  if [[ "$CAPTURE_STATUS" -ne 0 ]]; then
+    echo "3D multi-view capture failed with exit code $CAPTURE_STATUS" >&2
+    exit "$CAPTURE_STATUS"
+  fi
+  if [[ ! -s "$RESULTS_DIR/multiview.json" ]]; then
+    echo "3D multi-view capture did not produce its evidence manifest." >&2
+    exit 7
+  fi
 fi
 
 python3 - "$RESULTS_DIR/task.json" "$PROFILE" "$REQUEST_ID" <<'PY'

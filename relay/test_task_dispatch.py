@@ -93,6 +93,24 @@ class TaskDispatchTests(unittest.TestCase):
         with self.assertRaises(TaskDispatchError):
             asyncio.run(dispatch_task("engine_smoke", "task_123456", env={}))
 
+    def test_circleci_status_returns_pipeline_and_workflow_state(self):
+        async def handler(request):
+            if request.url.path.endswith("/workflow"):
+                return httpx.Response(200, json={"items": [{
+                    "id": "workflow-123",
+                    "name": "remote-godot-task",
+                    "status": "success",
+                }]})
+            return httpx.Response(200, json={"id": "12345678-1234-1234-1234-123456789abc", "state": "created", "number": 7})
+
+        result = asyncio.run(task_status(
+            "circleci", "12345678-1234-1234-1234-123456789abc", "task_123456",
+            env={"CIRCLECI_TOKEN": "circle-secret", "CIRCLECI_PROJECT_SLUG": "gh/example/project"},
+            transport=httpx.MockTransport(handler),
+        ))
+        self.assertEqual(result["state"], "created")
+        self.assertEqual(result["workflows"][0]["status"], "success")
+
     def test_status_rejects_unknown_provider(self):
         with self.assertRaises(ValueError):
             asyncio.run(task_status("unknown", None, "task_123456", env={}))

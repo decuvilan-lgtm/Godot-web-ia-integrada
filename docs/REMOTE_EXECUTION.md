@@ -12,7 +12,7 @@ Both providers run the same version-pinned Godot binary and the same repository 
 ## Fixed task profiles
 
 - `engine_smoke`: verifies the pinned Godot 4.7.2 Linux binary, imports the isolated bridge sandbox, and fails on script/parse errors.
-- `scene_audit_3d`: performs the same import check and runs a structured scene audit. The JSON report records scene hierarchy, Node3D transforms and basis vectors, mesh bounds and surfaces, materials, cameras, lights/shadows, skeleton bone counts, and AnimationPlayer tracks.
+- `scene_audit_3d`: performs the same import check and runs a structured scene audit. The JSON report records scene hierarchy, world transforms and basis vectors, mesh bounds and surfaces, materials, cameras, lights/shadows, collision shapes/layers, rigid and character body settings, skeleton bone names, and AnimationPlayer tracks with sampled key values. The same profile launches a separate Mesa software-rendered Godot process under Xvfb and saves eight camera views per scene containing meshes, with camera coordinates and image dimensions in a manifest.
 
 The current audit target is deliberately fixed to `examples/bridge-sandbox`, which includes a synthetic 3D fixture (mesh, material, camera, and light) so the audit proves it can read non-zero 3D data. It is an infrastructure validation target, not yet the user's actual game workspace. The next integration step is to transfer a versioned project snapshot into an isolated runner workspace and run these profiles against that snapshot.
 
@@ -44,4 +44,4 @@ The Relay exposes authenticated MCP tools `godot_start_task` and `godot_task_sta
 
 A single screenshot is not sufficient to assess a 3D project. The scene audit preserves structural evidence that can be checked independently of appearance: node hierarchy, world transforms, basis vectors, camera projection/FOV/near/far planes, mesh AABBs and surfaces, material parameters, light energy and shadow state, skeletons, and animation names.
 
-This is not a guarantee of "total precision". Visual fidelity still requires real rendered frames from multiple viewpoints, animation frame sequences, collision/physics checks, and comparison against the intended reference. The current CI audit is the first deterministic evidence layer; multi-view rendered capture and the actual project snapshot transfer are separate implementation steps.
+This is not a guarantee of "total precision". Visual fidelity still requires real rendered frames from multiple viewpoints, animation frame sequences, collision/physics checks, and comparison against the intended reference. The current CI audit and eight-view capture are deterministic infrastructure evidence for the fixed sandbox. They do not yet mean the user's real game project has been transferred or inspected; versioned project snapshot transfer remains a separate integration step.
