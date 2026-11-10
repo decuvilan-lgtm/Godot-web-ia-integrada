@@ -109,7 +109,7 @@ El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada 
 
 ## Observación visual (en desarrollo)
 
-El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). Cada solicitud debe indicar un objetivo exacto (`editor_ui`, `editor_2d`, `editor_3d` o `game_preview`); las secuencias indican cantidad e intervalo, y el zoom declara el sistema de coordenadas. No se permite adivinar el objetivo ni sustituir una fuente por otra.
+El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). En producción solo están habilitados los objetivos `editor_2d` y `editor_3d`. `editor_ui`, `game_preview` y `visual.zoom_to` están documentados, pero rechazados hasta implementar sus backends y restauración de vista. Las secuencias indican cantidad e intervalo; no se permite adivinar objetivos ni sustituir una fuente por otra.
 
 Neon Object Storage tiene el bucket privado `godot-visual-captures`; el Relay tiene credenciales de almacenamiento con alcance `storage:read`/`storage:write`, transferencia binaria autenticada a través del Relay y validación de imagen/metadatos. La API permite `editor_2d` y `editor_3d`, además de secuencias realtime. **El código está habilitado, pero la operación real sigue pendiente de emparejar el editor web y validar el ciclo captura → almacenamiento → recuperación**. `editor_ui`, `game_preview` y `visual.zoom_to` no se consideran disponibles.
 
