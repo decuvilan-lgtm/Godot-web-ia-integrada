@@ -112,6 +112,9 @@ def main() -> int:
         title = page.title()
         canvas_count = page.locator("canvas").count()
         editor_started = start_button.is_hidden()
+        empty_project_manager = page.get_by_text(
+            re.compile(r"You don't have any projects yet", re.I)
+        ).count() > 0
         if not editor_started:
             raise RuntimeError("Godot editor launch button is still visible; editor did not start")
         save_capture("web-editor-desktop.png", {"width": 1440, "height": 900}, False)
@@ -127,9 +130,10 @@ def main() -> int:
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
         "page_title": title,
-        "workspace_state": "empty_project_manager",
+        "workspace_state": "empty_project_manager" if empty_project_manager else "project_manager_or_editor",
         "canvas_count": canvas_count,
         "editor_started": editor_started,
+        "empty_project_manager": empty_project_manager,
         "captures": captures,
         "page_errors": page_errors[:30],
         "http_5xx_responses": failed_responses[:30],
