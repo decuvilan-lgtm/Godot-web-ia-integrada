@@ -112,7 +112,7 @@ Example — 12 consecutive screenshots of the 2D viewport:
   "interval_ms": 250,
   "timing_mode": "realtime",
   "output": {
-    "format": "webp",
+    "format": "jpeg",
     "max_width": 1920,
     "max_height": 1080,
     "quality": 85
@@ -135,7 +135,6 @@ Example — 8 consecutive images of the 3D viewport:
     "max_height": 900
   },
   "include_metadata": true,
-  "include_contact_sheet": true
 }
 ```
 
@@ -226,6 +225,8 @@ Example — focus a 3D world point:
 | `VISUAL_RESTORE_REQUIRED` | Request attempts to leave the editor view changed. |
 | `VISUAL_CAPTURE_TIMEOUT` | Capture did not complete within its deadline. |
 | `VISUAL_UPLOAD_INVALID` | Uploaded object failed metadata/hash validation. |
+| `VISUAL_FORMAT_UNAVAILABLE` | The requested image format is not supported by the current Godot capture plugin. |
+| `VISUAL_CONTACT_SHEET_UNAVAILABLE` | Contact-sheet generation is not implemented; request individual frames only. |
 
 ## 8. Examples of natural-language translation
 
