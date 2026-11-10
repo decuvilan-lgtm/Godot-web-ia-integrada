@@ -57,8 +57,15 @@ jobs:
           GODOT_TASK_REQUEST_ID: ${{ steps.task.outputs.task_id }}
         run: bash scripts/ci/run-godot-task.sh
 
+      - name: Run structured Godot scene audit and multi-view capture
+        if: steps.task.outputs.accepted == 'true' && steps.task.outputs.action == 'scene_audit_3d'
+        env:
+          GODOT_TASK_PROFILE: scene_audit_3d
+          GODOT_TASK_REQUEST_ID: ${{ steps.task.outputs.task_id }}
+        run: bash scripts/ci/run-godot-task.sh
+
       - name: Upload execution evidence
-        if: always() && steps.task.outputs.accepted == 'true' && steps.task.outputs.action == 'engine_smoke'
+        if: always() && steps.task.outputs.accepted == 'true' && (steps.task.outputs.action == 'engine_smoke' || steps.task.outputs.action == 'scene_audit_3d')
         uses: actions/upload-artifact@v4
         with:
           name: chatgpt-bridge-${{ steps.task.outputs.task_id }}
@@ -88,6 +95,22 @@ jobs:
             result.status = process.env.JOB_STATUS === 'success'
               ? (result.status === 'rejected' ? 'rejected' : 'succeeded')
               : (result.status === 'rejected' ? 'rejected' : 'failed');
+            try {
+              const task = JSON.parse(fs.readFileSync('/tmp/godot-task-results/task.json', 'utf8'));
+              result.execution = { profile: task.profile, status: task.status };
+            } catch (_) {}
+            try {
+              const audit = JSON.parse(fs.readFileSync('/tmp/godot-task-results/scene-audit.json', 'utf8'));
+              if (audit.summary) result.scene_audit = audit.summary;
+            } catch (_) {}
+            try {
+              const manifest = JSON.parse(fs.readFileSync('/tmp/godot-task-results/multiview.json', 'utf8'));
+              result.visual_evidence = {
+                captured_views: Array.isArray(manifest.captures) ? manifest.captures.length : 0,
+                captured_scenes: manifest.captured_scene_count || 0,
+                views_per_scene: manifest.view_count_per_scene || 0
+              };
+            } catch (_) {}
             result.workflow_run = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               '## ChatGPT Bridge · resultado',
