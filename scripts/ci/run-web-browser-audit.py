@@ -95,15 +95,15 @@ def main() -> int:
             size = path.stat().st_size
             if size < 1024 or size > MAX_CAPTURE_BYTES:
                 raise RuntimeError(f"Screenshot size outside safe bounds: {name} ({size} bytes)")
-            scroll_width = page.evaluate(
+                document_scroll_width = page.evaluate(
                 "() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)"
             )
             captures.append({
                 "file": name,
                 "viewport": viewport,
                 "mobile_viewport_emulation": mobile,
-                "document_scroll_width": scroll_width,
-                "horizontal_overflow": scroll_width > viewport["width"],
+                "document_scroll_width": document_scroll_width,
+                "document_horizontal_overflow": document_scroll_width > viewport["width"],
                 "bytes": size,
                 "width": viewport["width"],
                 "height": viewport["height"],
@@ -112,9 +112,7 @@ def main() -> int:
         title = page.title()
         canvas_count = page.locator("canvas").count()
         editor_started = start_button.is_hidden()
-        empty_project_manager = page.get_by_text(
-            re.compile(r"You don't have any projects yet", re.I)
-        ).count() > 0
+        workspace_state = "project_manager" if "Project Manager" in title else "editor_page"
         if not editor_started:
             raise RuntimeError("Godot editor launch button is still visible; editor did not start")
         save_capture("web-editor-desktop.png", {"width": 1440, "height": 900}, False)
@@ -130,10 +128,10 @@ def main() -> int:
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
         "page_title": title,
-        "workspace_state": "empty_project_manager" if empty_project_manager else "project_manager_or_editor",
+        "workspace_state": workspace_state,
+        "project_selected": False if workspace_state == "project_manager" else None,
         "canvas_count": canvas_count,
         "editor_started": editor_started,
-        "empty_project_manager": empty_project_manager,
         "captures": captures,
         "page_errors": page_errors[:30],
         "http_5xx_responses": failed_responses[:30],
