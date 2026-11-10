@@ -92,7 +92,7 @@ PY
   fi
   set +e
   timeout 180 xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 GODOT_SILENCE_ROOT_WARNING=1 \
-    "$GODOT_BIN" --path "$PROJECT_PATH" --rendering-method gl_compatibility \
+    "$GODOT_BIN" --audio-driver Dummy --path "$PROJECT_PATH" --rendering-method gl_compatibility \
     --script "$PWD/scripts/ci/scene_capture_3d.gd" \
     2>&1 | tee "$RESULTS_DIR/scene-capture.log"
   CAPTURE_STATUS=${PIPESTATUS[0]}

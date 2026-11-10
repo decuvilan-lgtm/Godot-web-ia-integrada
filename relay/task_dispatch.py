@@ -367,6 +367,7 @@ async def task_status(
     env: dict[str, str] | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> dict[str, Any]:
+    validate_request_id(request_id)
     if provider == "circleci":
         if not execution_id:
             raise ValueError("execution_id is required for CircleCI status")

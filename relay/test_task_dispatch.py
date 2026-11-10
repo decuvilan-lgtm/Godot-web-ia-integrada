@@ -112,6 +112,35 @@ class TaskDispatchTests(unittest.TestCase):
         self.assertEqual(result["state"], "created")
         self.assertEqual(result["workflows"][0]["status"], "success")
 
+    def test_circleci_status_includes_job_artifacts(self):
+        async def handler(request):
+            path = request.url.path
+            if path.endswith("/workflow"):
+                return httpx.Response(200, json={"items": [{
+                    "id": "workflow-123", "name": "remote-godot-task", "status": "success"
+                }]})
+            if path.endswith("/workflow/workflow-123/job"):
+                return httpx.Response(200, json={"items": [{
+                    "name": "godot-task", "status": "success", "job_number": 42
+                }]})
+            if path.endswith("/42/artifacts"):
+                return httpx.Response(200, json={"items": [{
+                    "path": "godot-task-results/multiview.json",
+                    "url": "https://circleci.example/artifact",
+                    "size": 2048,
+                }]})
+            return httpx.Response(200, json={"id": "12345678-1234-1234-1234-123456789abc", "state": "created"})
+
+        result = asyncio.run(task_status(
+            "circleci", "12345678-1234-1234-1234-123456789abc", "task_123456",
+            env={"CIRCLECI_TOKEN": "circle-secret", "CIRCLECI_PROJECT_SLUG": "gh/example/project"},
+            transport=httpx.MockTransport(handler),
+        ))
+        self.assertEqual(
+            result["workflows"][0]["jobs"][0]["artifacts"][0]["path"],
+            "godot-task-results/multiview.json",
+        )
+
     def test_provider_status_never_exposes_secret_values(self):
         result = provider_status(env={
             "CIRCLECI_TOKEN": "do-not-return-this",
