@@ -571,6 +571,35 @@ class RelayApiTests(unittest.TestCase):
         self.assertEqual(stored["Body"], payload)
         self.assertEqual(stored["ContentType"], "image/png")
 
+    def test_visual_sequence_upload_uses_precreated_sequence_record(self):
+        workspace_id = "11111111-1111-4111-8111-111111111111"
+        command_id = "22222222-2222-4222-8222-222222222222"
+        identity = {"id": "web-editor-1", "device_kind": "web_editor", "workspace_id": workspace_id}
+        command = {"id": command_id, "action": "visual.capture_sequence", "target": "web_editor"}
+        args = {"target": "editor_2d", "frames": 2, "interval_ms": 250}
+        pool = types.SimpleNamespace(fetchval=AsyncMock(return_value="sequence-id"))
+        client = types.SimpleNamespace(put_object=unittest.mock.Mock(return_value={}))
+
+        with patch("visual_proxy.leased_visual_command", new=AsyncMock(return_value=(identity, command, args, pool))):
+            with patch("visual_proxy.storage_client", return_value=client):
+                response = self.client.post(
+                    "/v1/command-center/visual/uploads/proxy",
+                    headers={
+                        "Authorization": "Bearer test",
+                        "Content-Type": "image/png",
+                        "X-Command-Id": command_id,
+                        "X-Frame-Index": "0",
+                    },
+                    content=b"test-image-payload",
+                )
+
+        self.assertEqual(response.status_code, 201)
+        query, params = pool.fetchval.await_args.args
+        self.assertIn("update command_center.visual_sequences", query.lower())
+        self.assertEqual(params, (command_id, workspace_id))
+        self.assertEqual(response.json()["sequence_id"], "sequence-id")
+        self.assertTrue(response.json()["object_key"].startswith(f"{workspace_id}/{command_id}/0/"))
+
     def test_visual_upload_abandon_removes_only_unregistered_object_owned_by_editor(self):
         workspace_id = "11111111-1111-4111-8111-111111111111"
         command_id = "22222222-2222-4222-8222-222222222222"
