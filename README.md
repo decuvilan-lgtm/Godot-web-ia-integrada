@@ -84,7 +84,7 @@ El PR #1 añade al relay FastAPI existente:
 - Respuestas no-cache y reconexión Neon acotada.
 - Página administrativa de emparejamiento en `/command-center/admin`.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–005 están instaladas/verificadas en Neon, incluido el esquema de metadatos de observación visual y la compatibilidad de secuencias para `editor_ui`. El servicio Render aún no tiene configurados los secretos necesarios. No se ha desplegado esta versión ni se ha hecho una solicitud real contra la base de datos.
+La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render tiene configurados los secretos de Postgres y del bucket privado; el relay está desplegado con el commit `df8abcc2`. La API acepta capturas `editor_2d`/`editor_3d`, pero todavía no hay editor emparejado ni una captura real. El rol `agent_controller` y la cola existen; falta conectar un runtime/herramienta de ChatGPT que pueda encolar órdenes y leer/inspeccionar los activos.
 
 ## Proyecto persistente y consultas múltiples
 
@@ -100,13 +100,12 @@ El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada 
 
 ## Próximas etapas
 
-1. Terminar CI del cliente web y corregir cualquier error de plugin.
-2. Revisar el sandbox dentro del editor Godot Web real y confirmar que el plugin puede ejecutarse allí.
-3. Configurar Neon URL y secreto administrativo en Render, después de revisión; desplegar solo cuando esté preparado.
-4. Emparejar el editor web como `web_editor` y Android como `android_editor`.
-5. Probar primero `ping`, estado, listado, escena y lectura de scripts.
-6. Conectar un controlador IA autenticado que pueda encolar órdenes para el puesto web.
-7. Implementar propuestas, diffs, snapshots, validación y aprobación explícita antes de cualquier aplicación al proyecto Android.
+1. Importar y abrir `examples/bridge-sandbox` en el Godot Web publicado; confirmar el dock Command Center.
+2. Emparejar únicamente `web_editor` en workspace `default` y probar `ping`, estado, escena y lectura.
+3. Ejecutar una captura real `editor_2d` y verificar almacenamiento, metadatos, hash y recuperación.
+4. Probar captura `editor_3d` y una secuencia breve; comprobar fallos parciales y limpieza.
+5. Conectar el runtime/herramienta de ChatGPT con el rol `agent_controller` para que pueda encolar órdenes y recuperar/inspeccionar imágenes.
+6. Mantener la copia web aislada; implementar propuestas, diffs, snapshots, validación y aprobación explícita antes de aplicar cambios al proyecto Android.
 
 ## Observación visual (en desarrollo)
 
