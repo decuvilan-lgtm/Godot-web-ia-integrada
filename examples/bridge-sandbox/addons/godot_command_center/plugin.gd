@@ -399,8 +399,8 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 	if image == null or image.is_empty():
 		return {"ok": false, "error_code": "VISUAL_CAPTURE_EMPTY", "message": "El SubViewport no devolvió una imagen válida."}
 	var output: Dictionary = args.get("output", {})
-	var max_width := clampi(int(output.get("max_width", 4096)), 320, 8192)
-	var max_height := clampi(int(output.get("max_height", 4096)), 320, 8192)
+	var max_width := clampi(int(output.get("max_width", 2560)), 320, 8192)
+	var max_height := clampi(int(output.get("max_height", 1440)), 320, 8192)
 	var scale_factor := minf(1.0, minf(float(max_width) / image.get_width(), float(max_height) / image.get_height()))
 	if scale_factor < 1.0:
 		image.resize(maxi(1, int(image.get_width() * scale_factor)), maxi(1, int(image.get_height() * scale_factor)), Image.INTERPOLATE_LANCZOS)
@@ -438,7 +438,9 @@ func _capture_and_upload_visual(command_id: String, target: String, args: Dictio
 	var object_key := str(upload_data.get("object_key", ""))
 	if object_key.is_empty():
 		return {"ok": false, "error_code": "VISUAL_PROXY_KEY_MISSING", "message": "El relay no confirmó la ubicación privada de la imagen."}
-	var metadata := {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
+	var metadata: Dictionary = {}
+	if bool(args.get("include_metadata", true)):
+		metadata = {"frame_index": frame_index, "viewport_size": [image.get_width(), image.get_height()], "godot_version": Engine.get_version_info()}
 	var lease_before_complete: Dictionary = await _request_visual_json("/v1/command-center/commands/" + command_id + "/heartbeat", HTTPClient.METHOD_POST, {})
 	if not bool(lease_before_complete.get("ok", false)):
 		await _abandon_visual_upload(object_key)

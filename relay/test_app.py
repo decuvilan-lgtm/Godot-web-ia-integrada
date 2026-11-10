@@ -296,6 +296,24 @@ class RelayApiTests(unittest.TestCase):
             })
         self.assertEqual(raised.exception.detail["code"], "VISUAL_SEQUENCE_LIMIT")
 
+    def test_visual_capture_rejects_formats_and_sequence_options_not_supported_by_plugin(self):
+        from command_center import validate_visual_command
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {
+                "target": "editor_2d",
+                "output": {"format": "webp"},
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_FORMAT_UNAVAILABLE")
+
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture_sequence", {
+                "target": "editor_2d",
+                "frames": 3,
+                "interval_ms": 250,
+                "include_contact_sheet": True,
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_CONTACT_SHEET_UNAVAILABLE")
+
     def test_visual_zoom_requires_matching_coordinate_space_and_restoration(self):
         from command_center import validate_visual_command
         validate_visual_command("visual.zoom_to", {

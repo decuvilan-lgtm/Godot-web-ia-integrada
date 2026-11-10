@@ -55,8 +55,8 @@ Required:
 
 Optional:
 - `viewport_index`: integer 0–3; required only for `editor_3d` when the editor exposes more than one 3D viewport. Defaults to 0 when omitted.
-- Contract formats: `jpeg`, `webp`, or `png`. Current Godot plugin implementation supports only `jpeg` and `png`, and defaults to `jpeg` when format is omitted; `webp` is not yet implemented there.
-- `output.max_width`, `output.max_height`: each 320–8192. Contract defaults are 2560 and 1440; the current plugin defaults to 4096 × 4096 and clamps each requested dimension to 320–8192.
+- Current supported formats: `jpeg` and `png`; the relay rejects `webp` before enqueueing because the Godot plugin does not encode it. The default is `jpeg`.
+- `output.max_width`, `output.max_height`: each 320–8192. Defaults are 2560 × 1440 to bound transfer size and editor load.
 - `output.quality`: integer 40–100; applies to JPEG/WebP in the contract. The current plugin applies quality only to JPEG; PNG ignores quality.
 - `include_metadata`: boolean; default true.
 
@@ -65,7 +65,7 @@ Example — whole editor page (contract example only; current plugin rejects `ed
 {
   "target": "editor_ui",
   "output": {
-    "format": "webp",
+    "format": "jpeg",
     "max_width": 2560,
     "max_height": 1440,
     "quality": 88
@@ -102,7 +102,7 @@ Optional:
 - `timing_mode`: `realtime` only until deterministic preview stepping exists. Do not accept `frame_step` before its control hook is implemented and tested.
 - `output`: same output object as `visual.capture`.
 - `include_metadata`: boolean; default true.
-- `include_contact_sheet`: boolean; default true. A contact sheet is supplementary; each original frame remains a separate asset.
+- `include_contact_sheet`: reserved; must be omitted or `false`. `true` is rejected until a separate contact-sheet asset format is implemented.
 
 Example — 12 consecutive screenshots of the 2D viewport:
 ```json
@@ -118,7 +118,6 @@ Example — 12 consecutive screenshots of the 2D viewport:
     "quality": 85
   },
   "include_metadata": true,
-  "include_contact_sheet": true
 }
 ```
 
@@ -195,7 +194,7 @@ Example — focus a 3D world point:
 
 - Image dimensions: maximum 8192 × 8192.
 - Maximum encoded size per image: 12 MiB.
-- Formats: JPEG, WebP, PNG.
+- Current formats: JPEG and PNG. WebP is not yet supported by the Godot capture plugin.
 - Sequence size: 2–24 frames; interval: 50–5000 ms.
 - Object keys are server-generated and scoped to workspace/command/asset IDs. Clients cannot choose arbitrary object keys.
 - **Upload path:** the Godot Web client sends raw image bytes to `POST /v1/command-center/visual/uploads/proxy` with its Bearer credential and command headers. Render validates the active command lease and size limit, then writes to the private bucket. The client never talks to Neon S3.

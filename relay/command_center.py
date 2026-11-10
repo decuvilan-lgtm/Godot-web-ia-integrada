@@ -133,10 +133,8 @@ def _validate_visual_output(output: Any) -> None:
         set(),
         "VISUAL_OUTPUT_INVALID",
     )
-    if "format" in output and (
-        not isinstance(output["format"], str) or output["format"] not in {"jpeg", "webp", "png"}
-    ):
-        _visual_error("VISUAL_OUTPUT_INVALID", "format must be jpeg, webp or png")
+    if "format" in output and output["format"] not in {"jpeg", "png"}:
+        _visual_error("VISUAL_FORMAT_UNAVAILABLE", "format must be jpeg or png; WebP is not supported by the current Godot capture backend")
     for key in ("max_width", "max_height"):
         if key in output and not _bounded_int(output[key], 320, 8192):
             _visual_error("VISUAL_OUTPUT_INVALID", f"{key} must be an integer from 320 to 8192")
@@ -206,6 +204,8 @@ def validate_visual_command(action: str, args: dict[str, Any]) -> None:
         for key in ("include_metadata", "include_contact_sheet"):
             if key in args and not isinstance(args[key], bool):
                 _visual_error("VISUAL_ARGUMENT_INVALID", f"{key} must be boolean")
+        if args.get("include_contact_sheet", False):
+            _visual_error("VISUAL_CONTACT_SHEET_UNAVAILABLE", "Contact sheets are not implemented; request the individual frames only")
         return
 
     if action == "visual.zoom_to":
