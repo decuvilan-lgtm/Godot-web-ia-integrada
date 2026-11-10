@@ -594,9 +594,9 @@ class RelayApiTests(unittest.TestCase):
                 )
 
         self.assertEqual(response.status_code, 201)
-        query, params = pool.fetchval.await_args.args
+        query, *params = pool.fetchval.await_args.args
         self.assertIn("update command_center.visual_sequences", query.lower())
-        self.assertEqual(params, (command_id, workspace_id))
+        self.assertEqual(tuple(params), (command_id, workspace_id))
         self.assertEqual(response.json()["sequence_id"], "sequence-id")
         self.assertTrue(response.json()["object_key"].startswith(f"{workspace_id}/{command_id}/0/"))
 
