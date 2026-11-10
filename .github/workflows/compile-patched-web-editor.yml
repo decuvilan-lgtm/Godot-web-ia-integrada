@@ -1,0 +1,71 @@
+name: Compile patched Godot Web Editor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "engine/godot"
+      - "scripts/apply-web-github-import.py"
+      - "scripts/prepare-engine-source.sh"
+      - ".github/workflows/compile-patched-web-editor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patched-web-editor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compile patched Godot Web editor from source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EM_VERSION: "4.0.11"
+      SCONS_FLAGS: "dev_mode=yes debug_symbols=no use_closure_compiler=yes"
+    steps:
+      - name: Checkout integration repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify pinned engine and apply GitHub importer patch
+        run: |
+          bash scripts/verify-engine-pin.sh
+          bash scripts/prepare-engine-source.sh
+
+      - name: Set up Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EM_VERSION }}
+          no-cache: true
+
+      - name: Verify Emscripten
+        run: emcc -v
+
+      - name: Set up Python and SCons
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned SCons
+        run: |
+          python -m pip install scons==4.10.1
+          scons --version
+
+      - name: Compile patched Web editor
+        working-directory: engine/godot
+        run: |
+          scons platform=web target=editor ${{ env.SCONS_FLAGS }} -j2
+          test -s bin/godot.web.editor.wasm32.zip
+          sha256sum bin/godot.web.editor.wasm32.zip
+
+      - name: Upload compiled patched editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-web-editor-patched-${{ github.sha }}
+          path: engine/godot/bin/godot.web.editor.wasm32.zip
+          if-no-files-found: error
+          retention-days: 7
