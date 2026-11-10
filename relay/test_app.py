@@ -156,6 +156,62 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("insert into command_center.sessions", sql)
         self.assertNotIn("insert into command_center.projects", sql)
 
+    def test_visual_sequence_metadata_is_created_when_command_is_queued(self):
+        class AsyncContext:
+            def __init__(self, value=None):
+                self.value = value
+            async def __aenter__(self):
+                return self.value
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+        class FakeConnection:
+            def __init__(self):
+                self.executed = []
+            def transaction(self):
+                return AsyncContext()
+            async def fetchval(self, query, *args):
+                return "sequence-command-id"
+            async def execute(self, query, *args):
+                self.executed.append((query, args))
+
+        class FakePool:
+            def __init__(self, connection):
+                self.connection = connection
+            def acquire(self):
+                return AsyncContext(self.connection)
+
+        connection = FakeConnection()
+        identity = {
+            "id": "agent-controller-test",
+            "device_kind": "agent_controller",
+            "workspace_id": "11111111-1111-4111-8111-111111111111",
+        }
+        with patch("command_center.authenticate_device", new=AsyncMock(return_value=identity)), \
+             patch("command_center.get_pool", new=AsyncMock(return_value=FakePool(connection))):
+            response = self.client.post(
+                "/v1/command-center/commands",
+                headers={"Authorization": "Bearer test"},
+                json={
+                    "target": "web_editor",
+                    "action": "visual.capture_sequence",
+                    "args": {"target": "editor_2d", "frames": 3, "interval_ms": 250},
+                    "idempotency_key": "sequence-lifecycle-test",
+                },
+            )
+
+        self.assertEqual(response.status_code, 202)
+        sequence_insert = next(
+            (entry for entry in connection.executed if "insert into command_center.visual_sequences" in entry[0].lower()),
+            None,
+        )
+        self.assertIsNotNone(sequence_insert)
+        self.assertEqual(
+            sequence_insert[1],
+            (identity["workspace_id"], "sequence-command-id", "editor_2d", 3, 250),
+        )
+        self.assertIn("'pending'", sequence_insert[0].lower())
+
     def test_command_center_policy_enables_supported_visual_captures_only(self):
         from command_center import READ_ONLY_ACTIONS, VISUAL_ACTIONS, VISUAL_COMMANDS_ENABLED, VISUAL_TARGETS
         self.assertEqual(

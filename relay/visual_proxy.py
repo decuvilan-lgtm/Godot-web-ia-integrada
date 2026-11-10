@@ -64,13 +64,14 @@ async def proxy_upload(
         if frame_index is None or frame_index >= frames:
             raise HTTPException(status_code=422, detail="A valid X-Frame-Index is required")
         sequence_id = await pool.fetchval(
-            """INSERT INTO command_center.visual_sequences
-               (workspace_id, command_id, source, requested_frames, interval_ms, status, started_at)
-               VALUES ($1,$2,$3,$4,$5,'capturing',now())
-               ON CONFLICT (command_id) DO UPDATE SET status='capturing'
+            """UPDATE command_center.visual_sequences
+               SET status='capturing', started_at=COALESCE(started_at, now())
+               WHERE command_id=$1 AND workspace_id=$2
                RETURNING id""",
-            identity["workspace_id"], command["id"], target, frames, args["interval_ms"],
+            command["id"], identity["workspace_id"],
         )
+        if sequence_id is None:
+            raise HTTPException(status_code=409, detail="Sequence metadata was not initialized when the command was queued")
     else:
         if frame_index is not None:
             raise HTTPException(status_code=422, detail="X-Frame-Index is only valid for capture_sequence")

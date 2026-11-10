@@ -502,6 +502,18 @@ async def create_command(
                     "status": existing["status"],
                     "reused": True,
                 }
+            if body.action == "visual.capture_sequence":
+                await connection.execute(
+                    """INSERT INTO command_center.visual_sequences
+                       (workspace_id, command_id, source, requested_frames, interval_ms, status)
+                       VALUES ($1,$2,$3,$4,$5,'pending')
+                       ON CONFLICT (command_id) DO NOTHING""",
+                    identity["workspace_id"],
+                    command_id,
+                    body.args["target"],
+                    body.args["frames"],
+                    body.args["interval_ms"],
+                )
             await connection.execute(
                 """INSERT INTO command_center.events
                    (workspace_id, actor_device_id, event_type, payload)
@@ -541,6 +553,21 @@ async def claim_next_command(
                 target,
             )
             for expired in expired_rows:
+                await connection.execute(
+                    """UPDATE command_center.visual_sequences AS sequence
+                       SET status = CASE
+                           WHEN (SELECT count(*) FROM command_center.visual_assets
+                                 WHERE sequence_id=sequence.id) >= sequence.requested_frames
+                               THEN 'completed'
+                           WHEN EXISTS (SELECT 1 FROM command_center.visual_assets
+                                        WHERE sequence_id=sequence.id)
+                               THEN 'partial'
+                           ELSE 'failed'
+                       END,
+                       finished_at=now()
+                       WHERE sequence.command_id=$1 AND sequence.status IN ('pending','capturing')""",
+                    expired["id"],
+                )
                 await connection.execute(
                     """INSERT INTO command_center.events
                        (workspace_id, actor_device_id, event_type, payload)
