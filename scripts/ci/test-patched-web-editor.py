@@ -18,7 +18,7 @@ SCREENSHOT = pathlib.Path("patched-godot-web-project-manager.png")
 IMPORT_SCREENSHOT = pathlib.Path("patched-godot-web-github-import.png")
 DIAGNOSTICS = pathlib.Path("patched-godot-web-diagnostics.json")
 TEST_REPOSITORY = "MCMLXXXV/godot-minimal-template"
-EXPECTED_PROJECT_TEXT = ("godot minimal template", "godot-minimal-template")
+EXPECTED_PROJECT_TEXT = ("godot minimal project template", "godot-minimal-template")
 REQUIRED = (
     b"Import from GitHub",
     b"Enter a public GitHub repository URL or owner/repository.",
