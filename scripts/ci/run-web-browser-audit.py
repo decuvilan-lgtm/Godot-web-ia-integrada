@@ -68,13 +68,24 @@ def main() -> int:
         if response is None or response.status >= 400:
             raise RuntimeError(f"Editor navigation failed: HTTP {response.status if response else 'no response'}")
 
-        # Godot's web editor may continue loading after DOMContentLoaded. Wait for
-        # its actual canvas rather than mistaking a static HTML shell for success.
+        # The published editor first shows a limitations dialog and a separate
+        # launch button. Dismissing the notice alone does not start the editor.
+        notice_button = page.get_by_role("button", name=re.compile(r"OK\\s*-\\s*Don't Show Again", re.I))
+        notice_button.wait_for(state="visible", timeout=60_000)
+        notice_button.click()
+
+        start_button = page.get_by_role("button", name=re.compile(r"Start Godot Editor", re.I))
+        start_button.wait_for(state="visible", timeout=60_000)
+        start_button.click()
+
+        # The editor's boot can take time because the published web bundle is large.
+        # Require the launch control to disappear, then allow the UI to settle.
+        start_button.wait_for(state="hidden", timeout=180_000)
         page.wait_for_function(
-            "() => document.querySelectorAll('canvas').length > 0",
-            timeout=180_000,
+            "() => [...document.querySelectorAll('canvas')].some(c => c.width > 320 && c.height > 200)",
+            timeout=60_000,
         )
-        page.wait_for_timeout(8_000)
+        page.wait_for_timeout(15_000)
 
         def save_capture(name: str, viewport: dict[str, int], mobile: bool) -> None:
             page.set_viewport_size(viewport)
@@ -95,6 +106,9 @@ def main() -> int:
 
         title = page.title()
         canvas_count = page.locator("canvas").count()
+        editor_started = start_button.is_hidden()
+        if not editor_started:
+            raise RuntimeError("Godot editor launch button is still visible; editor did not start")
         save_capture("web-editor-desktop.png", {"width": 1440, "height": 900}, False)
         save_capture("web-editor-mobile-viewport.png", {"width": 390, "height": 844}, True)
 
@@ -109,12 +123,13 @@ def main() -> int:
         "duration_ms": round((time.monotonic() - started) * 1000),
         "page_title": title,
         "canvas_count": canvas_count,
+        "editor_started": editor_started,
         "captures": captures,
         "page_errors": page_errors[:30],
         "http_5xx_responses": failed_responses[:30],
         "console_errors": console_errors[:30],
         "notes": [
-            "Chromium loaded the published Godot Web page and captured its real browser viewport.",
+            "Chromium dismissed the startup notice, launched Godot Editor, and captured the real browser viewport.",
             "Mobile capture uses viewport emulation, not a physical Android device.",
             "This audit does not prove editor pairing, project import, command execution, or private asset retrieval.",
         ],
