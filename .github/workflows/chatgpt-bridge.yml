@@ -45,7 +45,7 @@ jobs:
               'status': 'succeeded',
               'response': 'pong',
               'runner': 'GitHub Actions'
-          }, indent=2) + '\\n')
+          }, indent=2) + '\n')
           PY
         env:
           TASK_ID: ${{ steps.task.outputs.task_id }}
@@ -97,7 +97,7 @@ jobs:
               '```',
               '',
               'Respuesta generada automáticamente por el runner. No contiene credenciales.'
-            ].join('\\n');
+            ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
