@@ -105,6 +105,28 @@ PY
     echo "3D multi-view capture did not produce its evidence manifest." >&2
     exit 7
   fi
+  python3 - "$RESULTS_DIR/multiview.json" "$RESULTS_DIR/multiview" <<'PY'
+import json, pathlib, struct, sys
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2]).resolve()
+captures = manifest.get("captures", [])
+expected = manifest.get("captured_scene_count", 0) * manifest.get("view_count_per_scene", 0)
+if expected < 1 or len(captures) != expected:
+    raise SystemExit(f"Expected {expected} rendered views, found {len(captures)}")
+for capture in captures:
+    path = pathlib.Path(capture["image"]).resolve()
+    if root not in path.parents or not path.is_file():
+        raise SystemExit(f"Missing or out-of-directory image: {path.name}")
+    data = path.read_bytes()
+    if len(data) < 1024 or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+        raise SystemExit(f"Invalid or suspiciously small PNG: {path.name}")
+    width, height = struct.unpack(">II", data[16:24])
+    if (width, height) != (1280, 720):
+        raise SystemExit(f"Unexpected dimensions for {path.name}: {width}x{height}")
+    if capture.get("bytes") != len(data):
+        raise SystemExit(f"Byte-size manifest mismatch for {path.name}")
+print(f"Rendered image evidence verified: {len(captures)} PNG views at 1280x720.")
+PY
 fi
 
 python3 - "$RESULTS_DIR/task.json" "$PROFILE" "$REQUEST_ID" <<'PY'
