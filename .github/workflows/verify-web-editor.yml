@@ -1,4 +1,4 @@
-name: Verify Godot Web Editor
+name: Verify Godot Web Editor Baseline
 
 on:
   push:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build-and-verify:
-    name: Build and verify official web editor
+    name: Verify official prebuilt Web editor baseline
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Validate bridge sandbox in native Godot headless editor
         run: bash scripts/test-bridge-sandbox.sh
 
-      - name: Build pinned Godot Web Editor
+      - name: Package official prebuilt Web editor (baseline; C++ patch is not included)
         run: bash scripts/build-web.sh
 
       - name: Verify published bundle
