@@ -1,6 +1,6 @@
 # Live Visual Transfer Runbook
 
-Status: 2D/3D capture commands enabled in main; branch-scoped Neon storage credential configured on Render; relay deployment and live capture round-trip still require verification with a paired `web_editor`.
+Status: 2D/3D capture commands enabled and deployed in Render commit `df8abcc2`; branch-scoped Neon storage credential configured. The remaining acceptance gate is a paired `web_editor` and a real capture → storage → retrieval round-trip.
 
 ## Safety boundaries
 
@@ -17,7 +17,7 @@ Status: 2D/3D capture commands enabled in main; branch-scoped Neon storage crede
 2. Retrieve the value of `COMMAND_CENTER_ADMIN_TOKEN` from the Render service's private environment settings. Do not send it to anyone or put it in the URL.
 3. On the page, enter that administrator secret, leave workspace as `default`, and choose **Godot Web** (`web_editor`).
 4. Generate a code and use it immediately. It expires in 120 seconds and is displayed once.
-5. Open the official isolated Godot Web editor build. In the **Godot Command Center** dock, paste the code into **Código temporal de un solo uso** and press **Emparejar como Godot Web (IA)**.
+5. Open the published Godot Web editor, import/open the `examples/bridge-sandbox` project from the repository ZIP, and wait for the **Godot Command Center** dock to load. Paste the code into **Código temporal de un solo uso** and press **Emparejar como Godot Web (IA)**. The plugin is not automatically installed in a blank editor session.
 6. After the dock confirms pairing, press **Iniciar recepción de órdenes**.
 7. Do not pair an Android editor for this acceptance test. The web and Android workspaces must remain independent.
 
@@ -29,14 +29,14 @@ The operator/maintainer should run these checks after the web editor is paired a
 
 1. Confirm Neon has exactly the expected active `web_editor` device for workspace `default`; confirm no Android device was added or modified.
 2. Confirm the Render relay is live and its Neon connection is healthy.
-3. Prepare one short-lived, explicitly targeted `visual.capture` command for `editor_2d` on that paired device only. Keep the visual command gate closed for all other commands.
+3. Prepare one short-lived, explicitly targeted `visual.capture` command for `editor_2d` on that paired device only. The deployed relay allows only `editor_2d` and `editor_3d`; keep the test restricted to the isolated `web_editor` and do not widen targets.
 4. Confirm the command is claimed, its lease heartbeat succeeds, and the image bytes are sent to `POST /v1/command-center/visual/uploads/proxy`.
 5. Confirm the object appears in the private Neon bucket and registration records its MIME, dimensions, byte size, and SHA-256.
 6. Retrieve the same asset through `GET /v1/command-center/visual/assets/{asset_id}/content` using an authorized controller credential. Compare exact bytes and SHA-256 with the registered metadata.
 7. Repeat with a small `visual.capture_sequence` (2–3 frames). Verify unique frame indexes, expected count, and final sequence state.
 8. Confirm browser/Godot Web requests never go directly to Neon S3 and never receive S3 credentials or presigned URLs.
 9. Confirm a failed registration invokes the scoped abandon route and that a registered asset cannot be deleted through it.
-10. Disable the temporary test gate again unless the full acceptance suite passes. Only then decide whether to enable the supported visual commands.
+10. Confirm unsupported targets (`editor_ui`, `game_preview`, `visual.zoom_to`) still fail closed; do not enable them as part of this acceptance test.
 
 ## Acceptance evidence to record
 
@@ -55,3 +55,4 @@ The operator/maintainer should run these checks after the web editor is paired a
 - `visual.zoom_to` remains unavailable until exact view restoration is implemented and tested.
 - A still-image sequence is a sequence of images, not a video.
 - Automated tests mock S3. They do not replace the live Neon round-trip acceptance test.
+- The `agent_controller` role and command API exist, but no ChatGPT-connected controller runtime is currently attached; autonomous command enqueueing from the conversation is still a separate integration task.
