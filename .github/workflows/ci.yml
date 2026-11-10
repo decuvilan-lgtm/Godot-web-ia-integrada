@@ -21,7 +21,9 @@ jobs:
           bash -n scripts/build-web.sh
           bash -n scripts/ci/run-godot-task.sh
           ruby -e 'require "yaml"; c = YAML.load_file(".circleci/config.yml"); abort "CircleCI job missing" unless c.dig("jobs", "godot-task")'
-          python -m py_compile scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/mcp_server.py relay/task_dispatch.py relay/test_task_dispatch.py relay/test_mcp_server.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
+          python -m py_compile scripts/apply-web-github-import.py scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/mcp_server.py relay/task_dispatch.py relay/test_task_dispatch.py relay/test_mcp_server.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
+      - name: Test Web GitHub Project Manager patcher
+        run: python -m unittest discover -s tests -p 'test_web_github_import_patcher.py' -v
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
       - name: Validate mobile shell and sandbox package
