@@ -72,6 +72,8 @@ El contrato de sincronización de archivos y revisiones está en [SHARED_PROJECT
 
 El sandbox `examples/bridge-sandbox` incluye `addons/godot_command_center/plugin.gd`:
 
+- El proyecto sandbox activa ahora únicamente **Command Center** y **Shared Projects**. El complemento WebSocket heredado `godot_ai_bridge` queda desactivado para evitar dos protocolos de órdenes simultáneos.
+
 - Empareja como `web_editor`.
 - Mantiene la credencial solo en memoria; no la escribe en el proyecto.
 - Consulta la cola cada dos segundos y confirma resultados.
