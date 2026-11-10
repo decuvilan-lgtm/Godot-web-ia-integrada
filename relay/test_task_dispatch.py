@@ -23,6 +23,38 @@ class TaskDispatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_request_id("../../etc/passwd")
 
+    def test_browser_audit_is_allowlisted_and_uses_github_actions(self):
+        self.assertEqual(validate_task_profile("web_browser_audit"), "web_browser_audit")
+        calls = []
+
+        async def handler(request):
+            calls.append(request)
+            return httpx.Response(204)
+
+        result = asyncio.run(dispatch_task(
+            "web_browser_audit", "browser_123456",
+            env={
+                "CIRCLECI_TOKEN": "circle-secret",
+                "CIRCLECI_PROJECT_SLUG": "gh/example/project",
+                "GITHUB_ACTIONS_TOKEN": "github-secret",
+            },
+            transport=httpx.MockTransport(handler),
+        ))
+        self.assertEqual(result["provider"], "github_actions")
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0].url.path.endswith("/actions/workflows/remote-godot-task.yml/dispatches"))
+        self.assertEqual(
+            json.loads(calls[0].content)["inputs"]["task_profile"],
+            "web_browser_audit",
+        )
+
+    def test_browser_audit_requires_github_actions(self):
+        with self.assertRaises(TaskDispatchError):
+            asyncio.run(dispatch_task(
+                "web_browser_audit", "browser_123456",
+                env={"CIRCLECI_TOKEN": "circle-secret", "CIRCLECI_PROJECT_SLUG": "gh/example/project"},
+            ))
+
     def test_circleci_is_primary(self):
         calls = []
 
