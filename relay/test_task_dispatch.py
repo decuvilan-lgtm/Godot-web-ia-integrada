@@ -8,6 +8,7 @@ from task_dispatch import (
     TaskDispatchError,
     dispatch_task,
     task_status,
+    provider_status,
     validate_request_id,
     validate_task_profile,
 )
@@ -110,6 +111,39 @@ class TaskDispatchTests(unittest.TestCase):
         ))
         self.assertEqual(result["state"], "created")
         self.assertEqual(result["workflows"][0]["status"], "success")
+
+    def test_provider_status_never_exposes_secret_values(self):
+        result = provider_status(env={
+            "CIRCLECI_TOKEN": "do-not-return-this",
+            "CIRCLECI_PROJECT_SLUG": "gh/example/project",
+            "GITHUB_ACTIONS_TOKEN": "also-secret",
+        })
+        serialized = json.dumps(result)
+        self.assertTrue(result["primary"]["configured"])
+        self.assertTrue(result["fallback"]["configured"])
+        self.assertNotIn("do-not-return-this", serialized)
+        self.assertNotIn("also-secret", serialized)
+
+    def test_github_status_includes_artifact_metadata(self):
+        async def handler(request):
+            if request.url.path.endswith("/runs"):
+                return httpx.Response(200, json={"workflow_runs": [{
+                    "id": 77, "display_title": "Godot task task_123456",
+                    "status": "completed", "conclusion": "success",
+                    "html_url": "https://github.com/example/project/actions/runs/77",
+                }]})
+            return httpx.Response(200, json={"artifacts": [{
+                "id": 88, "name": "godot-task-task_123456",
+                "size_in_bytes": 1234, "expired": False,
+                "archive_download_url": "https://api.github.com/artifacts/88",
+            }]})
+
+        result = asyncio.run(task_status(
+            "github_actions", None, "task_123456",
+            env={"GITHUB_ACTIONS_TOKEN": "github-secret"},
+            transport=httpx.MockTransport(handler),
+        ))
+        self.assertEqual(result["artifacts"][0]["id"], 88)
 
     def test_status_rejects_unknown_provider(self):
         with self.assertRaises(ValueError):

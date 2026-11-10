@@ -38,7 +38,7 @@ Never commit tokens or put them in pipeline parameters. No automatic credit refi
 4. Keep the account on the Free plan and do not add a paid credit package.
 5. Deploy the Relay after the secrets are configured.
 
-The Relay exposes authenticated MCP tools `godot_start_task` and `godot_task_status`. A paired `agent_controller` is required. The status tool only reads executions from the configured provider project/repository.
+The Relay exposes authenticated MCP tools `godot_execution_providers`, `godot_start_task`, and `godot_task_status`. The provider status tool reveals only whether the required variables are configured and their non-secret project/repository identifiers; it never returns token values. Status responses include available job artifacts and their metadata. A paired `agent_controller` is required. The status tool only reads executions from the configured provider project/repository.
 
 ## 3D evidence and precision
 

@@ -160,6 +160,45 @@ async def dispatch_task(
     raise TaskDispatchError("No execution provider is configured")
 
 
+def provider_status(*, env: dict[str, str] | None = None) -> dict[str, Any]:
+    """Report provider readiness without ever returning credential values."""
+    settings = dict(os.environ if env is None else env)
+    circle_token = bool(settings.get("CIRCLECI_TOKEN", "").strip())
+    circle_slug = settings.get("CIRCLECI_PROJECT_SLUG", "").strip()
+    github_token = bool(settings.get("GITHUB_ACTIONS_TOKEN", "").strip())
+    github_repo = settings.get(
+        "GITHUB_ACTIONS_REPOSITORY", "decuvilan-lgtm/Godot-web-ia-integrada"
+    ).strip()
+    circle_ready = circle_token and bool(PROJECT_SLUG_RE.fullmatch(circle_slug))
+    github_ready = github_token and bool(REPOSITORY_RE.fullmatch(github_repo))
+    return {
+        "priority": ["circleci", "github_actions"],
+        "ready": bool(circle_ready or github_ready),
+        "primary": {
+            "provider": "circleci",
+            "configured": bool(circle_ready),
+            "missing": [
+                name for name, present in (
+                    ("CIRCLECI_TOKEN", circle_token),
+                    ("CIRCLECI_PROJECT_SLUG", bool(PROJECT_SLUG_RE.fullmatch(circle_slug))),
+                ) if not present
+            ],
+            "project_slug": circle_slug if circle_ready else None,
+        },
+        "fallback": {
+            "provider": "github_actions",
+            "configured": bool(github_ready),
+            "missing": [
+                name for name, present in (
+                    ("GITHUB_ACTIONS_TOKEN", github_token),
+                    ("GITHUB_ACTIONS_REPOSITORY", bool(REPOSITORY_RE.fullmatch(github_repo))),
+                ) if not present
+            ],
+            "repository": github_repo if github_ready else None,
+        },
+    }
+
+
 async def circleci_task_status(
     pipeline_id: str,
     *,
@@ -172,8 +211,9 @@ async def circleci_task_status(
     config = _circleci_config(settings)
     if not config:
         raise TaskDispatchError("CircleCI credentials or project slug are not configured")
-    token, _slug = config
+    token, slug = config
     headers = {"Circle-Token": token, "Accept": "application/json"}
+    workflows: list[dict[str, Any]] = []
     async with httpx.AsyncClient(transport=transport, timeout=20.0) as client:
         pipeline_response = await client.get(
             f"{CIRCLECI_API}/pipeline/{pipeline_id}", headers=headers
@@ -184,17 +224,56 @@ async def circleci_task_status(
             f"{CIRCLECI_API}/pipeline/{pipeline_id}/workflow", headers=headers
         )
         workflows_response.raise_for_status()
-        workflows_payload = workflows_response.json()
-    workflows = [
-        {
-            "id": item.get("id"),
-            "name": item.get("name"),
-            "status": item.get("status"),
-            "created_at": item.get("created_at"),
-            "stopped_at": item.get("stopped_at"),
-        }
-        for item in workflows_payload.get("items", [])
-    ]
+        workflow_items = workflows_response.json().get("items", [])
+        for item in workflow_items[:10]:
+            workflow = {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "created_at": item.get("created_at"),
+                "stopped_at": item.get("stopped_at"),
+                "jobs": [],
+            }
+            workflow_id = item.get("id")
+            if isinstance(workflow_id, str):
+                try:
+                    jobs_response = await client.get(
+                        f"{CIRCLECI_API}/workflow/{workflow_id}/job", headers=headers
+                    )
+                    jobs_response.raise_for_status()
+                    jobs = jobs_response.json().get("items", [])
+                except httpx.HTTPError as exc:
+                    workflow["jobs_error"] = type(exc).__name__
+                    jobs = []
+                for job in jobs[:25]:
+                    job_data = {
+                        "name": job.get("name"),
+                        "status": job.get("status"),
+                        "job_number": job.get("job_number"),
+                        "started_at": job.get("started_at"),
+                        "stopped_at": job.get("stopped_at"),
+                        "artifacts": [],
+                    }
+                    job_number = job.get("job_number")
+                    if isinstance(job_number, int):
+                        try:
+                            artifact_response = await client.get(
+                                f"{CIRCLECI_API}/project/{quote(slug, safe='/')}/{job_number}/artifacts",
+                                headers=headers,
+                            )
+                            artifact_response.raise_for_status()
+                            job_data["artifacts"] = [
+                                {
+                                    "path": artifact.get("path"),
+                                    "url": artifact.get("url"),
+                                    "size": artifact.get("size"),
+                                }
+                                for artifact in artifact_response.json().get("items", [])[:50]
+                            ]
+                        except httpx.HTTPError as exc:
+                            job_data["artifacts_error"] = type(exc).__name__
+                    workflow["jobs"].append(job_data)
+            workflows.append(workflow)
     return {
         "provider": "circleci",
         "execution_id": pipeline_id,
@@ -218,32 +297,54 @@ async def github_task_status(
         raise TaskDispatchError("GitHub Actions fallback credentials are not configured")
     token, repository = config
     owner, repo = repository.split("/", 1)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
     async with httpx.AsyncClient(transport=transport, timeout=20.0) as client:
         response = await client.get(
             f"{GITHUB_API}/repos/{owner}/{repo}/actions/workflows/remote-godot-task.yml/runs",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers=headers,
             params={"branch": "main", "event": "workflow_dispatch", "per_page": 50},
         )
         response.raise_for_status()
         payload = response.json()
-    expected_title = f"Godot task {request_id}"
-    match = next(
-        (run for run in payload.get("workflow_runs", [])
-         if run.get("display_title") == expected_title),
-        None,
-    )
-    if match is None:
-        return {
-            "provider": "github_actions",
-            "request_id": request_id,
-            "status": "not_visible_yet",
-            "detail": "The workflow may still be initializing or may have expired from the recent-run window.",
-        }
-    return {
+        expected_title = f"Godot task {request_id}"
+        match = next(
+            (run for run in payload.get("workflow_runs", [])
+             if run.get("display_title") == expected_title),
+            None,
+        )
+        if match is None:
+            return {
+                "provider": "github_actions",
+                "request_id": request_id,
+                "status": "not_visible_yet",
+                "detail": "The workflow may still be initializing or may have expired from the recent-run window.",
+            }
+        artifact_data: list[dict[str, Any]] = []
+        artifact_error = None
+        try:
+            artifact_response = await client.get(
+                f"{GITHUB_API}/repos/{owner}/{repo}/actions/runs/{match.get('id')}/artifacts",
+                headers=headers,
+                params={"per_page": 50},
+            )
+            artifact_response.raise_for_status()
+            artifact_data = [
+                {
+                    "id": artifact.get("id"),
+                    "name": artifact.get("name"),
+                    "size_in_bytes": artifact.get("size_in_bytes"),
+                    "expired": artifact.get("expired"),
+                    "archive_download_url": artifact.get("archive_download_url"),
+                }
+                for artifact in artifact_response.json().get("artifacts", [])[:50]
+            ]
+        except httpx.HTTPError as exc:
+            artifact_error = type(exc).__name__
+    result = {
         "provider": "github_actions",
         "request_id": request_id,
         "execution_id": str(match.get("id")),
@@ -252,8 +353,11 @@ async def github_task_status(
         "html_url": match.get("html_url"),
         "created_at": match.get("created_at"),
         "updated_at": match.get("updated_at"),
+        "artifacts": artifact_data,
     }
-
+    if artifact_error:
+        result["artifacts_error"] = artifact_error
+    return result
 
 async def task_status(
     provider: str,

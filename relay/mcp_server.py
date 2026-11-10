@@ -15,7 +15,7 @@ from mcp.server.mcpserver import Context
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import JSONResponse
 
-from task_dispatch import TaskDispatchError, dispatch_task, task_status
+from task_dispatch import TaskDispatchError, dispatch_task, provider_status, task_status
 
 from command_center import (
     ALLOWED_ACTIONS,
@@ -347,6 +347,12 @@ async def godot_list_recent_commands(limit: int, ctx: Context) -> dict[str, Any]
             for row in rows
         ]
     }
+
+@mcp_server.tool()
+async def godot_execution_providers(ctx: Context) -> dict[str, Any]:
+    """Check CircleCI primary and GitHub Actions fallback readiness without exposing secrets."""
+    _request_identity(ctx)
+    return provider_status()
 
 
 @mcp_server.tool()
