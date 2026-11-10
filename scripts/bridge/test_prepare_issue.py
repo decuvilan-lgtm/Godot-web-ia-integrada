@@ -26,6 +26,14 @@ class PrepareIssueTests(unittest.TestCase):
             self.assertTrue(prepare(event, output, result)["accepted"])
             self.assertIn("action=ping", output.read_text())
 
+    def test_accepts_scene_audit_3d(self):
+        temp, event, output, result = self.run_task(json.dumps({
+            "protocol": 1, "task_id": "bridge-audit-0001", "action": "scene_audit_3d"
+        }))
+        with temp:
+            self.assertTrue(prepare(event, output, result)["accepted"])
+            self.assertIn("action=scene_audit_3d", output.read_text())
+
     def test_rejects_shell_or_unknown_action(self):
         temp, event, output, result = self.run_task(json.dumps({
             "protocol": 1, "task_id": "bridge-ping-0001",
