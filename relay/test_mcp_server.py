@@ -23,6 +23,7 @@ class MCPCommandPolicyTests(unittest.TestCase):
                 "godot_enqueue_command",
                 "godot_command_status",
                 "godot_list_recent_commands",
+                "godot_execution_providers",
                 "godot_start_task",
                 "godot_task_status",
             },
