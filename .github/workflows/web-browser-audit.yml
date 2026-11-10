@@ -1,0 +1,44 @@
+name: Real browser visual audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/run-web-browser-audit.py'
+      - '.github/workflows/web-browser-audit.yml'
+      - '.github/workflows/remote-godot-task.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-browser-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Playwright and Chromium
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Open the published editor in real Chromium
+        env:
+          GODOT_TASK_REQUEST_ID: browser-pr-${{ github.event.pull_request.number || github.run_id }}
+        run: python scripts/ci/run-web-browser-audit.py
+      - name: Upload browser screenshots and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-browser-audit-${{ github.run_id }}
+          path: /tmp/godot-task-results/
+          if-no-files-found: warn
+          retention-days: 7
