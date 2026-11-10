@@ -30,8 +30,12 @@ Example body:
 Allowed actions:
 
 - `ping`: return `pong` from the GitHub Actions runner.
-- `engine_smoke`: run the existing fixed Godot headless smoke test against
+- `engine_smoke`: run the fixed Godot 4.7.2 headless import/smoke test against
   `examples/bridge-sandbox`.
+- `scene_audit_3d`: run the fixed structured 3D scene audit against the synthetic
+  sandbox fixture, then render and validate its bounded multi-view PNG evidence
+  under Xvfb/software rendering. The result comment includes the audit summary and
+  number of verified views; the full evidence is attached to the workflow run.
 
 The task envelope rejects unknown keys, unsupported versions, unsafe task IDs,
 oversized bodies, and actions outside the allowlist. It does not accept shell
@@ -42,9 +46,13 @@ commands, arbitrary paths, code, secrets, or free-form execution instructions.
 - Only issues opened by `decuvilan-lgtm` with the exact title prefix are processed.
 - Editing an existing issue does not re-run a task; create a new issue per request.
 - GitHub Actions may queue or delay work; there is no real-time guarantee.
-- Artifacts are retained for seven days and may require GitHub authentication.
+- Godot execution artifacts are retained for seven days and may require GitHub
+  authentication. The scene audit produces structured JSON plus eight rendered
+  viewpoints per eligible fixture scene; these are sandbox evidence, not captures
+  of the user's live editor or Android device.
 - The current bridge proves ChatGPT-to-runner messaging and return comments. It does
-  not yet retrieve binary screenshots into the ChatGPT conversation.
+  not yet retrieve binary screenshots into the ChatGPT conversation. The
+  `scene_audit_3d` artifact can be downloaded from the linked GitHub Actions run.
 - Godot execution is isolated to the repository's fixed sandbox. It cannot inspect
   the user's Android editor or a separate desktop session.
 
