@@ -4,7 +4,7 @@
 
 The Godot Web instance deployed on Render is the **AI's remote editor workspace**. The user continues working in the separate, modified Godot 4.7.2 Android editor on their phone. The web editor is not a replacement or mobile version of the user's editor.
 
-Neon Command Center is the authoritative command and metadata store. Neon Object Storage holds image bytes. Render transports authenticated requests and short-lived upload/download URLs; it must not retain screenshots on its local filesystem.
+Neon Command Center is the authoritative command and metadata store. Neon Object Storage holds image bytes. Render transports authenticated image bytes through the relay proxy; it must not retain screenshots on its local filesystem or expose S3 credentials/URLs to the editor.
 
 All visual commands in this phase target only the AI's `web_editor` device. They are read-only and cannot inspect the Android editor, the phone screen, unrelated browser tabs, project files outside the web workspace, or the operating system.
 
@@ -75,11 +75,11 @@ Neon production branch `br-dark-shadow-b567bp59`, region `us-east-2`:
 - Postgres stores metadata and private object keys only.
 - Image bytes never go into command JSONB results.
 
-Migration `004_visual_observations.sql` and migration `005_visual_ui_sequences.sql` were applied successfully to production after explicit user authorization. Verification confirmed:
+Migrations `004_visual_observations.sql`, `005_visual_ui_sequences.sql`, `006_visual_asset_single_capture_idempotency.sql` and `007_shared_project_sync.sql` are applied to the production branch. Verification confirmed:
 - `command_center.visual_sequences` exists.
 - `command_center.visual_assets` exists.
 - The three planned visual asset indexes exist, along with primary/unique indexes.
-- Both tables currently contain zero rows, as expected before the capture pipeline is implemented.
+- Both visual tables currently contain zero rows because no `web_editor` has been paired and no live capture command has run.
 
 The sequence source constraint now lists `editor_ui`, `editor_2d`, `editor_3d` and `game_preview`, and was verified on the production branch.
 
@@ -96,7 +96,7 @@ The sequence source constraint now lists `editor_ui`, `editor_2d`, `editor_3d` a
 9. The authenticated agent controller requests a short-lived download URL and retrieves the image.
 10. Neon retains metadata and bytes; Render does not persist screenshot files.
 
-Uploads and completion must be idempotent. Sequence frames are unique by `(sequence_id, frame_index)`; standalone captures require one unique asset per command because PostgreSQL's ordinary UNIQUE constraint treats NULL sequence IDs as distinct. Migration `006_visual_asset_single_capture_idempotency.sql` adds that partial unique index. It is included in the draft branch but has **not** been applied to production. On a retry that creates a fresh object key for an already registered frame, the relay keeps the original asset and attempts to delete the unreferenced duplicate object. An incomplete upload must not appear as a valid visual asset. Signed URLs must be short-lived, private, never logged and never persisted in the editor project.
+Uploads and completion must be idempotent. Sequence frames are unique by `(sequence_id, frame_index)`; standalone captures require one unique asset per command because PostgreSQL's ordinary UNIQUE constraint treats NULL sequence IDs as distinct. Migration `006_visual_asset_single_capture_idempotency.sql` adds that partial unique index and is applied to production. On a retry that creates a fresh object key for an already registered frame, the relay keeps the original asset and attempts to delete the unreferenced duplicate object. An incomplete upload must not appear as a valid visual asset. Signed URLs must be short-lived, private, never logged and never persisted in the editor project.
 
 ## Implementation status
 
@@ -158,15 +158,15 @@ python -m storage_cors
 
 Required environment: `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `COMMAND_CENTER_STORAGE_CORS_ORIGIN`. The origin currently intended for the AI web editor is `https://godot-web-ia-integrada-rt2l.onrender.com`. The utility never prints credentials or signed URLs. A successful read-back is not a substitute for the remaining real-browser OPTIONS + presigned PUT acceptance test.
 
-## Private visual transfer API (implemented, not deployed)
+## Private visual transfer API (deployed; live round-trip pending)
 
 The relay branch now contains `relay/visual_storage.py`, mounted under `/v1/command-center/visual`:
 
-- `POST /uploads/presign`: requires a live command lease owned by the paired `web_editor`; issues a 180-second presigned PUT URL for the private bucket. The server creates the object key; the editor never receives S3 credentials.
+- `POST /uploads/proxy`: requires a live command lease owned by the paired `web_editor`; accepts bounded image bytes and writes them to the private bucket through the relay. The editor never receives S3 credentials or presigned URLs.
 - `POST /commands/{command_id}/heartbeat`: renews only an unexpired lease already owned by that editor, capped by the command's absolute expiry. The Godot capture client renews before each frame and before metadata registration so longer sequences do not silently lose ownership.
 - `POST /uploads/complete`: rechecks the command lease and workspace, verifies object size and MIME type, downloads at most 12 MiB for SHA-256 and image-format/dimension verification, then inserts metadata in `visual_assets`. The signed object key binds the workspace, command and frame index; duplicate frame submissions are idempotent.
 - Sequence results are finalized as `completed`, `partial` or `failed` when the editor submits its command result, based on the requested frame count and successfully registered assets.
-- `GET /assets/{asset_id}/download`: workspace-scoped, authenticated controller/web-editor access; issues a short-lived private GET URL. The API returns metadata and URLs, not image bytes.
+- `GET /assets/{asset_id}/content`: workspace-scoped, authenticated controller/web-editor access; streams the verified image bytes through the relay.
 - S3 calls use path-style SigV4 against the branch endpoint and fail closed unless the four AWS-standard Neon storage environment variables are present.
 - New dependencies are pinned in the relay requirements: boto3 and Pillow.
 
@@ -174,16 +174,16 @@ Render now has the Neon storage endpoint and a branch-scoped read/write credenti
 
 ## Implementation order and acceptance gates
 
-The visual pipeline stays disabled until each gate is demonstrated:
+The deployed API accepts only the implemented 2D/3D viewport capture targets. End-to-end readiness remains provisional until each gate is demonstrated:
 
-1. **Storage authorization:** issue a dedicated Neon credential with only `storage:read` and `storage:write`, scoped to the existing production branch. Configure it as Render secrets only after reviewing the exact service and environment target. Never place it in Git, the Godot project, browser JavaScript, command payloads, or logs.
-2. **Relay transfer API:** implement short-lived presigned PUT/GET issuance, upload completion, server-generated object keys, lease/workspace checks, object HEAD verification, MIME/size/hash validation, idempotent metadata insertion, and workspace-scoped downloads.
-3. **Godot viewport capture:** implement 2D and 3D SubViewport capture after `RenderingServer.frame_post_draw`. Compress and bound images before requesting an upload URL. Keep the device credential in memory and never expose storage credentials to Godot.
+1. **Storage authorization:** a dedicated Neon credential with only `storage:read` and `storage:write` is already scoped to the production branch and configured as Render secrets. Never place it in Git, the Godot project, browser JavaScript, command payloads, or logs.
+2. **Relay transfer API:** deployed proxy upload, completion, abandonment, object verification, SHA-256 metadata registration and workspace-scoped content download are implemented. Validate them against the live private bucket.
+3. **Godot viewport capture:** the plugin implements 2D and 3D SubViewport capture after `RenderingServer.frame_post_draw`, bounded JPEG/PNG compression, and relay-proxy upload. Validate it in the deployed browser editor.
 4. **Browser-only capture targets:** provide a separately authenticated browser capture agent for `editor_ui` and `game_preview`. Do not pretend a SubViewport image is a full editor screenshot. If this agent is unavailable, return `VISUAL_TARGET_UNAVAILABLE`.
 5. **Zoom restoration:** capture and restore the original 2D editor transform or 3D editor camera state in a guaranteed cleanup path, including capture/upload failures.
-6. **Sequences:** create one sequence record per command, upload each frame independently with its index and timestamp, preserve successful frames after a later failure, and mark the sequence `partial` when appropriate. Keep `frame_step` rejected until deterministic preview control is proven.
-7. **Agent retrieval:** return asset IDs only to the controller, issue short-lived private download URLs after workspace authorization, and verify the controller can inspect the actual bytes.
-8. **End-to-end gate:** test real 2D, 3D, full-UI, preview and sequence captures in the deployed Godot Web workspace. Only then enable the visual command feature flag.
+6. **Sequences:** realtime still-image sequences and per-frame metadata are implemented. Verify a short live sequence, partial-failure handling and cleanup. Keep deterministic `frame_step` rejected until preview control is proven.
+7. **Agent retrieval:** asset IDs are returned to the controller; authenticated content download is implemented. Verify byte-for-byte retrieval and connect a usable agent-side runtime that can inspect the image.
+8. **End-to-end gate:** test real 2D and 3D captures plus a sequence in the deployed Godot Web workspace. Keep full-UI, game-preview and zoom targets disabled until their separate backends/restoration are implemented.
 
 The Android editor remains a separate user-owned workspace throughout these steps. No visual command in this phase may target the Android device or phone screen.
 
