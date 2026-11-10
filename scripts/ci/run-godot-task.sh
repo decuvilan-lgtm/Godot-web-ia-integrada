@@ -68,6 +68,23 @@ if [[ "$PROFILE" == "scene_audit_3d" ]]; then
     echo "Scene audit did not produce its JSON evidence." >&2
     exit 5
   fi
+  python3 - "$RESULTS_DIR/scene-audit.json" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+summary = report.get("summary", {})
+required = {
+    "mesh_instance3d_count": 1,
+    "camera3d_count": 1,
+    "light3d_count": 1,
+    "collision_shape3d_count": 2,
+    "physics_body3d_count": 2,
+    "animation_track_count": 1,
+}
+missing = [name for name, minimum in required.items() if summary.get(name, 0) < minimum]
+if missing:
+    raise SystemExit("3D evidence is incomplete: " + ", ".join(missing))
+print("3D evidence assertions passed:", json.dumps({k: summary[k] for k in required}))
+PY
 
   if ! command -v xvfb-run >/dev/null 2>&1; then
     echo "xvfb-run is required for deterministic 3D multi-view captures." >&2

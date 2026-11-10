@@ -16,7 +16,8 @@ var _report := {
         "animation_player_count": 0,
         "collision_shape3d_count": 0,
         "physics_body3d_count": 0,
-        "multimesh_instance3d_count": 0
+        "multimesh_instance3d_count": 0,
+        "animation_track_count": 0
     },
     "scenes": [],
     "errors": []
@@ -68,6 +69,12 @@ func _run() -> void:
         missing_3d_evidence.append("MeshInstance3D")
     if int(summary["camera3d_count"]) < 1:
         missing_3d_evidence.append("Camera3D")
+    if int(summary["collision_shape3d_count"]) < 1:
+        missing_3d_evidence.append("CollisionShape3D")
+    if int(summary["physics_body3d_count"]) < 1:
+        missing_3d_evidence.append("PhysicsBody3D")
+    if int(summary["animation_track_count"]) < 1:
+        missing_3d_evidence.append("AnimationPlayer track")
     if not missing_3d_evidence.is_empty():
         _report["errors"].append({
             "error": "3D audit fixture/coverage incomplete",
@@ -241,6 +248,7 @@ func _inspect_node(node: Node) -> Dictionary:
                         "key_count": animation.track_get_key_count(track_index),
                         "sampled_keys": keys
                     })
+            _report["summary"]["animation_track_count"] += tracks.size()
             animations.append({
                 "name": animation_name,
                 "length": animation.length if animation != null else 0.0,
