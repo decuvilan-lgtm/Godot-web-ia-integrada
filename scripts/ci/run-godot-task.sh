@@ -118,7 +118,7 @@ for capture in captures:
     if root not in path.parents or not path.is_file():
         raise SystemExit(f"Missing or out-of-directory image: {path.name}")
     data = path.read_bytes()
-    if len(data) < 1024 or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+    if len(data) < 1024 or data[:8] != b"\x89PNG\r\n\x1a\n":
         raise SystemExit(f"Invalid or suspiciously small PNG: {path.name}")
     width, height = struct.unpack(">II", data[16:24])
     if (width, height) != (1280, 720):
