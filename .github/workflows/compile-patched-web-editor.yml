@@ -7,6 +7,7 @@ on:
       - "engine/godot"
       - "scripts/apply-web-github-import.py"
       - "scripts/prepare-engine-source.sh"
+      - "scripts/ci/test-patched-web-editor.py"
       - ".github/workflows/compile-patched-web-editor.yml"
   workflow_dispatch:
 
@@ -70,15 +71,19 @@ jobs:
       - name: Boot patched editor in real Chromium
         run: python scripts/ci/test-patched-web-editor.py
 
-      - name: Upload Chromium evidence
+      - name: Upload Chromium diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: patched-godot-web-chromium-smoke-${{ github.sha }}
-          path: patched-godot-web-project-manager.png
-          if-no-files-found: error
+          name: patched-godot-web-chromium-diagnostics-${{ github.sha }}
+          path: |
+            patched-godot-web-project-manager.png
+            patched-godot-web-diagnostics.json
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload compiled patched editor
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: godot-web-editor-patched-${{ github.sha }}
