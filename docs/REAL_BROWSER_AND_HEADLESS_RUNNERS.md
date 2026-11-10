@@ -40,7 +40,7 @@ The first successful real-browser run is attached to [PR #15 workflow run 428825
 Observed state:
 - The editor starts and displays the Project Manager.
 - No project is currently loaded in that web workspace; the Project Manager reports an empty project list.
-- The 390×844 viewport screenshot shows horizontal clipping/overflow in the editor chrome. This is a diagnostic viewport capture, not a claim that the web editor is mobile-ready.
+- The 390×844 viewport screenshot visually shows editor controls clipped inside the Godot canvas. The document-level scroll-width metric does not detect clipping internal to the canvas. This is a diagnostic viewport capture, not a claim that the web editor is mobile-ready.
 - No page exceptions or HTTP 5xx responses were reported. Godot emitted a console warning that the HTTPS proxy feature is unavailable in the CI browser; the editor still started.
 
 The artifact includes desktop and mobile-sized PNG screenshots plus a JSON report. The later runner revision additionally records document scroll width and detects the empty-project state automatically.
