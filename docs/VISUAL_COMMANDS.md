@@ -1,7 +1,7 @@
 # Visual Command Contract
 
 Version: 1.0  
-Status: normative request contract; relay proxy deployed; live end-to-end transfer verification pending. The relay currently rejects all visual commands. The Godot plugin can capture only the 2D/3D editor SubViewports and supports JPEG/PNG; browser-level targets and zoom are not implemented.
+Status: normative request contract; relay proxy and 2D/3D capture gate deployed. Live end-to-end transfer verification is pending. The relay accepts `editor_2d` and `editor_3d`; browser-level targets and zoom are not implemented.
 
 For the operator pairing steps and controlled acceptance procedure, see [LIVE_VISUAL_TRANSFER_RUNBOOK.md](LIVE_VISUAL_TRANSFER_RUNBOOK.md).
 
@@ -203,8 +203,8 @@ Example — focus a 3D world point:
 - **Abandon path:** if the upload succeeded but the lease or metadata registration fails, the paired web editor calls `POST /v1/command-center/visual/uploads/abandon`. The relay verifies workspace, command ownership and that no asset references the key before deleting the unregistered object. Registered assets cannot be removed through this route.
 - **Download path:** authorized clients retrieve bytes through `GET /v1/command-center/visual/assets/{asset_id}/content`. The relay checks device role and workspace ownership before reading from the private bucket.
 - Legacy presigned upload/download routes remain only as disabled compatibility stubs and return HTTP 410 after authentication/lease checks. They never generate or return S3 URLs. Uploads must use the relay proxy; downloads must use the authenticated `/content` endpoint.
-- The relay currently has `VISUAL_COMMANDS_ENABLED = False`; all visual commands are rejected before enqueueing. Do not change this to `True` for testing. A separately scoped, one-shot test authorization must be implemented and reviewed after the isolated editor is paired.
-- Automated proxy tests mock the S3 client. They prove relay routing and validation behavior, not a real Neon round trip. Live upload/download verification remains pending.
+- The deployed relay currently has `VISUAL_COMMANDS_ENABLED = True` only for `editor_2d` and `editor_3d`. The API rejects `editor_ui`, `game_preview`, and `visual.zoom_to`. Keep testing limited to the isolated `web_editor` workspace; do not add Android or browser-level targets.
+- Automated proxy tests mock the S3 client. They prove relay routing and validation behavior, not a real Neon round trip. Live upload/download verification remains pending; the production bucket is still empty.
 - Results return asset IDs, dimensions, hashes, timestamps and sequence metadata only.
 
 ## 6. Sequence semantics
