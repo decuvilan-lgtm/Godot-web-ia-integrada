@@ -1,12 +1,31 @@
+import asyncio
 import unittest
 
+from mcp import Client
 from fastapi import HTTPException
 
 from command_center import ALLOWED_ACTIONS
-from mcp_server import validate_agent_command
+from mcp_server import mcp_server, validate_agent_command
 
 
 class MCPCommandPolicyTests(unittest.TestCase):
+    def test_mcp_protocol_exposes_only_the_intended_controller_tools(self):
+        async def list_names():
+            async with Client(mcp_server) as client:
+                result = await client.list_tools()
+                return {tool.name for tool in result.tools}
+
+        names = asyncio.run(list_names())
+        self.assertEqual(
+            names,
+            {
+                "godot_workspace_status",
+                "godot_enqueue_command",
+                "godot_command_status",
+                "godot_list_recent_commands",
+            },
+        )
+
     def test_all_read_only_actions_are_available(self):
         for action in ("ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"):
             self.assertEqual(validate_agent_command(action, {}, "test-" + action), "test-" + action)

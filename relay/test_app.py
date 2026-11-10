@@ -69,6 +69,24 @@ class RelayApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_mcp_endpoint_rejects_missing_credentials_before_protocol_handshake(self):
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers.get("www-authenticate"), "Bearer")
+        self.assertIn("no-store", response.headers.get("cache-control", ""))
+
+    def test_legacy_bridge_is_disabled_when_production_flag_is_off(self):
+        with patch("app.LEGACY_BRIDGE_ENABLED", False):
+            response = self.client.post(
+                "/v1/sessions",
+                headers={"X-Admin-Token": "test-admin-secret"},
+                json={"label": "legacy-disabled"},
+            )
+        self.assertEqual(response.status_code, 410)
+
     def test_command_center_routes_fail_closed_without_neon(self):
         denied = self.client.post(
             "/v1/command-center/pairing-codes",
