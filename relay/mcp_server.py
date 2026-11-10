@@ -367,8 +367,8 @@ async def godot_start_task(task_profile: str, request_id: str, ctx: Context) -> 
 async def godot_task_status(
     provider: str,
     request_id: str,
+    ctx: Context,
     execution_id: str | None = None,
-    ctx: Context = None,
 ) -> dict[str, Any]:
     """Check a CircleCI or GitHub Actions task started by godot_start_task."""
     _request_identity(ctx)

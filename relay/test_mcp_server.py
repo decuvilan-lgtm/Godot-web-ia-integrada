@@ -28,6 +28,17 @@ class MCPCommandPolicyTests(unittest.TestCase):
             },
         )
 
+        async def list_schemas():
+            async with Client(mcp_server) as client:
+                result = await client.list_tools()
+                return {tool.name: tool.inputSchema for tool in result.tools}
+
+        schemas = asyncio.run(list_schemas())
+        self.assertEqual(
+            set(schemas["godot_task_status"]["properties"]),
+            {"provider", "request_id", "execution_id"},
+        )
+
     def test_all_read_only_actions_are_available(self):
         for action in ("ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"):
             self.assertEqual(validate_agent_command(action, {}, "test-" + action), "test-" + action)

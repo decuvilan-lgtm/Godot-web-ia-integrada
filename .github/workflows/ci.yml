@@ -55,6 +55,27 @@ jobs:
           python -m unittest -v test_app.py test_mcp_server.py test_task_dispatch.py
           PYTHONPATH=.. python -m unittest discover -s ../tests/live_link -p 'test_storage_cors.py' -v
 
+
+  godot-scene-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Run structured 3D scene audit
+        env:
+          GODOT_TASK_PROFILE: scene_audit_3d
+          GODOT_TASK_REQUEST_ID: ci-scene-audit-12345678
+        run: bash scripts/ci/run-godot-task.sh
+      - name: Upload scene audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-scene-audit
+          path: /tmp/godot-task-results/
+          if-no-files-found: warn
+          retention-days: 7
+
   godot-plugin-smoke-test:
     runs-on: ubuntu-latest
     steps:

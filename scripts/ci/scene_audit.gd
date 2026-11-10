@@ -104,7 +104,7 @@ func _inspect_node(node: Node) -> Dictionary:
         data["transform"] = {
             "position": _vector3(transform.origin),
             "rotation_degrees": _vector3(spatial.global_rotation_degrees),
-            "scale": _vector3(spatial.global_basis.get_scale()),
+            "scale": _vector3(transform.basis.get_scale()),
             "basis_x": _vector3(transform.basis.x),
             "basis_y": _vector3(transform.basis.y),
             "basis_z": _vector3(transform.basis.z)
