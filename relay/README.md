@@ -1,55 +1,72 @@
 # Godot Web IA Relay
 
-Small, ephemeral WebSocket/HTTP relay for pairing the Godot editor plugin with a remote controller.
+Relay FastAPI para el Godot Command Center. Render transporta las peticiones; Neon Postgres conserva identidades, cola, resultados y eventos. El servicio permanece en el plan Free y puede suspenderse por inactividad.
 
-## Runtime
+## Servicios y responsabilidades
 
-- Python 3.12+
-- FastAPI + Uvicorn
-- Render free web service
-- In-memory sessions only; all sessions expire after 30 minutes or process restart.
-- No project files or source code are persisted by this service.
+- **Render Relay:** API HTTPS, autenticación, encolado, polling y proxy de bytes.
+- **Neon Postgres:** fuente de verdad para workspaces, dispositivos, pairing, comandos, resultados y eventos.
+- **Neon Object Storage:** bucket privado para bytes de capturas y archivos compartidos.
+- **Godot Web:** puesto aislado de la IA, rol `web_editor`.
+- **Godot Android:** puesto del usuario, rol `android_editor`.
+- **MCP:** interfaz estándar para hosts/agentes externos, rol `agent_controller`.
 
-## Environment
+## Variables de entorno
 
-- `RELAY_ADMIN_TOKEN`: required high-entropy secret used to create sessions.
-- `SESSION_TTL_SECONDS`: optional, defaults to 1800.
-- `ALLOWED_ORIGINS`: optional comma-separated browser origins; keep the deployed editor origin in this list.
+- `COMMAND_CENTER_DATABASE_URL`: URL de Neon.
+- `COMMAND_CENTER_ADMIN_TOKEN`: secreto administrativo para emitir códigos de emparejamiento.
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`: acceso del relay al bucket privado.
+- `ALLOWED_ORIGINS`: orígenes permitidos para clientes de navegador.
+- `RELAY_LEGACY_BRIDGE_ENABLED`: desactivado por defecto. Solo habilita temporalmente el puente WebSocket antiguo; no debe activarse en producción.
 
-## API
+No se guardan secretos en el repositorio. No registrar tokens, códigos temporales, URLs firmadas ni credenciales S3.
 
-- `GET /health`: liveness.
-- `POST /v1/sessions`: requires `X-Admin-Token`; returns one-time editor and controller tokens.
-- `GET /v1/sessions/{id}`: requires `Authorization: Bearer <controller_token>`.
-- `POST /v1/sessions/{id}/request`: authenticated controller request; forwards a read-only protocol packet to the connected editor and waits for its response.
-- `wss://host/v1/editor/{id}`: editor plugin connection. The first packet must be `{"type":"auth","protocol":1,"token":"..." }`.
+## API principal
 
-## Current scope and limits
+- `GET /health`: liveness del relay y estado de inicialización de Neon.
+- `/v1/command-center/*`: emparejamiento, órdenes, leases, resultados y consulta.
+- `/v1/command-center/visual/*`: transferencias autenticadas de capturas.
+- `/v1/command-center/projects/*`: sincronización de proyectos compartidos.
+- `/command-center/admin`: página same-origin para emitir códigos temporales.
 
-Only the bridge actions implemented by the plugin are usable: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read`. Writes and arbitrary process execution are not exposed.
+El puente efímero `/v1/sessions/*` y `/v1/editor/*` está desactivado por defecto. El único puente de producción es Command Center HTTP + Neon.
 
-The free instance may sleep and its memory is ephemeral. A restart invalidates all sessions and tokens. Do not use it as project storage. A persistent workspace and snapshot system must be built separately before any write capability is enabled.
-## Neon Command Center API
+## Servidor MCP remoto
 
-The FastAPI relay also exposes a separate durable HTTP API backed by the `command_center` schema. It does not replace the ephemeral WebSocket session API above.
+Endpoint Streamable HTTP:
 
-Required environment:
-- `COMMAND_CENTER_DATABASE_URL`: Neon connection string for the dedicated `Godot Command Center` database. If missing, Command Center endpoints fail closed with HTTP 503. If Neon is temporarily unreachable at startup, the API retries pool initialization on later requests without requiring a relay restart.
-- `COMMAND_CENTER_ADMIN_TOKEN`: separate high-entropy administrator secret for creating single-use device pairing codes.
+`https://godot-web-ia-relay.onrender.com/mcp`
 
-Administrator page:
-- Open `/command-center/admin` on the relay host to generate a pairing code without constructing an HTTP request manually.
-- The page sends the admin secret only in the `X-Command-Center-Admin` request header, clears the password field after submission, and does not write credentials or codes to browser storage.
-- The page and its same-origin script use no-store cache headers, a restrictive Content Security Policy, and no third-party assets. Keep the admin URL private and use it only over HTTPS.
+El MCP exige `Authorization: Bearer <credencial de dispositivo>` y solo acepta dispositivos `agent_controller`. El token se valida contra el hash guardado en Neon en cada petición. El middleware rechaza credenciales ausentes, inválidas, revocadas o de otro rol antes de procesar MCP.
 
-Routes:
-- `POST /v1/command-center/pairing-codes` — requires `X-Command-Center-Admin`; body: `{"device_kind":"android_editor","workspace":"default"}`. The returned code expires in 120 seconds.
-- `POST /v1/command-center/pair` — exchanges a one-time code for a device bearer credential.
-- `POST /v1/command-center/commands` — authenticated `agent_controller` queues an allowlisted read-only command with an idempotency key.
-- `GET /v1/command-center/commands/next?target=android_editor` — an authenticated matching editor claims a leased command.
-- `POST /v1/command-center/commands/{id}/result` — submits the command result.
-- `GET /v1/command-center/commands/{id}` — reads command status within the authenticated workspace.
+Herramientas:
 
-Only `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, and `script.read` are enabled. Pairing codes are single-use; presenting a fresh administrator-issued code for an existing installation rotates its credential. Device credentials are stored only as SHA-256 hashes in Neon. Command Center API responses, including one-time pairing credentials and command results, are marked no-store. Do not expose administrator secrets or device credentials in logs or project files.
+- `godot_workspace_status`
+- `godot_enqueue_command`
+- `godot_command_status`
+- `godot_list_recent_commands`
 
-Render remains on the free plan. The database URL is intentionally a manual secret (`sync: false`) in the Blueprint; no database credential is committed to this repository.
+El MCP comparte la misma cola `command_center.commands` que la API REST. El destino de los comandos MCP está fijado a `web_editor`. La idempotencia, los límites de tamaño y la política de comandos se validan antes de insertar. El servidor no crea workspaces ni sesiones por consulta.
+
+La política permite las cinco acciones de lectura del plugin y las capturas `visual.capture` / `visual.capture_sequence` para `editor_2d` y `editor_3d`. No permite escritura, shell, ejecución de procesos ni zoom de coordenadas.
+
+**Importante:** el despliegue de un servidor MCP no lo registra automáticamente en ChatGPT. Un host externo compatible debe configurarlo y recibir una credencial `agent_controller` por el flujo de emparejamiento. No generar códigos hasta que el cliente esté listo.
+
+## Emparejamiento
+
+1. Abrir `/command-center/admin` por HTTPS.
+2. Introducir el secreto administrativo en el campo de la página; no pegarlo en chats, archivos o código.
+3. Elegir workspace `default` y el rol correspondiente (`web_editor` o `agent_controller`).
+4. Generar el código solo cuando el dispositivo cliente esté listo: caduca en 120 segundos y se consume una vez.
+5. Introducir el código en el cliente. El bearer devuelto se mantiene solo en memoria del plugin/cliente.
+
+No generar códigos de pairing anticipadamente ni emparejar Android durante las pruebas del puesto Web.
+
+## Operación y límites
+
+- Neon es la fuente persistente; Render no almacena la cola en memoria.
+- Las órdenes expiran a los 10 minutos; los leases se renuevan por el editor.
+- La misma clave idempotente con el mismo contenido devuelve la orden existente; reutilizarla con contenido diferente produce conflicto.
+- El bucket de capturas permanece privado. El navegador no recibe credenciales S3.
+- No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
+- Mantener Render en el plan Free.

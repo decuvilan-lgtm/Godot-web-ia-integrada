@@ -8,7 +8,7 @@ Entorno de desarrollo con **dos puestos de trabajo separados** que comparten un 
 
 La regla central es que el agente trabaja en su copia web. Nunca sobrescribe directamente el proyecto aceptado en Android. Los cambios futuros se presentarán como propuestas con diff, validación y snapshot; solo se aplicarán tras aprobación explícita.
 
-> **Estado real (10 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
+> **Estado real (10 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. El commit `48034bc` añade además un servidor MCP remoto autenticado; CI pasó, pero su despliegue Render aún debe confirmarse. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
 
 ## Acceso
 
@@ -84,7 +84,11 @@ El PR #1 añade al relay FastAPI existente:
 - Respuestas no-cache y reconexión Neon acotada.
 - Página administrativa de emparejamiento en `/command-center/admin`.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render tiene configurados los secretos de Postgres y del bucket privado; el relay está desplegado con el commit `060787a8`. La API acepta solo capturas `editor_2d`/`editor_3d`; WebP, hojas de contacto, captura de UI, preview y zoom están rechazados. Todavía no hay editor emparejado ni una captura real. El rol `agent_controller` y la cola existen; falta conectar un runtime/herramienta de ChatGPT que pueda encolar órdenes y leer/inspeccionar los activos.
+La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render tiene configurados los secretos de Postgres y del bucket privado; el relay está desplegado con el commit `060787a8`. La API acepta solo capturas `editor_2d`/`editor_3d`; WebP, hojas de contacto, captura de UI, preview y zoom están rechazados. Todavía no hay editor emparejado ni una captura real. El commit `48034bc` añade un endpoint MCP Streamable HTTP en `/mcp`, protegido por credenciales de dispositivos `agent_controller`, con herramientas para encolar órdenes y consultar resultados. El servidor reutiliza la cola Neon existente. **No está registrado automáticamente en ChatGPT**: falta configurar un host externo compatible y probar el ciclo real.
+
+## Servidor MCP remoto
+
+El endpoint MCP previsto es `https://godot-web-ia-relay.onrender.com/mcp`. Acepta solo credenciales Bearer emparejadas como `agent_controller`; el destino de sus órdenes está fijado al puesto aislado `web_editor`. Las herramientas exponen estado del workspace, encolado idempotente y consulta de resultados. No hay escritura de archivos ni shell. Consulta [docs/MCP_SERVER.md](docs/MCP_SERVER.md) para el contrato y límites.
 
 ## Proyecto persistente y consultas múltiples
 
