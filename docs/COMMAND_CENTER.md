@@ -3,12 +3,12 @@
 ## Estado verificado
 
 - El relay FastAPI está desplegado en Render: `https://godot-web-ia-relay.onrender.com`.
-- El despliegue de código activo usa el commit `df8abcc2a92b5daf6ca481298913f3bd879f9e6b` (`main`). Render confirmó build correcto, arranque de Uvicorn y estado `live`.
+- El despliegue de código activo usa el commit `060787a8cd888624756e9298f67dc0e96305e5ed` (`main`). Render confirmó build correcto, arranque de Uvicorn y estado `live`.
 - Neon Postgres está conectado al relay; el esquema `command_center` y el workspace `default` están disponibles.
 - Neon Object Storage usa el bucket privado `godot-visual-captures`.
 - En la última auditoría no había dispositivos emparejados, sesiones activas, comandos recientes ni activos visuales. El bucket estaba vacío.
 - El pairing y la transferencia real todavía requieren una sesión del editor Godot Web aislado. Los tests de S3 son mocks y no demuestran una ida y vuelta real.
-- La API acepta capturas `editor_2d` y `editor_3d` (`VISUAL_COMMANDS_ENABLED = True`). `editor_ui`, `game_preview` y `visual.zoom_to` siguen rechazados.
+- La API acepta capturas `editor_2d` y `editor_3d` (`VISUAL_COMMANDS_ENABLED = True`). `editor_ui`, `game_preview`, `visual.zoom_to`, WebP y hojas de contacto siguen rechazados.
 
 Para emparejar y realizar la prueba controlada, seguir [LIVE_VISUAL_TRANSFER_RUNBOOK.md](LIVE_VISUAL_TRANSFER_RUNBOOK.md). No activar órdenes visuales generales para probarlas.
 

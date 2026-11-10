@@ -1,6 +1,6 @@
 # Live Visual Transfer Runbook
 
-Status: 2D/3D capture commands enabled and deployed in Render commit `df8abcc2`; branch-scoped Neon storage credential configured. The remaining acceptance gate is a paired `web_editor` and a real capture → storage → retrieval round-trip.
+Status: 2D/3D capture commands enabled and deployed in Render commit `060787a8`; sequence lifecycle and output-option validation included. Branch-scoped Neon storage credential configured. The remaining acceptance gate is a paired `web_editor` and a real capture → storage → retrieval round-trip.
 
 ## Safety boundaries
 
