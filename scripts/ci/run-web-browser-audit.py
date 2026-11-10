@@ -70,7 +70,7 @@ def main() -> int:
 
         # The published editor first shows a limitations dialog and a separate
         # launch button. Dismissing the notice alone does not start the editor.
-        notice_button = page.get_by_role("button", name=re.compile(r"OK\\s*-\\s*Don't Show Again", re.I))
+        notice_button = page.get_by_role("button", name=re.compile(r"OK\s*-\s*Don't Show Again", re.I))
         notice_button.wait_for(state="visible", timeout=60_000)
         notice_button.click()
 
