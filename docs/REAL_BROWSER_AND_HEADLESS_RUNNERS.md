@@ -33,6 +33,18 @@ The new fixed profile is `web_browser_audit`.
 
 The mobile-sized capture is **viewport emulation in Chromium**, not a physical Android device test. The browser audit is a smoke test of the published web editor. It does not prove device pairing, project import, Command Center connectivity, a running game preview, or private image retrieval.
 
+## First live browser evidence
+
+The first successful real-browser run is attached to [PR #15 workflow run 42882553499](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/42882553499). It dismissed the published editor's startup notice, pressed **Start Godot Editor**, and captured the actual Godot 4.7.2 Project Manager.
+
+Observed state:
+- The editor starts and displays the Project Manager.
+- No project is currently loaded in that web workspace; the Project Manager reports an empty project list.
+- The 390×844 viewport screenshot shows horizontal clipping/overflow in the editor chrome. This is a diagnostic viewport capture, not a claim that the web editor is mobile-ready.
+- No page exceptions or HTTP 5xx responses were reported. Godot emitted a console warning that the HTTPS proxy feature is unavailable in the CI browser; the editor still started.
+
+The artifact includes desktop and mobile-sized PNG screenshots plus a JSON report. The later runner revision additionally records document scroll width and detects the empty-project state automatically.
+
 ## Dispatch and cost model
 
 The existing task dispatcher accepts only fixed profiles. The browser profile is routed directly to GitHub Actions because the current CircleCI job is the Godot runner and does not install Playwright. Existing Godot profiles retain the CircleCI-first / GitHub Actions fallback behavior.
