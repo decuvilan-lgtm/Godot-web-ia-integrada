@@ -65,6 +65,8 @@ jobs:
 
       - name: Install Chromium smoke-test dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
           python -m pip install playwright==1.55.0
           python -m playwright install --with-deps chromium
 
@@ -78,6 +80,7 @@ jobs:
           name: patched-godot-web-chromium-diagnostics-${{ github.sha }}
           path: |
             patched-godot-web-project-manager.png
+            patched-godot-web-github-import.png
             patched-godot-web-diagnostics.json
           if-no-files-found: warn
           retention-days: 7
