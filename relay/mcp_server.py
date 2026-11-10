@@ -15,6 +15,8 @@ from mcp.server.mcpserver import Context
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import JSONResponse
 
+from task_dispatch import TaskDispatchError, dispatch_task, task_status
+
 from command_center import (
     ALLOWED_ACTIONS,
     COMMAND_TTL_SECONDS,
@@ -345,6 +347,35 @@ async def godot_list_recent_commands(limit: int, ctx: Context) -> dict[str, Any]
             for row in rows
         ]
     }
+
+
+@mcp_server.tool()
+async def godot_start_task(task_profile: str, request_id: str, ctx: Context) -> dict[str, Any]:
+    """Start a fixed Godot validation task. CircleCI is primary; GitHub Actions is fallback.
+
+    Profiles: engine_smoke, scene_audit_3d. The caller cannot provide a shell command,
+    repository, branch, filesystem path, or arbitrary workflow.
+    """
+    _request_identity(ctx)
+    try:
+        return await dispatch_task(task_profile, request_id)
+    except (TaskDispatchError, ValueError) as exc:
+        raise ValueError(str(exc)) from exc
+
+
+@mcp_server.tool()
+async def godot_task_status(
+    provider: str,
+    request_id: str,
+    execution_id: str | None = None,
+    ctx: Context = None,
+) -> dict[str, Any]:
+    """Check a CircleCI or GitHub Actions task started by godot_start_task."""
+    _request_identity(ctx)
+    try:
+        return await task_status(provider, execution_id, request_id)
+    except (TaskDispatchError, ValueError) as exc:
+        raise ValueError(str(exc)) from exc
 
 
 _mcp_transport = mcp_server.streamable_http_app(

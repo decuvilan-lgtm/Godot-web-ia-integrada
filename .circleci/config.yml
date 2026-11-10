@@ -1,0 +1,41 @@
+version: 2.1
+
+parameters:
+  run_godot_task:
+    type: boolean
+    default: false
+  task_profile:
+    type: enum
+    enum: ["engine_smoke", "scene_audit_3d"]
+    default: "engine_smoke"
+  request_id:
+    type: string
+    default: "manual-run"
+
+jobs:
+  godot-task:
+    docker:
+      - image: cimg/base:stable
+    resource_class: small
+    environment:
+      GODOT_TASK_PROFILE: << pipeline.parameters.task_profile >>
+      GODOT_TASK_REQUEST_ID: << pipeline.parameters.request_id >>
+    steps:
+      - checkout
+      - run:
+          name: Install minimal runner dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ca-certificates curl unzip
+      - run:
+          name: Execute isolated Godot task
+          command: bash scripts/ci/run-godot-task.sh
+      - store_artifacts:
+          path: /tmp/godot-task-results
+          destination: godot-task-results
+
+workflows:
+  remote-godot-task:
+    when: << pipeline.parameters.run_godot_task >>
+    jobs:
+      - godot-task
