@@ -95,7 +95,7 @@ def main() -> int:
             size = path.stat().st_size
             if size < 1024 or size > MAX_CAPTURE_BYTES:
                 raise RuntimeError(f"Screenshot size outside safe bounds: {name} ({size} bytes)")
-                document_scroll_width = page.evaluate(
+            document_scroll_width = page.evaluate(
                 "() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)"
             )
             captures.append({
