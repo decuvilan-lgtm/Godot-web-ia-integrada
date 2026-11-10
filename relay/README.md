@@ -70,3 +70,12 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 - El bucket de capturas permanece privado. El navegador no recibe credenciales S3.
 - No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
 - Mantener Render en el plan Free.
+
+
+## Browser and headless task runners
+
+The fixed task dispatcher also exposes `web_browser_audit`. Unlike the Godot profiles, it is routed directly to GitHub Actions, where pinned Playwright opens the fixed published Godot Web editor in Chromium and captures desktop/mobile-sized viewports. It records browser exceptions and HTTP 5xx responses. It does not accept caller-supplied URLs or browser commands.
+
+The browser job has no Neon/Render/device credentials and uploads screenshots plus JSON diagnostics as a seven-day workflow artifact. This artifact is not yet automatically returned as image bytes to ChatGPT. The mobile-sized screenshot is viewport emulation, not a physical-device test.
+
+See [REAL_BROWSER_AND_HEADLESS_RUNNERS.md](../docs/REAL_BROWSER_AND_HEADLESS_RUNNERS.md) for architecture, invocation and the remaining integration gates.

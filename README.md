@@ -119,6 +119,8 @@ Neon Object Storage tiene el bucket privado `godot-visual-captures`; el Relay ti
 
 ## Desarrollo
 
+- [Runner real de navegador + ejecución headless](docs/REAL_BROWSER_AND_HEADLESS_RUNNERS.md)
+
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
 - [Protocolo WebSocket anterior](docs/BRIDGE_PROTOCOL.md)

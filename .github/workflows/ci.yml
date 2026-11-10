@@ -21,7 +21,7 @@ jobs:
           bash -n scripts/build-web.sh
           bash -n scripts/ci/run-godot-task.sh
           ruby -e 'require "yaml"; c = YAML.load_file(".circleci/config.yml"); abort "CircleCI job missing" unless c.dig("jobs", "godot-task")'
-          python -m py_compile scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/mcp_server.py relay/task_dispatch.py relay/test_task_dispatch.py relay/test_mcp_server.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
+          python -m py_compile scripts/ci/run-web-browser-audit.py scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/mcp_server.py relay/task_dispatch.py relay/test_task_dispatch.py relay/test_mcp_server.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
       - name: Validate mobile shell and sandbox package
@@ -58,6 +58,35 @@ jobs:
           python -m unittest -v test_app.py test_mcp_server.py test_task_dispatch.py
           PYTHONPATH=.. python -m unittest discover -s ../tests/live_link -p 'test_storage_cors.py' -v
 
+
+
+  web-browser-audit:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Playwright and Chromium
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Open the published editor in real Chromium
+        env:
+          GODOT_TASK_REQUEST_ID: browser-pr-${{ github.event.pull_request.number || github.run_id }}
+        run: python scripts/ci/run-web-browser-audit.py
+      - name: Upload browser screenshots and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-browser-audit-${{ github.run_id }}
+          path: /tmp/godot-task-results/
+          if-no-files-found: warn
+          retention-days: 7
 
   godot-scene-audit:
     runs-on: ubuntu-latest

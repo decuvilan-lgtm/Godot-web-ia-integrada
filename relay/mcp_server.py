@@ -359,7 +359,7 @@ async def godot_execution_providers(ctx: Context) -> dict[str, Any]:
 async def godot_start_task(task_profile: str, request_id: str, ctx: Context) -> dict[str, Any]:
     """Start a fixed Godot validation task. CircleCI is primary; GitHub Actions is fallback.
 
-    Profiles: engine_smoke, scene_audit_3d. The caller cannot provide a shell command,
+    Profiles: engine_smoke, scene_audit_3d, web_browser_audit. The browser profile opens only the fixed published editor URL. The caller cannot provide a shell command,
     repository, branch, filesystem path, or arbitrary workflow.
     """
     _request_identity(ctx)

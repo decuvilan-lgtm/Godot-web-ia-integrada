@@ -14,7 +14,7 @@ import httpx
 
 CIRCLECI_API = "https://circleci.com/api/v2"
 GITHUB_API = "https://api.github.com"
-TASK_PROFILES = {"engine_smoke", "scene_audit_3d"}
+TASK_PROFILES = {"engine_smoke", "scene_audit_3d", "web_browser_audit"}
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
 PIPELINE_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -133,6 +133,19 @@ async def dispatch_task(
     settings = dict(os.environ if env is None else env)
     circleci = _circleci_config(settings)
     github = _github_config(settings)
+
+    # The browser audit has a dedicated GitHub Actions job with pinned Playwright
+    # and Chromium. Do not send it to the legacy CircleCI Godot-only executor.
+    if task_profile == "web_browser_audit":
+        if not github:
+            raise TaskDispatchError("web_browser_audit requires the GitHub Actions dispatch credential")
+        try:
+            return await _github_trigger(*github, task_profile, request_id, transport)
+        except httpx.HTTPError as exc:
+            raise TaskDispatchError(
+                f"GitHub Actions browser audit dispatch failed ({type(exc).__name__})"
+            ) from exc
+
     circleci_error: str | None = None
 
     if circleci:
