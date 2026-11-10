@@ -63,7 +63,7 @@ replace_once(
 }
 
 void ProjectManager::_new_project() {""",
-    r'''void ProjectManager::_import_project() {
+    '''void ProjectManager::_import_project() {
 \tproject_dialog->set_mode(ProjectDialog::MODE_IMPORT);
 \tproject_dialog->ask_for_path_and_show();
 }
