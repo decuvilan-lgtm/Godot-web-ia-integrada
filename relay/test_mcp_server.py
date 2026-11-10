@@ -31,7 +31,7 @@ class MCPCommandPolicyTests(unittest.TestCase):
         async def list_schemas():
             async with Client(mcp_server) as client:
                 result = await client.list_tools()
-                return {tool.name: tool.inputSchema for tool in result.tools}
+                return {tool.name: tool.input_schema for tool in result.tools}
 
         schemas = asyncio.run(list_schemas())
         self.assertEqual(

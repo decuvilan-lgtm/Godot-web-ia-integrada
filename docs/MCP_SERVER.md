@@ -24,6 +24,8 @@ La credencial se obtiene mediante el flujo normal de emparejamiento de dispositi
 | `godot_enqueue_command` | Encola una orden idempotente para el editor Web aislado. |
 | `godot_command_status` | Devuelve estado, resultado y error de una orden del mismo workspace. |
 | `godot_list_recent_commands` | Lista resúmenes de hasta 50 órdenes recientes. |
+| `godot_start_task` | Inicia una tarea Godot allowlisted; CircleCI es el proveedor primario y GitHub Actions el respaldo. |
+| `godot_task_status` | Consulta el estado de una ejecución CircleCI o GitHub Actions. |
 
 ### Encolar una orden
 
@@ -62,3 +64,13 @@ MCP y REST comparten las mismas tablas, política visual, expiración e idempote
 El código del servidor está en `relay/mcp_server.py`; el endpoint se monta desde `relay/app.py`. El commit `48034bc16e8f9337fd5fffb85c54f705d2e1996e` pasó CI. El despliegue de Render debe verificarse por separado.
 
 Un endpoint MCP desplegado no queda automáticamente disponible como herramienta dentro de ChatGPT. Hace falta registrar/configurar el servidor en un host MCP compatible y emparejar un `agent_controller`. Hasta que esa integración se pruebe, no afirmar que ChatGPT ya puede invocar el endpoint directamente.
+
+
+## Ejecución remota directa
+
+Las tareas de validación no esperan a que el editor web esté abierto. El Relay invoca al proveedor CI directamente, en este orden:
+
+1. CircleCI (principal).
+2. GitHub Actions (respaldo cuando CircleCI no está configurado o no responde).
+
+Los perfiles disponibles son `engine_smoke` y `scene_audit_3d`. Ambos ejecutan un binario oficial Godot 4.7.2 verificado por SHA-512. No se aceptan comandos de shell, rutas ni ramas arbitrarias desde MCP. Consulta [REMOTE_EXECUTION.md](REMOTE_EXECUTION.md) para configuración, límites gratuitos y alcance de las pruebas 3D.
