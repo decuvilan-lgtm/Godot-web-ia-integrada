@@ -309,6 +309,11 @@ async def get_pool(request: Request):
             )
             request.app.state.command_center_db = pool
             request.app.state.command_center_db_retry_after = 0.0
+            try:
+                from mcp_server import set_database_pool
+                set_database_pool(pool)
+            except ImportError:
+                pass
             logger.info("Neon Command Center database pool connected")
             return pool
         except Exception as exc:

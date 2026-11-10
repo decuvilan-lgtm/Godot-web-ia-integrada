@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 os.environ["RELAY_ADMIN_TOKEN"] = "test-admin-secret"
+os.environ["RELAY_LEGACY_BRIDGE_ENABLED"] = "true"
 from app import app, sessions
 
 class RelayApiTests(unittest.TestCase):
