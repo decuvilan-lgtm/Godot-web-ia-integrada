@@ -3,12 +3,12 @@
 ## Estado verificado
 
 - El relay FastAPI está desplegado en Render: `https://godot-web-ia-relay.onrender.com`.
-- El último despliegue de código del relay usa el commit `8fa678ca342d828f4cd69a32f914922dbf9f85aa`. El commit más reciente de `main` incluye además documentación operativa.
+- El despliegue de código activo usa el commit `df8abcc2a92b5daf6ca481298913f3bd879f9e6b` (`main`). Render confirmó build correcto, arranque de Uvicorn y estado `live`.
 - Neon Postgres está conectado al relay; el esquema `command_center` y el workspace `default` están disponibles.
 - Neon Object Storage usa el bucket privado `godot-visual-captures`.
 - En la última auditoría no había dispositivos emparejados, sesiones activas, comandos recientes ni activos visuales. El bucket estaba vacío.
 - El pairing y la transferencia real todavía requieren una sesión del editor Godot Web aislado. Los tests de S3 son mocks y no demuestran una ida y vuelta real.
-- Las órdenes visuales siguen deshabilitadas en el relay mediante `VISUAL_COMMANDS_ENABLED = False`.
+- La API acepta capturas `editor_2d` y `editor_3d` (`VISUAL_COMMANDS_ENABLED = True`). `editor_ui`, `game_preview` y `visual.zoom_to` siguen rechazados.
 
 Para emparejar y realizar la prueba controlada, seguir [LIVE_VISUAL_TRANSFER_RUNBOOK.md](LIVE_VISUAL_TRANSFER_RUNBOOK.md). No activar órdenes visuales generales para probarlas.
 
@@ -48,7 +48,7 @@ Rutas bajo `/v1/command-center`:
 
 - `POST /pairing-codes`: requiere `X-Command-Center-Admin`; emite un código de un solo uso y corta duración.
 - `POST /pair`: consume el código y registra o rota la credencial del dispositivo.
-- `POST /commands`: solo `agent_controller`; crea una orden idempotente para `web_editor` o `android_editor`. Las órdenes visuales están bloqueadas actualmente.
+- `POST /commands`: solo `agent_controller`; crea una orden idempotente para `web_editor` o `android_editor`. Las capturas visuales se restringen a `web_editor` y a `editor_2d`/`editor_3d`.
 - `GET /commands/next?target=web_editor|android_editor`: un editor reclama órdenes únicamente de su propio rol.
 - `POST /commands/{id}/heartbeat`: renueva el lease de la orden reclamada.
 - `POST /commands/{id}/result`: el editor confirma el resultado de su lease.
@@ -64,7 +64,7 @@ El contrato de sincronización de archivos y revisiones está en [SHARED_PROJECT
 - Los bytes pasan exclusivamente por Render y el bucket privado; no se entregan URLs S3 a los clientes.
 - El complemento **Shared Projects** permite listar/crear proyectos, analizar y sincronizar manualmente.
 - Los conflictos detienen el lote; las copias locales reemplazadas o eliminadas se guardan en `user://godot_project_sync/rescue`.
-- La migración de Neon ya está aplicada en la rama de producción. El código del relay sigue pendiente de desplegar desde la rama de trabajo y de una prueba real entre dos dispositivos.
+- La migración de Neon está aplicada y el relay actualizado está desplegado desde `main`. La sincronización entre dos editores aún necesita su prueba real de transferencia.
 
 ## Clientes de editor
 
@@ -78,7 +78,7 @@ El sandbox `examples/bridge-sandbox` incluye `addons/godot_command_center/plugin
 - La fase de lectura admite `ping`, `project.get_state`, `project.list_files`, `scene.inspect` y `script.read`.
 - La captura visual implementada en el plugin obtiene imágenes de los SubViewports 2D y 3D; solo codifica JPEG o PNG.
 - El plugin rechaza `editor_ui` y `game_preview` porque requieren captura del navegador, y rechaza `visual.zoom_to` hasta implementar restauración exacta de la vista.
-- La implementación del plugin no implica que el flujo esté habilitado en el relay: la compuerta visual permanece cerrada.
+- El relay permite únicamente los objetivos `editor_2d` y `editor_3d`; el plugin sube la imagen por el proxy autenticado. El recorrido real captura → almacenamiento → recuperación todavía no se ha probado.
 
 ### Godot Android — editor del usuario
 
@@ -101,11 +101,11 @@ El editor Android del usuario es un puesto distinto y no debe emparejarse ni mod
 
 ## Siguientes hitos
 
-1. Emparejar únicamente el editor Godot Web aislado.
-2. Verificar que el dispositivo registrado sea `web_editor` en workspace `default` y que Android siga sin cambios.
-3. Diseñar una autorización temporal estrictamente limitada a una única captura `editor_2d` para ese dispositivo; no habilitar todos los comandos visuales.
-4. Probar subida, registro, descarga autenticada y coincidencia byte a byte/SHA-256.
-5. Probar una secuencia corta de 2–3 imágenes y los estados de secuencia.
-6. Confirmar que el navegador no contacta Neon S3 directamente.
-7. Mantener la compuerta cerrada hasta completar la aceptación.
-8. Después, conectar el controlador IA y avanzar hacia propuestas/diffs/snapshots/aprobación/rollback antes de permitir cambios al proyecto.
+1. Abrir/importar `examples/bridge-sandbox` en el editor Godot Web publicado y confirmar que aparece el dock Command Center.
+2. Generar un código temporal `web_editor` desde `/command-center/admin` y emparejar el sandbox en workspace `default`.
+3. Ejecutar `ping`, `project.get_state` y `scene.inspect`; confirmar los resultados en Neon.
+4. Encolar una única captura `visual.capture` de `editor_2d`; verificar lease, bytes almacenados, metadatos, SHA-256 y recuperación autenticada.
+5. Probar una secuencia breve de 2–3 imágenes y confirmar estados `completed`/`partial`/`failed`.
+6. Comprobar que el navegador no contacta Neon S3 directamente y que Android permanece sin emparejar.
+7. Conectar un controlador `agent_controller` utilizable por el agente. Hoy existe el rol/API, pero no hay un runtime/herramienta de ChatGPT conectado que encole órdenes autónomamente.
+8. Después, completar propuestas/diffs/snapshots/aprobación/rollback antes de permitir cambios al proyecto.
