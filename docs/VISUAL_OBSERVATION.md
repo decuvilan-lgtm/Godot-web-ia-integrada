@@ -156,7 +156,7 @@ cd relay
 python -m storage_cors
 ```
 
-Required environment: `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `COMMAND_CENTER_STORAGE_CORS_ORIGIN`. The origin currently intended for the AI web editor is `https://godot-web-ia-integrada-rt2l.onrender.com`. The utility never prints credentials or signed URLs. A successful read-back is not a substitute for the remaining real-browser OPTIONS + presigned PUT acceptance test.
+The optional CORS utility requires `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `COMMAND_CENTER_STORAGE_CORS_ORIGIN`. It is not part of the active proxy-transfer path and has not been applied to the bucket. No browser-to-S3 CORS rule is needed for the current design.
 
 ## Private visual transfer API (deployed; live round-trip pending)
 
@@ -190,4 +190,4 @@ The Android editor remains a separate user-owned workspace throughout these step
 
 ## Additional relay verification coverage
 
-The draft relay test suite now exercises the private object verifier with generated PNG bytes and a fake S3 client. It checks successful SHA-256 calculation, strict reported-dimension matching, MIME/extension consistency, invalid image rejection and object-length mismatch. These are deterministic unit tests; they do not replace the pending presigned PUT/GET integration test against the actual private Neon bucket.
+The relay test suite exercises the private object verifier with generated PNG bytes and a fake S3 client. It checks successful SHA-256 calculation, strict reported-dimension matching, MIME/extension consistency, invalid image rejection and object-length mismatch. These are deterministic unit tests; they do not replace the pending live relay-proxy upload, metadata-registration and authenticated-download test against the actual private Neon bucket.
