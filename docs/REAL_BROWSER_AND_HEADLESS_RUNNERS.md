@@ -37,7 +37,7 @@ The mobile-sized capture is **viewport emulation in Chromium**, not a physical A
 
 The existing task dispatcher accepts only fixed profiles. The browser profile is routed directly to GitHub Actions because the current CircleCI job is the Godot runner and does not install Playwright. Existing Godot profiles retain the CircleCI-first / GitHub Actions fallback behavior.
 
-The workflow runs on demand; it does not create a persistent worker or upgrade Render resources. Browser installation and page loading consume the normal GitHub Actions job time.
+The profile can be dispatched on demand through the existing task workflow. A separate pull-request workflow also runs the browser audit when the runner or its workflow changes, so the real-browser smoke test is exercised during this PR. It does not create a persistent worker or upgrade Render resources. Browser installation and page loading consume the normal GitHub Actions job time.
 
 ## Security boundaries
 
