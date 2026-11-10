@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="BoxMesh" id="BoxMesh_fixture"]
+size = Vector3(2, 2, 2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fixture"]
+albedo_color = Color(0.18, 0.52, 0.82, 1)
+metallic = 0.15
+roughness = 0.42
+
+[node name="Audit3DFixture" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+position = Vector3(1, 2, 3)
+mesh = SubResource("BoxMesh_fixture")
+material_override = SubResource("StandardMaterial3D_fixture")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(0, 2, 6)
+current = true
+fov = 55.0
+near = 0.1
+far = 250.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-45, 25, 0)
+light_energy = 1.5
+shadow_enabled = true

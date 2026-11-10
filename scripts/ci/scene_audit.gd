@@ -57,6 +57,19 @@ func _run() -> void:
         await process_frame
 
     _report["summary"]["scene_count"] = _report["scenes"].size()
+    var summary: Dictionary = _report["summary"]
+    var missing_3d_evidence: Array[String] = []
+    if int(summary["node3d_count"]) < 1:
+        missing_3d_evidence.append("Node3D")
+    if int(summary["mesh_instance3d_count"]) < 1:
+        missing_3d_evidence.append("MeshInstance3D")
+    if int(summary["camera3d_count"]) < 1:
+        missing_3d_evidence.append("Camera3D")
+    if not missing_3d_evidence.is_empty():
+        _report["errors"].append({
+            "error": "3D audit fixture/coverage incomplete",
+            "missing": missing_3d_evidence
+        })
     var output := FileAccess.open(OUTPUT_PATH, FileAccess.WRITE)
     if output == null:
         push_error("Unable to write scene audit to " + OUTPUT_PATH)
@@ -65,7 +78,7 @@ func _run() -> void:
     output.store_string(JSON.stringify(_report, "\t"))
     output.close()
     print("GODOT_SCENE_AUDIT=" + JSON.stringify(_report))
-    quit(0)
+    quit(6 if not missing_3d_evidence.is_empty() else 0)
 
 
 func _collect_scenes(directory_path: String, output: Array[String]) -> void:

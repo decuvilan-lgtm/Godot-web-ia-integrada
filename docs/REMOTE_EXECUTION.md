@@ -14,7 +14,7 @@ Both providers run the same version-pinned Godot binary and the same repository 
 - `engine_smoke`: verifies the pinned Godot 4.7.2 Linux binary, imports the isolated bridge sandbox, and fails on script/parse errors.
 - `scene_audit_3d`: performs the same import check and runs a structured scene audit. The JSON report records scene hierarchy, Node3D transforms and basis vectors, mesh bounds and surfaces, materials, cameras, lights/shadows, skeleton bone counts, and AnimationPlayer tracks.
 
-The current audit target is deliberately fixed to `examples/bridge-sandbox`. It is an infrastructure validation target, not yet the user's actual game workspace. The next integration step is to transfer a versioned project snapshot into an isolated runner workspace and run these profiles against that snapshot.
+The current audit target is deliberately fixed to `examples/bridge-sandbox`, which includes a synthetic 3D fixture (mesh, material, camera, and light) so the audit proves it can read non-zero 3D data. It is an infrastructure validation target, not yet the user's actual game workspace. The next integration step is to transfer a versioned project snapshot into an isolated runner workspace and run these profiles against that snapshot.
 
 ## Required Render environment variables
 
