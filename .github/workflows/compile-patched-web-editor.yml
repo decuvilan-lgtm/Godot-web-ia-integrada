@@ -14,9 +14,11 @@ on:
 permissions:
   contents: read
 
+# Never terminate a long native engine build just because another check starts.
+# Scope concurrency to this workflow and PR; keep an active build running.
 concurrency:
-  group: patched-web-editor-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   compile:
