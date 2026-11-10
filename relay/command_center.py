@@ -133,8 +133,11 @@ def _validate_visual_output(output: Any) -> None:
         set(),
         "VISUAL_OUTPUT_INVALID",
     )
-    if "format" in output and output["format"] not in {"jpeg", "png"}:
-        _visual_error("VISUAL_FORMAT_UNAVAILABLE", "format must be jpeg or png; WebP is not supported by the current Godot capture backend")
+    if "format" in output:
+        if not isinstance(output["format"], str):
+            _visual_error("VISUAL_OUTPUT_INVALID", "format must be a string")
+        if output["format"] not in {"jpeg", "png"}:
+            _visual_error("VISUAL_FORMAT_UNAVAILABLE", "format must be jpeg or png; WebP is not supported by the current Godot capture backend")
     for key in ("max_width", "max_height"):
         if key in output and not _bounded_int(output[key], 320, 8192):
             _visual_error("VISUAL_OUTPUT_INVALID", f"{key} must be an integer from 320 to 8192")

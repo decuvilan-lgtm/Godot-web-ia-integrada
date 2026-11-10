@@ -304,6 +304,12 @@ class RelayApiTests(unittest.TestCase):
                 "output": {"format": "webp"},
             })
         self.assertEqual(raised.exception.detail["code"], "VISUAL_FORMAT_UNAVAILABLE")
+        with self.assertRaises(HTTPException) as raised:
+            validate_visual_command("visual.capture", {
+                "target": "editor_2d",
+                "output": {"format": {"unexpected": "object"}},
+            })
+        self.assertEqual(raised.exception.detail["code"], "VISUAL_OUTPUT_INVALID")
 
         with self.assertRaises(HTTPException) as raised:
             validate_visual_command("visual.capture_sequence", {
