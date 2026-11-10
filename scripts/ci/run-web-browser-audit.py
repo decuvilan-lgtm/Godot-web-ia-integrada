@@ -95,10 +95,15 @@ def main() -> int:
             size = path.stat().st_size
             if size < 1024 or size > MAX_CAPTURE_BYTES:
                 raise RuntimeError(f"Screenshot size outside safe bounds: {name} ({size} bytes)")
+            scroll_width = page.evaluate(
+                "() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)"
+            )
             captures.append({
                 "file": name,
                 "viewport": viewport,
                 "mobile_viewport_emulation": mobile,
+                "document_scroll_width": scroll_width,
+                "horizontal_overflow": scroll_width > viewport["width"],
                 "bytes": size,
                 "width": viewport["width"],
                 "height": viewport["height"],
@@ -122,6 +127,7 @@ def main() -> int:
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
         "page_title": title,
+        "workspace_state": "empty_project_manager",
         "canvas_count": canvas_count,
         "editor_started": editor_started,
         "captures": captures,
