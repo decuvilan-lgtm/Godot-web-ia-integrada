@@ -31,12 +31,13 @@ READ_ONLY_ACTIONS = {
     "scene.inspect",
     "script.read",
 }
+SCENE_NAVIGATION_ACTIONS = {"scene.open", "scene.select_node"}
 VISUAL_ACTIONS = {
     "visual.capture",
     "visual.capture_sequence",
     "visual.zoom_to",
 }
-ALLOWED_ACTIONS = READ_ONLY_ACTIONS | VISUAL_ACTIONS
+ALLOWED_ACTIONS = READ_ONLY_ACTIONS | SCENE_NAVIGATION_ACTIONS | VISUAL_ACTIONS
 # Enable only the Godot editor SubViewport backends that are implemented.
 # Browser chrome and game preview require a separate browser capture agent.
 VISUAL_COMMANDS_ENABLED = True
@@ -436,6 +437,46 @@ async def pair_device(body: PairDeviceRequest, request: Request):
     }
 
 
+def validate_scene_navigation_command(action: str, args: dict[str, Any]) -> None:
+    """Validate bounded, read-only scene navigation commands."""
+    if not isinstance(args, dict):
+        raise HTTPException(status_code=422, detail={"code": "SCENE_ARGUMENT_INVALID", "message": "Scene arguments must be an object"})
+
+    if action == "scene.open":
+        _strict_keys(args, {"path"}, {"path"}, "SCENE_ARGUMENT_INVALID")
+        path = args["path"]
+        if (
+            not isinstance(path, str)
+            or len(path) > 512
+            or not path.startswith("res://")
+            or path == "res://"
+            or ".." in path
+            or "\\\\" in path
+            or path.rsplit(".", 1)[-1].lower() not in {"tscn", "scn"}
+        ):
+            raise HTTPException(status_code=422, detail={"code": "SCENE_PATH_INVALID", "message": "path must be a project-local .tscn or .scn resource"})
+        return
+
+    if action == "scene.select_node":
+        _strict_keys(args, {"node_path"}, {"node_path"}, "SCENE_ARGUMENT_INVALID")
+        node_path = args["node_path"]
+        if (
+            not isinstance(node_path, str)
+            or not node_path
+            or len(node_path) > 512
+            or node_path.startswith("/")
+            or node_path.endswith("/")
+            or "//" in node_path
+            or ".." in node_path
+            or "\\\\" in node_path
+            or ":" in node_path
+        ):
+            raise HTTPException(status_code=422, detail={"code": "SCENE_NODE_PATH_INVALID", "message": "node_path must be a relative path within the open scene"})
+        return
+
+    raise HTTPException(status_code=400, detail="Unknown scene navigation action")
+
+
 @router.post("/commands", status_code=202)
 async def create_command(
     body: CreateCommandRequest,
@@ -447,6 +488,10 @@ async def create_command(
         raise HTTPException(status_code=403, detail="Only an agent controller can enqueue commands")
     if body.action not in ALLOWED_ACTIONS:
         raise HTTPException(status_code=400, detail="Action is not enabled in the command policy")
+    if body.action in SCENE_NAVIGATION_ACTIONS:
+        if body.target != "web_editor":
+            raise HTTPException(status_code=403, detail="Scene navigation commands are restricted to the isolated AI web_editor workspace")
+        validate_scene_navigation_command(body.action, body.args)
     if body.action in VISUAL_ACTIONS:
         if body.target != "web_editor":
             raise HTTPException(status_code=403, detail="Visual commands are restricted to the AI web_editor workspace")
