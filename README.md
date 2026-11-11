@@ -94,6 +94,19 @@ El endpoint MCP previsto es `https://godot-web-ia-relay.onrender.com/mcp`. Acept
 
 El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada consulta crea solo una orden independiente; no crea un proyecto, workspace ni sesión. Se pueden encolar varias consultas sobre el mismo proyecto: cada una tiene su ID e idempotency key, y el editor las procesa en cola, una por una. Las órdenes pendientes tienen una ventana de expiración de 10 minutos. Las repeticiones de una misma consulta reutilizan su clave; las consultas nuevas usan claves nuevas, pero mantienen el mismo workspace. La selección/creación de otros proyectos será una acción explícita futura, nunca un efecto secundario de consultar.
 
+## Multi-proyecto en Godot Web
+
+El Project Manager debe ser la pantalla de entrada después de pulsar **Iniciar Godot**. No debe abrir automáticamente el último proyecto ni sustituir la lista por el proyecto recién importado.
+
+- Mantener un catálogo con todos los proyectos registrados en el almacenamiento persistente del navegador.
+- Cada importación añade un proyecto independiente al catálogo; nunca sobrescribe ni cambia de forma implícita el proyecto activo.
+- Al volver al Project Manager, deben seguir apareciendo todos los proyectos disponibles para elegir cuál abrir.
+- Los datos y archivos de cada proyecto deben permanecer aislados. Cambiar de proyecto no debe mezclar escenas, recursos, ajustes ni estado del editor.
+- La prueba de aceptación debe importar un repositorio, pulsar **Install**, comprobar que el diálogo se cierra y verificar que el proyecto figura como entrada de la lista. También debe comprobar que un proyecto ya registrado no desaparece al importar otro.
+- “Todos los proyectos abiertos” significa que todos están disponibles en el administrador; no que se lancen simultáneamente varias instancias de editor dentro de una única pestaña.
+
+La persistencia y restauración del catálogo en una nueva sesión del navegador deben probarse explícitamente; una lista visible solo durante la sesión actual no satisface el requisito.
+
 ## Verificaciones y límites
 
 - Los tests del relay y el smoke test de Godot 4.7.2 para el sandbox han pasado en CI para el último commit validado.
