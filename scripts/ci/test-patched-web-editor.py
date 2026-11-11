@@ -22,11 +22,13 @@ IMPORT_SCREENSHOT = pathlib.Path("patched-godot-web-github-import.png")
 DIAGNOSTICS = pathlib.Path("patched-godot-web-diagnostics.json")
 TEST_REPOSITORY = "MCMLXXXV/godot-minimal-template"
 EXPECTED_PROJECT_TEXT = ("godot minimal project template", "godot-minimal-template")
+# Only assert stable UI markers in the compiled artifact. Diagnostic wording is
+# intentionally tested against source by the patcher unit tests, not WASM: changing
+# an error message must never prevent Chromium from reaching the real import test.
 REQUIRED = (
     b"Import from GitHub",
     b"Enter a public GitHub repository URL or owner/repository.",
     b"Invalid repository. Use https://github.com/owner/repository.",
-    b"GitHub download failed (request result %d, HTTP %d). Check the repository URL and connection.",
 )
 
 class IsolatedHandler(http.server.SimpleHTTPRequestHandler):
