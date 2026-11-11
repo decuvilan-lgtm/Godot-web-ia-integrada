@@ -35,20 +35,20 @@ replace_once(
     HEADER,
     "ProjectDialog *project_dialog = nullptr;",
     """ProjectDialog *project_dialog = nullptr;
-\tConfirmationDialog *github_import_dialog = nullptr;
-\tLineEdit *github_repo_url = nullptr;
-\tHTTPRequest *github_http_request = nullptr;
-\tString github_zip_path;
-\tString github_repo_name;""",
+	ConfirmationDialog *github_import_dialog = nullptr;
+	LineEdit *github_repo_url = nullptr;
+	HTTPRequest *github_http_request = nullptr;
+	String github_zip_path;
+	String github_repo_name;""",
 )
 replace_once(
     HEADER,
-    "\tvoid _import_project();\n\tvoid _new_project();",
-    """\tvoid _import_project();
-\tvoid _show_github_import_dialog();
-\tvoid _github_import_confirmed();
-\tvoid _github_download_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
-\tvoid _new_project();""",
+    "	void _import_project();\n	void _new_project();",
+    """	void _import_project();
+	void _show_github_import_dialog();
+	void _github_import_confirmed();
+	void _github_download_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
+	void _new_project();""",
 )
 replace_once(
     SOURCE,
@@ -58,101 +58,103 @@ replace_once(
 replace_once(
     SOURCE,
     """void ProjectManager::_import_project() {
-\tproject_dialog->set_mode(ProjectDialog::MODE_IMPORT);
-\tproject_dialog->ask_for_path_and_show();
+	project_dialog->set_mode(ProjectDialog::MODE_IMPORT);
+	project_dialog->ask_for_path_and_show();
 }
 
 void ProjectManager::_new_project() {""",
     '''void ProjectManager::_import_project() {
-\tproject_dialog->set_mode(ProjectDialog::MODE_IMPORT);
-\tproject_dialog->ask_for_path_and_show();
+	project_dialog->set_mode(ProjectDialog::MODE_IMPORT);
+	project_dialog->ask_for_path_and_show();
 }
 
 void ProjectManager::_show_github_import_dialog() {
-\tif (!github_import_dialog) {
-\t\tgithub_import_dialog = memnew(ConfirmationDialog);
-\t\tgithub_import_dialog->set_title(TTRC("Import from GitHub"));
-\t\tgithub_import_dialog->set_ok_button_text(TTRC("Download"));
-\t\tVBoxContainer *container = memnew(VBoxContainer);
-\t\tcontainer->add_theme_constant_override("separation", 8 * EDSCALE);
-\t\tgithub_import_dialog->add_child(container);
-\t\tLabel *help = memnew(Label);
-\t\thelp->set_text(TTRC("Enter a public GitHub repository URL or owner/repository."));
-\t\thelp->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
-\t\tcontainer->add_child(help);
-\t\tgithub_repo_url = memnew(LineEdit);
-\t\tgithub_repo_url->set_placeholder(TTRC("https://github.com/owner/repository"));
-\t\tgithub_repo_url->set_clear_button_enabled(true);
-\t\tcontainer->add_child(github_repo_url);
-\t\tadd_child(github_import_dialog);
-\t\tgithub_import_dialog->connect("confirmed", callable_mp(this, &ProjectManager::_github_import_confirmed));
-\t}
-\tgithub_import_dialog->popup_centered(Size2i(520 * EDSCALE, 0));
+	if (!github_import_dialog) {
+		github_import_dialog = memnew(ConfirmationDialog);
+		github_import_dialog->set_title(TTRC("Import from GitHub"));
+		github_import_dialog->set_ok_button_text(TTRC("Download"));
+		VBoxContainer *container = memnew(VBoxContainer);
+		container->add_theme_constant_override("separation", 8 * EDSCALE);
+		github_import_dialog->add_child(container);
+		Label *help = memnew(Label);
+		help->set_text(TTRC("Enter a public GitHub repository URL or owner/repository."));
+		// Avoid an autowrapped zero-width Label requesting a dialog taller than the viewport.
+		container->add_child(help);
+		github_repo_url = memnew(LineEdit);
+		github_repo_url->set_placeholder(TTRC("https://github.com/owner/repository"));
+		github_repo_url->set_clear_button_enabled(true);
+		container->add_child(github_repo_url);
+		github_import_dialog->register_text_enter(github_repo_url);
+		add_child(github_import_dialog);
+		github_import_dialog->connect("confirmed", callable_mp(this, &ProjectManager::_github_import_confirmed));
+	}
+	github_import_dialog->popup_centered(Size2i(520 * EDSCALE, 0));
+	github_repo_url->grab_focus();
 }
 
 void ProjectManager::_github_import_confirmed() {
-\tif (github_http_request) {
-\t\t_show_error(TTR("A GitHub download is already in progress."));
-\t\treturn;
-\t}
-\tString repository = github_repo_url->get_text().strip_edges();
-\trepository = repository.trim_prefix("https://github.com/");
-\trepository = repository.trim_prefix("http://github.com/");
-\trepository = repository.trim_suffix("/");
-\trepository = repository.trim_suffix(".git");
-\tPackedStringArray parts = repository.split("/", false);
-\tif (parts.size() != 2 || parts[0].is_empty() || parts[1].is_empty() ||
-\t\tparts[0].contains_char(' ') || parts[1].contains_char(' ') ||
-\t\tparts[0].contains_char('?') || parts[1].contains_char('?') ||
-\t\tparts[0].contains_char('#') || parts[1].contains_char('#')) {
-\t\t_show_error(TTR("Invalid repository. Use https://github.com/owner/repository."));
-\t\treturn;
-\t}
-\tgithub_repo_name = parts[1];
-\tgithub_zip_path = OS::get_singleton()->get_cache_path().path_join("godot_github_import.zip");
-\tDirAccess::remove_absolute(github_zip_path);
-\tgithub_http_request = memnew(HTTPRequest);
-\tgithub_http_request->set_download_file(github_zip_path);
-\tgithub_http_request->set_timeout(60.0);
-\tgithub_http_request->set_max_redirects(4);
-\tadd_child(github_http_request);
-\tgithub_http_request->connect("request_completed", callable_mp(this, &ProjectManager::_github_download_completed));
-\tPackedStringArray headers;
-\theaders.push_back("Accept: application/vnd.github+json");
-\theaders.push_back("User-Agent: Godot-Project-Manager");
-\tError err = github_http_request->request("https://api.github.com/repos/" + parts[0] + "/" + parts[1] + "/zipball", headers);
-\tif (err != OK) {
-\t\tgithub_http_request->queue_free();
-\t\tgithub_http_request = nullptr;
-\t\t_show_error(TTR("Could not start the GitHub download. Check your internet connection."));
-\t}
+	if (github_http_request) {
+		_show_error(TTR("A GitHub download is already in progress."));
+		return;
+	}
+	String repository = github_repo_url->get_text().strip_edges();
+	repository = repository.trim_prefix("https://github.com/");
+	repository = repository.trim_prefix("http://github.com/");
+	repository = repository.trim_suffix("/");
+	repository = repository.trim_suffix(".git");
+	PackedStringArray parts = repository.split("/", false);
+	if (parts.size() != 2 || parts[0].is_empty() || parts[1].is_empty() ||
+		parts[0].contains_char(' ') || parts[1].contains_char(' ') ||
+		parts[0].contains_char('?') || parts[1].contains_char('?') ||
+		parts[0].contains_char('#') || parts[1].contains_char('#')) {
+		_show_error(TTR("Invalid repository. Use https://github.com/owner/repository."));
+		return;
+	}
+	github_repo_name = parts[1];
+	github_zip_path = OS::get_singleton()->get_cache_path().path_join("godot_github_import.zip");
+	DirAccess::remove_absolute(github_zip_path);
+	github_http_request = memnew(HTTPRequest);
+	github_http_request->set_download_file(github_zip_path);
+	github_http_request->set_timeout(60.0);
+	github_http_request->set_max_redirects(4);
+	add_child(github_http_request);
+	github_http_request->connect("request_completed", callable_mp(this, &ProjectManager::_github_download_completed));
+	PackedStringArray headers;
+	headers.push_back("Accept: application/vnd.github+json");
+	headers.push_back("User-Agent: Godot-Project-Manager");
+	Error err = github_http_request->request("https://api.github.com/repos/" + parts[0] + "/" + parts[1] + "/zipball", headers);
+	if (err != OK) {
+		github_http_request->queue_free();
+		github_http_request = nullptr;
+		_show_error(TTR("Could not start the GitHub download. Check your internet connection."));
+	}
 }
 
 void ProjectManager::_github_download_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body) {
-\tif (github_http_request) {
-\t\tgithub_http_request->queue_free();
-\t\tgithub_http_request = nullptr;
-\t}
-\tif (p_result != HTTPRequest::RESULT_SUCCESS || p_response_code != 200 || !FileAccess::exists(github_zip_path)) {
-\t\t_show_error(vformat(TTR("GitHub download failed (HTTP %d). Check the repository URL and make sure it is public."), p_response_code));
-\t\treturn;
-\t}
-\t_install_project(github_zip_path, github_repo_name);
+	if (github_http_request) {
+		github_http_request->queue_free();
+		github_http_request = nullptr;
+	}
+	if (p_result != HTTPRequest::RESULT_SUCCESS || p_response_code != 200 || !FileAccess::exists(github_zip_path)) {
+		_show_error(vformat(TTR("GitHub download failed (HTTP %d). Check the repository URL and make sure it is public."), p_response_code));
+		return;
+	}
+	_install_project(github_zip_path, github_repo_name);
 }
 
 void ProjectManager::_new_project() {'''
 )
 replace_once(
     SOURCE,
-    "\t\t\thb->add_child(import_btn);\n\n\t\t\tscan_btn = memnew(Button);",
-    """\t\t\thb->add_child(import_btn);
+    "			hb->add_child(import_btn);\n\n			scan_btn = memnew(Button);",
+    """			hb->add_child(import_btn);
 
-\t\t\tButton *github_import_btn = memnew(Button);
-\t\t\tgithub_import_btn->set_text(TTRC("GitHub"));
-\t\t\tgithub_import_btn->set_tooltip_text(TTRC("Import a project from a public GitHub repository."));
-\t\t\tgithub_import_btn->connect(SceneStringName(pressed), callable_mp(this, &ProjectManager::_show_github_import_dialog));
-\t\t\thb->add_child(github_import_btn);
+			Button *github_import_btn = memnew(Button);
+			github_import_btn->set_text(TTRC("GitHub"));
+			github_import_btn->set_tooltip_text(TTRC("Import a project from a public GitHub repository."));
+			github_import_btn->connect(SceneStringName(pressed), callable_mp(this, &ProjectManager::_show_github_import_dialog));
+			hb->add_child(github_import_btn);
 
-\t\t\tscan_btn = memnew(Button);""",
+			scan_btn = memnew(Button);""",
 )
 print("Public GitHub import added to the Godot Web Project Manager source.")
