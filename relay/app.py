@@ -17,7 +17,6 @@ from admin import router as command_center_admin_router
 from visual_storage import router as visual_storage_router
 from visual_proxy import router as visual_proxy_router
 from project_sync import router as project_sync_router
-from mcp_server import mcp_asgi_app, mcp_server, set_database_pool
 
 APP_VERSION = "0.3.0"
 logger = logging.getLogger("godot_web_ia_relay")
@@ -34,8 +33,8 @@ app.add_middleware(
     allow_origins=os.environ.get("ALLOWED_ORIGINS", "https://godot-web-ia-integrada-rt2l.onrender.com").split(","),
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin", "X-Command-Id", "X-Frame-Index", "X-Project-Path", "X-Base-SHA256", "X-File-SHA256", "Last-Event-ID", "Mcp-Method", "Mcp-Name", "Mcp-Protocol-Version", "Mcp-Session-Id"],
-    expose_headers=["X-File-SHA256", "Mcp-Session-Id"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin", "X-Command-Id", "X-Frame-Index", "X-Project-Path", "X-Base-SHA256", "X-File-SHA256", "Last-Event-ID"],
+    expose_headers=["X-File-SHA256"],
 )
 
 @dataclass
@@ -51,8 +50,6 @@ class Session:
 sessions: dict[str, Session] = {}
 app.state.command_center_db = None
 app.state.session_cleanup_task = None
-app.state.mcp_session_manager_task = None
-app.state.mcp_session_manager_stop = None
 
 app.include_router(command_center_router)
 app.include_router(command_center_admin_router)
@@ -63,7 +60,7 @@ app.include_router(project_sync_router)
 @app.middleware("http")
 async def prevent_command_center_response_caching(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(("/v1/command-center/", "/command-center/admin", "/mcp")):
+    if request.url.path.startswith(("/v1/command-center/", "/command-center/admin")):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -79,7 +76,7 @@ class RelayRequest(BaseModel):
 
 def require_legacy_bridge() -> None:
     if not LEGACY_BRIDGE_ENABLED:
-        raise HTTPException(status_code=410, detail="Legacy WebSocket bridge is disabled; use the durable Command Center API or MCP endpoint")
+        raise HTTPException(status_code=410, detail="Legacy WebSocket bridge is disabled; use the durable Command Center API")
 
 def require_admin(value: str | None) -> None:
     if not ADMIN_TOKEN or not value or not hmac.compare_digest(value, ADMIN_TOKEN):
@@ -216,7 +213,6 @@ async def editor_socket(websocket: WebSocket, session_id: str):
 async def cleanup_expired_sessions():
     database_url = os.environ.get("COMMAND_CENTER_DATABASE_URL", "").strip()
     app.state.command_center_db = None
-    set_database_pool(None)
     app.state.command_center_db_lock = asyncio.Lock()
     app.state.command_center_db_retry_after = 0.0
     if database_url:
@@ -225,7 +221,6 @@ async def cleanup_expired_sessions():
             app.state.command_center_db = await asyncpg.create_pool(
                 dsn=database_url, min_size=1, max_size=5, timeout=5, command_timeout=10
             )
-            set_database_pool(app.state.command_center_db)
         except Exception:
             # A Neon outage or missing driver must not take down the existing
             # WebSocket relay. Command Center routes remain fail-closed (503).
@@ -249,26 +244,10 @@ async def cleanup_expired_sessions():
             await asyncio.sleep(30)
     app.state.session_cleanup_task = asyncio.create_task(cleanup_loop()) if LEGACY_BRIDGE_ENABLED else None
 
-    # Mounted MCP sub-apps do not run their own lifespan; start its session manager here.
-    mcp_stop = asyncio.Event()
-    mcp_started = asyncio.Event()
-    async def run_mcp_manager():
-        async with mcp_server.session_manager.run():
-            mcp_started.set()
-            await mcp_stop.wait()
-    app.state.mcp_session_manager_stop = mcp_stop
-    app.state.mcp_session_manager_task = asyncio.create_task(run_mcp_manager())
-    await mcp_started.wait()
 
 
 @app.on_event("shutdown")
 async def shutdown_services():
-    mcp_stop = app.state.mcp_session_manager_stop
-    mcp_task = app.state.mcp_session_manager_task
-    if mcp_stop is not None:
-        mcp_stop.set()
-    if mcp_task is not None:
-        await mcp_task
     task = app.state.session_cleanup_task
     if task is not None:
         task.cancel()
@@ -276,6 +255,3 @@ async def shutdown_services():
     if pool is not None:
         await pool.close()
 
-# Keep the durable Neon Command Center as the only production bridge.
-# Mount last so the MCP app cannot shadow the explicit FastAPI routes above.
-app.mount("/", app=mcp_asgi_app)
