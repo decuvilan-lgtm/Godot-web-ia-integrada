@@ -113,3 +113,17 @@ El editor Android del usuario es un puesto distinto y no debe emparejarse ni mod
 6. Comprobar que el navegador no contacta Neon S3 directamente y que Android permanece sin emparejar.
 7. Conectar un controlador `agent_controller` utilizable por el agente. Hoy existe el rol/API, pero no hay un runtime/herramienta de ChatGPT conectado que encole órdenes autónomamente.
 8. Después, completar propuestas/diffs/snapshots/aprobación/rollback antes de permitir cambios al proyecto.
+
+
+## Navegación de escenas desde el controlador (11 de noviembre de 2026)
+
+El puesto `web_editor` incorpora dos acciones nuevas de navegación, restringidas en el relay al rol `agent_controller` y al destino `web_editor`:
+
+- `scene.open`: recibe únicamente una ruta `.tscn` o `.scn` relativa a `res://`; abre esa escena en Godot y espera a que el editor confirme la raíz activa.
+- `scene.select_node`: recibe únicamente una ruta relativa a la raíz de la escena abierta; selecciona el nodo en `EditorSelection`, localiza su fila en un `Tree` del editor, expande sus antecesores y confirma la selección del panel Scene.
+
+Las rutas se validan tanto en el relay como en el complemento. Se rechazan rutas absolutas, traversal, separadores Windows, campos desconocidos y rutas de nodos fuera de la escena activa. La inspección sigue limitada por `MAX_NODES` y `MAX_DEPTH`. No se añaden operaciones de escritura ni ejecución de procesos.
+
+**Verificación de código:** Repository checks [run 43121795823](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43121795823) terminó en `success`: pruebas API del relay, empaquetado del sandbox, auditoría de escenas y smoke test de importación del complemento con Godot 4.7.2 pasaron.
+
+**Pendiente:** el smoke test confirma que el complemento importa sin errores y las pruebas del relay validan la política de comandos; todavía falta una sesión real del Godot Web publicado para confirmar la interacción visual en el panel Scene y el ciclo completo Neon → editor → resultado. No marcar la selección visual en producción como verificada hasta realizar esa prueba.
