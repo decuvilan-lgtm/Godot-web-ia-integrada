@@ -3,7 +3,7 @@
 ## Estado verificado
 
 - El relay FastAPI está desplegado en Render: `https://godot-web-ia-relay.onrender.com`.
-- El último despliegue confirmado antes del cambio MCP usa el commit `060787a8cd888624756e9298f67dc0e96305e5ed` (`main`). El commit `48034bc16e8f9337fd5fffb85c54f705d2e1996e` añade el servidor MCP y pasó CI; su despliegue en Render queda pendiente de confirmación.
+- El relay usa la API HTTP del Command Center y Neon como cola durable. La conversación de ChatGPT aún no tiene un runtime directo conectado a esa API.
 - Neon Postgres está conectado al relay; el esquema `command_center` y el workspace `default` están disponibles.
 - Neon Object Storage usa el bucket privado `godot-visual-captures`.
 - En la última auditoría no había dispositivos emparejados, sesiones activas, comandos recientes ni activos visuales. El bucket estaba vacío.
@@ -55,31 +55,6 @@ Rutas bajo `/v1/command-center`:
 - `GET /commands/{id}`: consulta estado y resultado con autorización de workspace.
 
 El puente WebSocket efímero heredado está desactivado por defecto (`RELAY_LEGACY_BRIDGE_ENABLED=false`). El flujo de producción unificado es HTTP + Neon; no se deben crear sesiones por el protocolo antiguo.
-
-## Servidor MCP remoto
-
-El commit `48034bc16e8f9337fd5fffb85c54f705d2e1996e` añade un servidor MCP Streamable HTTP en:
-
-`https://godot-web-ia-relay.onrender.com/mcp`
-
-El endpoint exige `Authorization: Bearer <credencial emparejada>` y acepta exclusivamente dispositivos `agent_controller`. La credencial es la misma identidad de dispositivo emparejada en Neon; el servidor valida su hash en cada petición y no almacena el token en memoria de sesión ni en logs. No se debe pegar una credencial en código, issues o archivos del proyecto.
-
-Herramientas MCP:
-
-- `godot_workspace_status`: lista dispositivos emparejados del workspace autenticado.
-- `godot_enqueue_command`: encola una orden permitida para `web_editor`, con clave de idempotencia.
-- `godot_command_status`: consulta estado, resultado y errores de una orden del mismo workspace.
-- `godot_list_recent_commands`: lista resúmenes recientes.
-
-Política actual:
-
-- Lectura: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, `script.read`.
-- Observación visual: `visual.capture` y `visual.capture_sequence`, solo para `editor_2d` y `editor_3d`.
-- Rechazados: escritura de scripts/archivos, shell, ejecución de procesos, `visual.zoom_to`, captura de UI y preview de juego.
-- El destino está fijado a `web_editor`; no puede redirigir comandos al editor Android.
-- MCP reutiliza `command_center.commands`, `command_results` y `events`; no crea una segunda cola.
-
-El servidor está preparado para un host MCP externo compatible. **No está registrado automáticamente en ChatGPT** y la integración del host requiere configuración explícita. La prueba end-to-end necesita emparejar un dispositivo `agent_controller`; no generar el código hasta que ese cliente esté listo.
 
 ## Proyectos compartidos Web ↔ Android
 
