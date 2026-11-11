@@ -10,7 +10,8 @@ Android source of truth:
 
 ## Implementation
 
-- `scripts/apply-web-github-import.py`: anchor-checked port of the Android Project Manager patch, targeting the pinned Godot source.
+- `scripts/apply-web-github-import.py`: anchor-checked port of the Android Project Manager patch, targeting the pinned Godot source. It requests the archive from the same-origin-compatible Relay route rather than calling GitHub from Chromium.
+- `relay/github_import.py`: bounded server-side public GitHub archive proxy. It verifies repository visibility through GitHub's API, permits only the `codeload.github.com` archive redirect, limits archives to 64 MiB, caps concurrent downloads and rate-limits requests.
 - `scripts/prepare-engine-source.sh`: initializes the pinned engine source and applies the patch.
 - `scripts/ci/test-patched-web-editor.py`: end-to-end Chromium smoke test. It boots the compiled Web editor, clicks the native GitHub button, enters a public test repository, submits the download, and verifies that the imported project appears in the Project Manager using OCR against the rendered canvas.
 - `tests/test_web_github_import_patcher.py`: static patcher checks, including fail-closed checks for changed upstream anchors.
@@ -38,6 +39,8 @@ The source-built patched editor is validated in Chromium by CI. The production W
 ## Scope and safety
 
 - Public GitHub repositories only; no tokens or private-repository credentials.
+- Chromium calls the Relay endpoint; the Relay contacts GitHub and codeload server-to-server, avoiding browser CORS on GitHub's redirect.
+- The proxy accepts no arbitrary URL or redirect host and enforces a 64 MiB archive cap.
 - Input is restricted to GitHub repository owner/name values; arbitrary hosts are not accepted.
 - Import is a download-and-install action. The CI fixture is not executed as part of the import test.
 - Keep the existing Neon Shared Projects layer for subsequent Web/Android synchronization. GitHub import and project synchronization are separate operations.
