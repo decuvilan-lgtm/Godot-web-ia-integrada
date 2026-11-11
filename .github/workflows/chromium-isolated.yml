@@ -1,0 +1,52 @@
+name: Isolated Chromium GitHub Fetch Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/ci/test-chromium-github-fetch.py"
+      - ".github/workflows/chromium-isolated.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromium-isolated-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  chromium:
+    name: Isolated Chromium runtime and GitHub fetch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Run isolated Chromium fetch diagnostic
+        run: |
+          set +e
+          python scripts/ci/test-chromium-github-fetch.py
+          result=$?
+          echo "Chromium diagnostic exit code: $result"
+          sleep 180
+          exit "$result"
+
+      - name: Upload Chromium diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-chromium-diagnostics-${{ github.sha }}
+          path: chromium-isolated-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 7
