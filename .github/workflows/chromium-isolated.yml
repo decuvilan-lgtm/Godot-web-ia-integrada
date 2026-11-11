@@ -39,7 +39,6 @@ jobs:
           python scripts/ci/test-chromium-github-fetch.py
           result=$?
           echo "Chromium diagnostic exit code: $result"
-          sleep 180
           exit "$result"
 
       - name: Upload Chromium diagnostic
