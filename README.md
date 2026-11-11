@@ -117,6 +117,10 @@ El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_O
 
 Neon Object Storage tiene el bucket privado `godot-visual-captures`; el Relay tiene credenciales de almacenamiento con alcance `storage:read`/`storage:write`, transferencia binaria autenticada a través del Relay y validación de imagen/metadatos. La API permite `editor_2d` y `editor_3d`, además de secuencias realtime. **El código está habilitado, pero la operación real sigue pendiente de emparejar el editor web y validar el ciclo captura → almacenamiento → recuperación**. `editor_ui`, `game_preview` y `visual.zoom_to` no se consideran disponibles.
 
+## Flujo de desarrollo Headless + GitHub
+
+El trabajo técnico se realiza primero en el proyecto local de Linux con Godot Headless. Después se reflejan en GitHub los archivos locales necesarios o, cuando conviene, se editan directamente los archivos del repositorio. Linux no necesita ni tiene que conectarse a Internet; nunca se sube el motor Headless. Consulta el [flujo de desarrollo detallado](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md).
+
 ## Desarrollo
 
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
