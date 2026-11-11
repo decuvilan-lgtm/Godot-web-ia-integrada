@@ -451,7 +451,7 @@ def validate_scene_navigation_command(action: str, args: dict[str, Any]) -> None
             or not path.startswith("res://")
             or path == "res://"
             or ".." in path
-            or "\\\\" in path
+            or chr(92) in path
             or path.rsplit(".", 1)[-1].lower() not in {"tscn", "scn"}
         ):
             raise HTTPException(status_code=422, detail={"code": "SCENE_PATH_INVALID", "message": "path must be a project-local .tscn or .scn resource"})
@@ -468,7 +468,7 @@ def validate_scene_navigation_command(action: str, args: dict[str, Any]) -> None
             or node_path.endswith("/")
             or "//" in node_path
             or ".." in node_path
-            or "\\\\" in node_path
+            or chr(92) in node_path
             or ":" in node_path
         ):
             raise HTTPException(status_code=422, detail={"code": "SCENE_NODE_PATH_INVALID", "message": "node_path must be a relative path within the open scene"})
