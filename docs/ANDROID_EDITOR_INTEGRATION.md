@@ -17,7 +17,6 @@ La revisión de GitHub encontró estas líneas de trabajo:
 | Rama | Estado observado | Contenido principal |
 |---|---|---|
 | `main` | Rama predeterminada | Flujo inicial de compilación y parche de importación GitHub pública |
-| `feature/github-sync-and-safe-mcp` | PR #1 abierto, WIP | Sincronización incremental GitHub, MCP Android seguro, Terrain 3D y cambios de arranque |
 | `feature/live-editor-link` | PR #2 abierto como borrador, basado en PR #1 | Live Link, relay WebSocket, cliente de agente, operaciones de archivos y escena |
 | `feature/native-editor-integration` | Rama existente | Extensiones nativas y sincronización; requiere comparar antes de reutilizar |
 | `work/mobile-ui-preflight` | Rama existente | Preflight de interfaz móvil |
