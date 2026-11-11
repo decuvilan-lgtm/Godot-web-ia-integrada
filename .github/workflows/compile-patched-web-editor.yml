@@ -1,12 +1,6 @@
 name: Compile patched Godot Web Editor
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "engine/godot"
-      - "scripts/apply-web-github-import.py"
-      - "scripts/prepare-engine-source.sh"
   workflow_dispatch:
 
 permissions:
