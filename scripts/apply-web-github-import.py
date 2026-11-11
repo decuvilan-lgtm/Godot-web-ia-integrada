@@ -122,7 +122,6 @@ void ProjectManager::_github_import_confirmed() {
 	github_zip_path = OS::get_singleton()->get_cache_path().path_join("godot_github_import.zip");
 	DirAccess::remove_absolute(github_zip_path);
 	github_http_request = memnew(HTTPRequest);
-	github_http_request->set_download_file(github_zip_path);
 	github_http_request->set_timeout(180.0);
 	github_http_request->set_max_redirects(0);
 	github_http_request->set_body_size_limit(64 * 1024 * 1024);
@@ -144,9 +143,30 @@ void ProjectManager::_github_download_completed(int p_result, int p_response_cod
 		github_http_request->queue_free();
 		github_http_request = nullptr;
 	}
-	if (p_result != HTTPRequest::RESULT_SUCCESS || p_response_code != 200 || !FileAccess::exists(github_zip_path)) {
+	if (p_result != HTTPRequest::RESULT_SUCCESS || p_response_code != 200) {
 		DirAccess::remove_absolute(github_zip_path);
-		_show_error(vformat(TTR("GitHub download failed (HTTP %d). Check the repository URL and make sure it is public."), p_response_code));
+		_show_error(vformat(TTR("GitHub download failed (request result %d, HTTP %d). Check the repository URL and connection."), p_result, p_response_code));
+		return;
+	}
+	if (p_body.is_empty()) {
+		DirAccess::remove_absolute(github_zip_path);
+		_show_error(TTR("GitHub returned an empty project archive."));
+		return;
+	}
+	// HTTPClientWeb cannot provide a reliable Content-Length. HTTPRequest's
+	// download-to-file path may delete a successful unknown-length download
+	// during cleanup, so persist the bounded response body explicitly here.
+	Ref<FileAccess> zip_file = FileAccess::open(github_zip_path, FileAccess::WRITE);
+	if (zip_file.is_null()) {
+		_show_error(TTR("Could not save the downloaded GitHub archive."));
+		return;
+	}
+	zip_file->store_buffer(p_body.ptr(), p_body.size());
+	Error write_error = zip_file->get_error();
+	zip_file.unref();
+	if (write_error != OK) {
+		DirAccess::remove_absolute(github_zip_path);
+		_show_error(TTR("Could not write the downloaded GitHub archive."));
 		return;
 	}
 	_install_project(github_zip_path, github_repo_name);
