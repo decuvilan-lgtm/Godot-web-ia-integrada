@@ -5,6 +5,7 @@ This patch is intentionally anchor-checked: if upstream Godot changes the Projec
 Manager structure, the script fails instead of silently producing a partial patch.
 """
 from pathlib import Path
+import os
 import sys
 
 ROOT = Path(__file__).resolve().parents[1] / "engine" / "godot"
@@ -50,6 +51,13 @@ replace_once(
 	void _github_download_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
 	void _new_project();""",
 )
+relay_url = os.environ.get(
+    "GODOT_GITHUB_IMPORT_RELAY_URL",
+    "https://godot-web-ia-relay.onrender.com/v1/github/import/",
+).strip()
+if not relay_url.startswith(("https://", "http://127.0.0.1:")) or not relay_url.endswith("/"):
+    sys.exit("GODOT_GITHUB_IMPORT_RELAY_URL must be HTTPS (or localhost for CI) and end with /.")
+
 replace_once(
     SOURCE,
     '#include "scene/gui/separator.h"\n#include "scene/main/scene_tree.h"',
@@ -122,7 +130,7 @@ void ProjectManager::_github_import_confirmed() {
 	github_http_request->connect("request_completed", callable_mp(this, &ProjectManager::_github_download_completed));
 	// The Relay fetches GitHub's codeload redirect server-side. This avoids
 	// browser CORS restrictions while keeping the engine's native ZIP installer.
-	const String relay_url = "https://godot-web-ia-relay.onrender.com/v1/github/import/";
+	const String relay_url = "__GITHUB_IMPORT_RELAY_URL__";
 	Error err = github_http_request->request(relay_url + parts[0].uri_encode() + "/" + parts[1].uri_encode());
 	if (err != OK) {
 		github_http_request->queue_free();
@@ -159,4 +167,7 @@ replace_once(
 
 			scan_btn = memnew(Button);""",
 )
+source_text = SOURCE.read_text(encoding="utf-8")
+source_text = source_text.replace("__GITHUB_IMPORT_RELAY_URL__", relay_url)
+SOURCE.write_text(source_text, encoding="utf-8")
 print("Public GitHub import added to the Godot Web Project Manager source.")
