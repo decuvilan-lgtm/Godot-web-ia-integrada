@@ -4,12 +4,14 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
+import os
 import pathlib
 import shutil
 import subprocess
 import tempfile
 import threading
 import time
+import urllib.request
 import zipfile
 from playwright.sync_api import sync_playwright
 
@@ -67,7 +69,26 @@ def main():
                 "failed_requests": [], "responses": [], "startup_actions": [],
                 "github_import": {"repository": TEST_REPOSITORY, "attempted": False, "passed": False},
             }
+            relay_log = pathlib.Path("github-import-relay.log").open("w", encoding="utf-8")
+            relay_env = os.environ.copy()
+            relay_env["ALLOWED_ORIGINS"] = "http://127.0.0.1:8765"
+            relay_env["RELAY_LEGACY_BRIDGE_ENABLED"] = "false"
+            relay = subprocess.Popen(
+                [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8766"],
+                cwd="relay", env=relay_env, stdout=relay_log, stderr=subprocess.STDOUT,
+            )
             try:
+                relay_ready = False
+                for _ in range(60):
+                    try:
+                        with urllib.request.urlopen("http://127.0.0.1:8766/health", timeout=2) as health:
+                            relay_ready = health.status == 200
+                        if relay_ready:
+                            break
+                    except Exception:
+                        time.sleep(1)
+                if not relay_ready:
+                    raise RuntimeError("Local GitHub import Relay did not become healthy; inspect github-import-relay.log")
                 with sync_playwright() as playwright:
                     browser = playwright.chromium.launch(headless=True, args=[
                         "--no-sandbox", "--enable-webgl", "--use-gl=angle",
@@ -162,7 +183,7 @@ def main():
                         diagnostics["github_import"]["ocr_text"] = observed[:4000]
                         diagnostics["github_import"]["responses"] = [
                             item for item in diagnostics["responses"]
-                            if "api.github.com" in item["url"]
+                            if "127.0.0.1:8766/v1/github/import/" in item["url"]
                         ]
                         page.screenshot(path=str(SCREENSHOT), full_page=True)
                         if not diagnostics["github_import"]["passed"]:
@@ -172,7 +193,7 @@ def main():
                                 "and OCR diagnostics."
                             )
                         if not any(item["status"] == 200 for item in diagnostics["github_import"]["responses"]):
-                            raise RuntimeError("Project appeared but no successful GitHub API response was recorded")
+                            raise RuntimeError("Project appeared but no successful Relay archive response was recorded")
                         print(f"GitHub repository import passed: {TEST_REPOSITORY}")
                     finally:
                         browser.close()
@@ -180,6 +201,13 @@ def main():
                 diagnostics["test_error"] = str(exc)[:3000]
                 raise
             finally:
+                relay.terminate()
+                try:
+                    relay.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    relay.kill()
+                    relay.wait(timeout=5)
+                relay_log.close()
                 diagnostics["captured_at"] = time.time()
                 DIAGNOSTICS.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
                 server.shutdown()
