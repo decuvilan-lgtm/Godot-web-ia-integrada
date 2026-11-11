@@ -35,6 +35,8 @@ jobs:
           submodules: false
 
       - name: Verify pinned engine and apply GitHub importer patch
+        env:
+          GODOT_GITHUB_IMPORT_RELAY_URL: http://127.0.0.1:8766/v1/github/import/
         run: |
           bash scripts/verify-engine-pin.sh
           bash scripts/prepare-engine-source.sh
@@ -70,6 +72,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr
           python -m pip install playwright==1.55.0
+          python -m pip install -r relay/requirements.txt
           python -m playwright install --with-deps chromium
 
       - name: Boot patched editor in real Chromium
