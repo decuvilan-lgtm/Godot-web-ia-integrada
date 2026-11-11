@@ -128,17 +128,23 @@ def main():
                         # Godot renders Project Manager controls into its canvas, so this
                         # interaction intentionally uses real pointer/keyboard input.
                         page.mouse.click(215, 98)  # GitHub button in the Project Manager toolbar.
-                        page.wait_for_timeout(900)
-                        page.screenshot(path=str(IMPORT_SCREENSHOT), full_page=True)
-                        diagnostics["github_import"]["dialog_opened"] = True
-                        # ConfirmationDialog is centered; its LineEdit is the first input row.
-                        page.mouse.click(720, 450)
-                        page.keyboard.type(TEST_REPOSITORY, delay=12)
-                        page.wait_for_timeout(250)
-                        page.screenshot(path=str(IMPORT_SCREENSHOT), full_page=True)
-                        page.mouse.click(940, 495)  # Download / OK button.
-                        diagnostics["github_import"]["attempted"] = True
-                        diagnostics["github_import"]["input"] = TEST_REPOSITORY
+						page.wait_for_timeout(900)
+						page.screenshot(path=str(IMPORT_SCREENSHOT), full_page=True)
+						diagnostics["github_import"]["dialog_opened"] = True
+						# The native LineEdit is focused by the importer. Verify visible input before submit.
+						page.keyboard.type(TEST_REPOSITORY, delay=12)
+						page.wait_for_timeout(300)
+						page.screenshot(path=str(IMPORT_SCREENSHOT), full_page=True)
+						input_text = canvas_text(page)
+						diagnostics["github_import"]["input_visible"] = (
+							"mcmlxxxv" in input_text and "godot-minimal-template" in input_text
+						)
+						if not diagnostics["github_import"]["input_visible"]:
+							diagnostics["github_import"]["ocr_input_text"] = input_text[:2000]
+							raise RuntimeError("GitHub dialog opened, but repository text was not visible in its input field.")
+						page.keyboard.press("Enter")  # registered LineEdit submission triggers Download.
+						diagnostics["github_import"]["attempted"] = True
+						diagnostics["github_import"]["input"] = TEST_REPOSITORY
 
                         deadline = time.monotonic() + 150
                         observed = ""
