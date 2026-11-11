@@ -61,3 +61,14 @@ La inspección del editor aún no demuestra:
 ## Regla de documentación
 
 Cada capacidad futura debe etiquetarse como **Implementada**, **Probada**, **Aprobada** o **Pendiente**. La presencia de código no equivale a funcionamiento. Añadir siempre el enlace de CI, el resultado, el número de elementos procesados y cualquier limitación observada.
+
+
+## Nueva corrección en validación (11 de noviembre de 2026)
+
+- Diagnóstico del run [43108334454](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43108334454): el inventario detectó 32 escenas, 58 archivos GDScript y 36 nodos de escena; además exportó 974 propiedades efectivas de ProjectSettings.
+- Las escenas raíz Main.tscn y enemy.tscn se abrieron y verificaron. La cola falló en el tercer comando al intentar resolver el hijo directo CollisionShape2D de enemy.tscn.
+- El archivo de escena confirma que CollisionShape2D es hijo directo de la raíz Enemy. La hipótesis de trabajo es una condición de sincronización entre la apertura de la escena y la disponibilidad de sus nodos en el árbol del editor; todavía no está demostrada.
+- Se actualizó el complemento de prueba para esperar hasta 120 frames a que la raíz solicitada quede activa y hasta 120 frames adicionales para resolver el nodo exacto. Si no aparece, ahora registra ruta, raíz y nombres de hijos antes de fallar.
+- Commit de prueba: [b04ccb07c78aea2bd09d4a74b53e2ea267242595](https://github.com/gavilandavid89-pixel/Escondite/commit/b04ccb07c78aea2bd09d4a74b53e2ea267242595).
+- Validaciones disparadas por ese commit: [Visual QA run 43110383661](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110383661) y [Headless source export run 43110383804](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110383804).
+- Estado al documentar: **Pendiente de resultado**. No marcar la selección de nodos hijos como aprobada hasta que Visual QA termine y se compruebe el total de comandos y capturas.
