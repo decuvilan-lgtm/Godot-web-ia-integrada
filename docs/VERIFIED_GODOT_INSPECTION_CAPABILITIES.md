@@ -81,3 +81,20 @@ Cada capacidad futura debe etiquetarse como **Implementada**, **Probada**, **Apr
 - Se corrigió el acceso al último segmento usando NodePath.get_name_count() y NodePath.get_name(). Commit: [5f354c75356d0fc55708e3fab4f061cc79269ff5](https://github.com/gavilandavid89-pixel/Escondite/commit/5f354c75356d0fc55708e3fab4f061cc79269ff5).
 - Nueva validación pendiente: [Visual QA run 43110764363](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110764363) y [Headless export run 43110764430](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110764430).
 - Estado actual: **Pendiente**. No afirmar que la inspección de nodos hijos funciona hasta revisar el nuevo run, el número de comandos verificados y las capturas generadas.
+
+
+## Resultado verificado: selección visual de nodos hijos (11 de noviembre de 2026)
+
+**Estado: Probado y aprobado en el proyecto Godot de referencia; pendiente de integración en el editor web.**
+
+- Visual QA [run 43119694027](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43119694027): **success**.
+- Exportación headless [run 43119694016](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43119694016): **success**.
+- El inspector abre escenas, expande los antecesores en el panel Scene, selecciona el elemento real del árbol y confirma que queda seleccionado antes de tomar la captura.
+- Resultado: **36 comandos verificados y 36 capturas de vistas de escena/nodo**.
+- La comprobación headless confirma que `enemy.tscn` contiene 2 nodos cargados y que su hijo `CollisionShape2D` está presente. La escena del jugador también conserva sus 2 nodos.
+- Causa identificada: la propiedad serializada `collision_mask = 1 | 2` en `enemy.tscn` hacía que Godot 4.7.2 cargara solamente la raíz, aunque el archivo declaraba el hijo. Se sustituyó por el valor entero equivalente `collision_mask = 3`; tras el cambio, la carga reporta 2 nodos y 1 hijo.
+- Se añadió una comprobación headless para comparar el contenido declarado del archivo con los nodos realmente cargados, evitando que una futura regresión quede oculta.
+- El test de recompensas de combate también se hizo determinista desactivando la evasión aleatoria del enemigo de prueba; no se modificaron los tiempos de espera ni la configuración de Actions.
+- Commit de la corrección de la escena: [9c2870ccdbed83b3fb808ec2847cf5e603097bad](https://github.com/gavilandavid89-pixel/Escondite/commit/9c2870ccdbed83b3fb808ec2847cf5e603097bad).
+
+**Límite importante:** estos resultados siguen perteneciendo a `gavilandavid89-pixel/Escondite`, un proyecto de referencia independiente. No demuestran que la automatización ya esté conectada al editor Godot Web de este repositorio ni al servicio Neon. Esa integración continúa pendiente.
