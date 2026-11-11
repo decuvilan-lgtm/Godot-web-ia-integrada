@@ -115,14 +115,15 @@ void ProjectManager::_github_import_confirmed() {
 	DirAccess::remove_absolute(github_zip_path);
 	github_http_request = memnew(HTTPRequest);
 	github_http_request->set_download_file(github_zip_path);
-	github_http_request->set_timeout(60.0);
-	github_http_request->set_max_redirects(4);
+	github_http_request->set_timeout(180.0);
+	github_http_request->set_max_redirects(0);
+	github_http_request->set_body_size_limit(64 * 1024 * 1024);
 	add_child(github_http_request);
 	github_http_request->connect("request_completed", callable_mp(this, &ProjectManager::_github_download_completed));
-	PackedStringArray headers;
-	headers.push_back("Accept: application/vnd.github+json");
-	headers.push_back("User-Agent: Godot-Project-Manager");
-	Error err = github_http_request->request("https://api.github.com/repos/" + parts[0] + "/" + parts[1] + "/zipball", headers);
+	// The Relay fetches GitHub's codeload redirect server-side. This avoids
+	// browser CORS restrictions while keeping the engine's native ZIP installer.
+	const String relay_url = "https://godot-web-ia-relay.onrender.com/v1/github/import/";
+	Error err = github_http_request->request(relay_url + parts[0].uri_encode() + "/" + parts[1].uri_encode());
 	if (err != OK) {
 		github_http_request->queue_free();
 		github_http_request = nullptr;
@@ -136,6 +137,7 @@ void ProjectManager::_github_download_completed(int p_result, int p_response_cod
 		github_http_request = nullptr;
 	}
 	if (p_result != HTTPRequest::RESULT_SUCCESS || p_response_code != 200 || !FileAccess::exists(github_zip_path)) {
+		DirAccess::remove_absolute(github_zip_path);
 		_show_error(vformat(TTR("GitHub download failed (HTTP %d). Check the repository URL and make sure it is public."), p_response_code));
 		return;
 	}
