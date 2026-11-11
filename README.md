@@ -84,7 +84,7 @@ El PR #1 añade al relay FastAPI existente:
 - Respuestas no-cache y reconexión Neon acotada.
 - Página administrativa de emparejamiento en `/command-center/admin`.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render tiene configurados los secretos de Postgres y del bucket privado; el relay está desplegado con el commit `060787a8`. La API acepta solo capturas `editor_2d`/`editor_3d`; WebP, hojas de contacto, captura de UI, preview y zoom están rechazados. Todavía no hay editor emparejado ni una captura real. El commit `48034bc` añade un endpoint MCP Streamable HTTP en `/mcp`, protegido por credenciales de dispositivos `agent_controller`, con herramientas para encolar órdenes y consultar resultados. El servidor reutiliza la cola Neon existente. **No está registrado automáticamente en ChatGPT**: falta configurar un host externo compatible y probar el ciclo real.
+La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render conserva los secretos de Postgres y del bucket privado. La API acepta capturas `editor_2d`/`editor_3d`; WebP, hojas de contacto, captura de UI, preview y zoom siguen rechazados. Todavía falta demostrar una sesión real del editor web y recuperar una captura. El control del repositorio se realiza mediante la integración GitHub; la sincronización y observación del editor usan el Command Center HTTP existente. No hay un servidor de protocolo personalizado ni un runtime de ChatGPT conectado directamente a la cola.
 
 ## Servidor MCP remoto
 
@@ -108,7 +108,7 @@ El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada 
 2. Emparejar únicamente `web_editor` en workspace `default` y probar `ping`, estado, escena y lectura.
 3. Ejecutar una captura real `editor_2d` y verificar almacenamiento, metadatos, hash y recuperación.
 4. Probar captura `editor_3d` y una secuencia breve; comprobar fallos parciales y limpieza.
-5. Conectar el runtime/herramienta de ChatGPT con el rol `agent_controller` para que pueda encolar órdenes y recuperar/inspeccionar imágenes.
+5. Resolver una vía nativa y compatible para que ChatGPT use la API HTTP del Command Center; no añadir un servidor de protocolo personalizado ni asumir que el rol `agent_controller` ya conecta esta conversación.
 6. Mantener la copia web aislada; implementar propuestas, diffs, snapshots, validación y aprobación explícita antes de aplicar cambios al proyecto Android.
 
 ## Observación visual (en desarrollo)
