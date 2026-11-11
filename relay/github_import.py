@@ -33,7 +33,10 @@ _ALLOWED_ARCHIVE_HOST = "codeload.github.com"
 def _validate_repository(owner: str, repo: str) -> tuple[str, str]:
     if not OWNER_RE.fullmatch(owner) or not REPO_RE.fullmatch(repo) or repo in {".", ".."}:
         raise HTTPException(status_code=422, detail="Invalid GitHub owner or repository name")
-    return owner, repo.removesuffix(".git")
+    repo = repo.removesuffix(".git")
+    if repo in {"", ".", ".."}:
+        raise HTTPException(status_code=422, detail="Invalid GitHub repository name")
+    return owner, repo
 
 
 async def _check_rate_limit(client_ip: str) -> None:
@@ -106,7 +109,8 @@ async def _download_archive(owner: str, repo: str) -> bytes:
 @router.get("/import/{owner}/{repo}")
 async def import_public_repository(owner: str, repo: str, request: Request):
     owner, repo = _validate_repository(owner, repo)
-    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",", 1)[0].strip() or (request.client.host if request.client else "unknown")
     await _check_rate_limit(client_ip)
     if _download_slots.locked():
         raise HTTPException(status_code=503, detail="GitHub import service is busy; try again shortly")
