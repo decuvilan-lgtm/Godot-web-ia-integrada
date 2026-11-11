@@ -1,0 +1,95 @@
+name: Compile patched Godot Web Editor
+
+on:
+  push:
+    branches:
+      - feat/web-github-project-import
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer integration commit supersedes an older expensive build on this branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compile patched Godot Web editor from source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EM_VERSION: "4.0.11"
+      SCONS_FLAGS: "dev_mode=yes debug_symbols=no use_closure_compiler=yes"
+    steps:
+      - name: Checkout integration repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify pinned engine and apply GitHub importer patch
+        env:
+          GODOT_GITHUB_IMPORT_RELAY_URL: http://127.0.0.1:8766/v1/github/import/
+        run: |
+          bash scripts/verify-engine-pin.sh
+          bash scripts/prepare-engine-source.sh
+
+      - name: Set up Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EM_VERSION }}
+          no-cache: true
+
+      - name: Verify Emscripten
+        run: emcc -v
+
+      - name: Set up Python and SCons
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned SCons
+        run: |
+          python -m pip install scons==4.10.1
+          scons --version
+
+      - name: Compile patched Web editor
+        working-directory: engine/godot
+        run: |
+          scons platform=web target=editor ${{ env.SCONS_FLAGS }} -j2
+          test -s bin/godot.web.editor.wasm32.zip
+          sha256sum bin/godot.web.editor.wasm32.zip
+
+      - name: Install Chromium smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          python -m pip install playwright==1.55.0
+          python -m pip install -r relay/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Boot patched editor in real Chromium
+        run: python scripts/ci/test-patched-web-editor.py
+
+      - name: Upload Chromium diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patched-godot-web-chromium-diagnostics-${{ github.sha }}
+          path: |
+            patched-godot-web-project-manager.png
+            patched-godot-web-github-import.png
+            patched-godot-web-install-confirmation.png
+            patched-godot-web-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload compiled patched editor
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-web-editor-patched-${{ github.sha }}
+          path: engine/godot/bin/godot.web.editor.wasm32.zip
+          if-no-files-found: error
+          retention-days: 7

@@ -26,4 +26,6 @@ if [[ -d "${PATCH_DIR}" ]]; then
   done < <(find "${PATCH_DIR}" -maxdepth 1 -type f -name '*.patch' -print | sort)
 fi
 
-echo "Godot source ready at ${ENGINE_DIR}"
+python3 "${ROOT_DIR}/scripts/apply-web-github-import.py"
+
+echo "Godot source ready at ${ENGINE_DIR} (public GitHub import patch applied)"

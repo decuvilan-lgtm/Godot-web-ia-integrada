@@ -94,6 +94,17 @@ El endpoint MCP previsto es `https://godot-web-ia-relay.onrender.com/mcp`. Acept
 
 El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada consulta crea solo una orden independiente; no crea un proyecto, workspace ni sesión. Se pueden encolar varias consultas sobre el mismo proyecto: cada una tiene su ID e idempotency key, y el editor las procesa en cola, una por una. Las órdenes pendientes tienen una ventana de expiración de 10 minutos. Las repeticiones de una misma consulta reutilizan su clave; las consultas nuevas usan claves nuevas, pero mantienen el mismo workspace. La selección/creación de otros proyectos será una acción explícita futura, nunca un efecto secundario de consultar.
 
+## Importación de proyectos en Godot Web
+
+Godot Web ya incluye su **Project Manager nativo**. La integración de GitHub debe aprovechar ese administrador existente, no crear otro catálogo ni una capa paralela para gestionar proyectos.
+
+- El botón de importación de GitHub añade proyectos mediante el flujo nativo de instalación de Godot.
+- El Project Manager nativo sigue siendo el lugar para ver, seleccionar, abrir y administrar los proyectos.
+- Cada proyecto conserva su propia carpeta y configuración según el funcionamiento normal de Godot; no debemos implementar mecanismos duplicados para separarlos.
+- Se puede alternar entre distintos proyectos volviendo al Project Manager. Esto no implica ejecutar varios editores simultáneamente en una misma pestaña.
+
+La validación debe comprobar que una importación termina correctamente y que el proyecto queda disponible en el Project Manager nativo.
+
 ## Verificaciones y límites
 
 - Los tests del relay y el smoke test de Godot 4.7.2 para el sandbox han pasado en CI para el último commit validado.
