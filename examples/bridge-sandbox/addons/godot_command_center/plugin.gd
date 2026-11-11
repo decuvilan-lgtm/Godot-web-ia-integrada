@@ -351,7 +351,7 @@ func _send_pending_result() -> void:
 func _execute_command(action: String, args: Variant) -> Dictionary:
 	if action.begins_with("visual."):
 		return await _execute_visual_action(action, args)
-	return _execute_read_only(action, args)
+	return await _execute_read_only(action, args)
 
 
 func _execute_visual_action(action: String, args: Variant) -> Dictionary:
@@ -544,7 +544,7 @@ func _execute_read_only(action: String, args: Variant) -> Dictionary:
 		"scene.inspect":
 			return _inspect_current_scene()
 		"scene.select_node":
-			return _select_scene_node(args)
+			return await _select_scene_node(args)
 		"script.read":
 			return _read_script(args)
 		_:
