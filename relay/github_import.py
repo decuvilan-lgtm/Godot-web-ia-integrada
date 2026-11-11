@@ -110,7 +110,7 @@ async def _download_archive(owner: str, repo: str) -> bytes:
 async def import_public_repository(owner: str, repo: str, request: Request):
     owner, repo = _validate_repository(owner, repo)
     forwarded_for = request.headers.get("x-forwarded-for", "")
-    client_ip = forwarded_for.split(",", 1)[0].strip() or (request.client.host if request.client else "unknown")
+    client_ip = forwarded_for.rsplit(",", 1)[-1].strip() or (request.client.host if request.client else "unknown")
     await _check_rate_limit(client_ip)
     if _download_slots.locked():
         raise HTTPException(status_code=503, detail="GitHub import service is busy; try again shortly")
