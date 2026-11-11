@@ -539,8 +539,12 @@ func _execute_read_only(action: String, args: Variant) -> Dictionary:
 			}}
 		"project.list_files":
 			return _list_project_files(args)
+		"scene.open":
+			return await _open_scene(args)
 		"scene.inspect":
 			return _inspect_current_scene()
+		"scene.select_node":
+			return _select_scene_node(args)
 		"script.read":
 			return _read_script(args)
 		_:
@@ -573,6 +577,120 @@ func _collect_files(path: String, output: Array[String], limit: int, depth: int)
 		if directory_name.begins_with(".") or directory_name.to_lower() in [".godot", ".git", "node_modules", ".import"]:
 			continue
 		_collect_files(path.path_join(directory_name), output, limit, depth + 1)
+
+
+func _open_scene(args: Dictionary) -> Dictionary:
+	var path := str(args.get("path", ""))
+	if not _is_safe_scene_path(path):
+		return {"ok": false, "result": {"error_code": "SCENE_PATH_INVALID", "message": "La ruta debe ser una escena .tscn o .scn dentro de res://."}}
+	if not FileAccess.file_exists(path):
+		return {"ok": false, "result": {"error_code": "SCENE_NOT_FOUND", "message": "La escena solicitada no existe en el proyecto."}}
+
+	var current := EditorInterface.get_edited_scene_root()
+	if current == null or current.scene_file_path != path:
+		EditorInterface.open_scene_from_path(path)
+
+	var root: Node
+	for _frame in range(120):
+		await get_tree().process_frame
+		root = EditorInterface.get_edited_scene_root()
+		if root != null and root.scene_file_path == path:
+			break
+	if root == null or root.scene_file_path != path:
+		return {"ok": false, "result": {"error_code": "SCENE_OPEN_TIMEOUT", "message": "Godot no confirmó la apertura de la escena solicitada.", "requested_path": path}}
+	return {"ok": true, "result": {
+		"scene_path": root.scene_file_path,
+		"root_name": str(root.name),
+		"root_class": root.get_class(),
+		"opened": true
+	}}
+
+
+func _is_safe_scene_path(path: String) -> bool:
+	if path.length() > 512 or not path.begins_with("res://") or path.contains("..") or path.contains("\\") or path.contains(":"):
+		return false
+	var extension := path.get_extension().to_lower()
+	return extension in ["tscn", "scn"]
+
+
+func _select_scene_node(args: Dictionary) -> Dictionary:
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return {"ok": false, "result": {"error_code": "SCENE_NOT_OPEN", "message": "Abre primero la escena que contiene el nodo."}}
+	var node_path := str(args.get("node_path", ""))
+	if node_path.is_empty() or node_path.length() > 512 or node_path.begins_with("/") or node_path.contains("..") or node_path.contains("\\") or node_path.contains(":"):
+		return {"ok": false, "result": {"error_code": "SCENE_NODE_PATH_INVALID", "message": "La ruta del nodo debe ser relativa a la raíz de la escena."}}
+	var target: Node = root if node_path == "." else root.get_node_or_null(NodePath(node_path))
+	if target == null or not (target == root or root.is_ancestor_of(target)):
+		return {"ok": false, "result": {"error_code": "SCENE_NODE_NOT_FOUND", "message": "No existe ese nodo en la escena abierta.", "node_path": node_path}}
+
+	EditorInterface.get_selection().clear()
+	EditorInterface.get_selection().add_node(target)
+	var dock_match := _find_scene_dock_item(root, target, node_path)
+	if dock_match.is_empty():
+		return {"ok": false, "result": {
+			"error_code": "SCENE_DOCK_ITEM_NOT_FOUND",
+			"message": "El nodo existe y quedó seleccionado por el editor, pero no se pudo localizar su fila en el panel Scene.",
+			"node_path": node_path
+		}}
+	var scene_tree: Tree = dock_match["tree"]
+	var scene_item: TreeItem = dock_match["item"]
+	var ancestor: TreeItem = scene_item
+	while ancestor != null:
+		ancestor.collapsed = false
+		ancestor = ancestor.get_parent()
+	scene_tree.set_selected(scene_item, 0)
+	scene_tree.ensure_cursor_is_visible()
+	scene_tree.queue_redraw()
+	await get_tree().process_frame
+	var dock_selected := scene_tree.get_selected() == scene_item
+	var editor_selected := target in EditorInterface.get_selection().get_selected_nodes()
+	return {"ok": dock_selected and editor_selected, "result": {
+		"scene_path": root.scene_file_path,
+		"node_path": node_path,
+		"node_name": str(target.name),
+		"node_class": target.get_class(),
+		"editor_selection_confirmed": editor_selected,
+		"scene_dock_selection_confirmed": dock_selected,
+		"ancestors_expanded": true
+	}}
+
+
+func _find_scene_dock_item(root: Node, target: Node, node_path: String) -> Dictionary:
+	var base := EditorInterface.get_base_control()
+	if base == null:
+		return {}
+	var trees := base.find_children("*", "Tree", true, false)
+	for candidate in trees:
+		if not candidate is Tree:
+			continue
+		var tree := candidate as Tree
+		var tree_root := tree.get_root()
+		if tree_root == null:
+			continue
+		var item := _find_scene_tree_item(tree_root, root, target, node_path, ".")
+		if item != null:
+			return {"tree": tree, "item": item}
+	return {}
+
+
+func _find_scene_tree_item(item: TreeItem, root: Node, target: Node, target_path: String, current_path: String) -> TreeItem:
+	var metadata: Variant = item.get_metadata(0)
+	if metadata is Node and metadata == target:
+		return item
+	if current_path == "." and target_path == "." and item.get_text(0) == str(root.name):
+		return item
+	var child := item.get_first_child()
+	while child != null:
+		var child_name := child.get_text(0)
+		var child_path := child_name if current_path == "." else current_path + "/" + child_name
+		if child_path == target_path and child_name == str(target.name):
+			return child
+		var match_item := _find_scene_tree_item(child, root, target, target_path, child_path)
+		if match_item != null:
+			return match_item
+		child = child.get_next()
+	return null
 
 
 func _inspect_current_scene() -> Dictionary:
