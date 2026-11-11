@@ -51,3 +51,15 @@ El resumen debe indicar, de forma breve y verificable:
 - Cualquier limitación que haya impedido probar una parte.
 
 **Principio clave:** primero se desarrolla y se prueba en el proyecto local con Godot Headless; después se refleja el resultado en GitHub usando la operación que corresponda. Se transfieren los archivos del proyecto cuando hace falta, no el motor Headless.
+
+## Obtener o actualizar la copia local desde GitHub
+
+Como Linux no tiene salida a Internet, al iniciar el trabajo o cuando la copia local no esté disponible/no corresponda al commit actual, primero se debe recuperar el contenido del repositorio mediante la integración de GitHub de ChatGPT.
+
+Para transferencias iniciales o amplias se utiliza el workflow `.github/workflows/export-headless-workspace.yml`, que crea un artefacto temporal con los archivos versionados del repositorio. ChatGPT descarga ese artefacto mediante la conexión de GitHub, lo materializa en el entorno de trabajo y lo extrae en la carpeta local de proyectos. Se verifica el SHA-256 y el commit de origen antes de abrir el proyecto con Godot Headless.
+
+El workflow no incluye el contenido de submódulos Git ni el motor Godot. Si una tarea necesita un submódulo o recurso externo concreto, se recupera por separado mediante una vía autorizada; no se asume que está presente en el archivo exportado.
+
+Para cambios pequeños o archivos puntuales, no hace falta volver a empaquetar todo el repositorio: se recuperan los archivos necesarios con la integración GitHub y se actualiza solo esa parte de la copia local. La copia local debe registrar el commit del que procede y mantenerse sincronizada con los cambios directos que se hagan en GitHub.
+
+El artefacto ZIP es solo un medio de transporte para una descarga inicial/masiva; no es el formato de trabajo ni un paquete que haya que generar en cada iteración.
