@@ -50,6 +50,7 @@ Rutas bajo `/v1/command-center`:
 - `POST /pair`: consume el código y registra o rota la credencial del dispositivo.
 - `POST /commands`: solo `agent_controller`; crea una orden idempotente para `web_editor` o `android_editor`. Las capturas visuales se restringen a `web_editor` y a `editor_2d`/`editor_3d`.
 - `GET /commands/next?target=web_editor|android_editor`: un editor reclama órdenes únicamente de su propio rol.
+- Acciones de navegación `scene.open` y `scene.select_node`: disponibles únicamente para `web_editor`, con rutas acotadas a escenas del proyecto y rutas de nodos relativas; no se permiten rutas absolutas ni traversal.
 - `POST /commands/{id}/heartbeat`: renueva el lease de la orden reclamada.
 - `POST /commands/{id}/result`: el editor confirma el resultado de su lease.
 - `GET /commands/{id}`: consulta estado y resultado con autorización de workspace.
@@ -78,6 +79,7 @@ El sandbox `examples/bridge-sandbox` incluye `addons/godot_command_center/plugin
 - Mantiene la credencial solo en memoria; no la escribe en el proyecto.
 - Consulta la cola cada dos segundos y confirma resultados.
 - La fase de lectura admite `ping`, `project.get_state`, `project.list_files`, `scene.inspect` y `script.read`.
+- La navegación de escenas admite `scene.open` (abre una ruta `.tscn`/`.scn` dentro de `res://`) y `scene.select_node` (selecciona una ruta relativa a la raíz de la escena abierta en el árbol real del panel Scene y expande sus antecesores).
 - La captura visual implementada en el plugin obtiene imágenes de los SubViewports 2D y 3D; solo codifica JPEG o PNG.
 - El plugin rechaza `editor_ui` y `game_preview` porque requieren captura del navegador, y rechaza `visual.zoom_to` hasta implementar restauración exacta de la vista.
 - El relay permite únicamente los objetivos `editor_2d` y `editor_3d`; el plugin sube la imagen por el proxy autenticado. El recorrido real captura → almacenamiento → recuperación todavía no se ha probado.
