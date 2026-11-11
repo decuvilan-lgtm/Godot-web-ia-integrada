@@ -54,7 +54,9 @@ class WebGithubImportPatcherTests(unittest.TestCase):
         source = (self.root / "engine/godot/editor/project_manager/project_manager.cpp").read_text()
         self.assertIn("HTTPRequest *github_http_request", header)
         self.assertIn("_github_download_completed", header)
-        self.assertIn("https://api.github.com/repos/", source)
+        self.assertIn("https://godot-web-ia-relay.onrender.com/v1/github/import/", source)
+        self.assertNotIn("api.github.com/repos/", source)
+        self.assertIn("set_body_size_limit(64 * 1024 * 1024)", source)
         self.assertIn('github_import_btn->set_text(TTRC("GitHub"))', source)
         self.assertIn("_install_project(github_zip_path, github_repo_name)", source)
 
