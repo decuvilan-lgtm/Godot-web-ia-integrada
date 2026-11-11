@@ -69,9 +69,10 @@ Complemento `examples/bridge-sandbox/addons/godot_command_center/plugin.gd`:
 - Rol `web_editor` validado por el servidor.
 - Token Bearer en memoria; no se guarda en el proyecto.
 - Polling de la cola durable y confirmación de resultados.
-- Acciones iniciales de solo lectura: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, `script.read`.
+- Acciones de consulta: `ping`, `project.get_state`, `project.list_files`, `scene.inspect`, `script.read`.
+- Navegación de interfaz acotada: `scene.open` y `scene.select_node`; permiten abrir una escena y seleccionar un nodo en el panel Scene sin modificar archivos ni contenido del proyecto.
 - Límites de archivos, nodos, profundidad y tamaño de scripts.
-- Sin escritura arbitraria, shell ni ejecución de procesos.
+- Sin escritura arbitraria, shell ni ejecución de procesos. La navegación de escenas solo cambia la escena activa y la selección del editor.
 
 El antiguo complemento WebSocket se conserva como referencia, pero no está habilitado en el sandbox por defecto.
 
