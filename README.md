@@ -94,18 +94,16 @@ El endpoint MCP previsto es `https://godot-web-ia-relay.onrender.com/mcp`. Acept
 
 El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada consulta crea solo una orden independiente; no crea un proyecto, workspace ni sesión. Se pueden encolar varias consultas sobre el mismo proyecto: cada una tiene su ID e idempotency key, y el editor las procesa en cola, una por una. Las órdenes pendientes tienen una ventana de expiración de 10 minutos. Las repeticiones de una misma consulta reutilizan su clave; las consultas nuevas usan claves nuevas, pero mantienen el mismo workspace. La selección/creación de otros proyectos será una acción explícita futura, nunca un efecto secundario de consultar.
 
-## Multi-proyecto en Godot Web
+## Importación de proyectos en Godot Web
 
-El Project Manager debe ser la pantalla de entrada después de pulsar **Iniciar Godot**. No debe abrir automáticamente el último proyecto ni sustituir la lista por el proyecto recién importado.
+Godot Web ya incluye su **Project Manager nativo**. La integración de GitHub debe aprovechar ese administrador existente, no crear otro catálogo ni una capa paralela para gestionar proyectos.
 
-- Mantener un catálogo con todos los proyectos registrados en el almacenamiento persistente del navegador.
-- Cada importación añade un proyecto independiente al catálogo; nunca sobrescribe ni cambia de forma implícita el proyecto activo.
-- Al volver al Project Manager, deben seguir apareciendo todos los proyectos disponibles para elegir cuál abrir.
-- Los datos y archivos de cada proyecto deben permanecer aislados. Cambiar de proyecto no debe mezclar escenas, recursos, ajustes ni estado del editor.
-- La prueba de aceptación debe importar un repositorio, pulsar **Install**, comprobar que el diálogo se cierra y verificar que el proyecto figura como entrada de la lista. También debe comprobar que un proyecto ya registrado no desaparece al importar otro.
-- “Todos los proyectos abiertos” significa que todos están disponibles en el administrador; no que se lancen simultáneamente varias instancias de editor dentro de una única pestaña.
+- El botón de importación de GitHub añade proyectos mediante el flujo nativo de instalación de Godot.
+- El Project Manager nativo sigue siendo el lugar para ver, seleccionar, abrir y administrar los proyectos.
+- Cada proyecto conserva su propia carpeta y configuración según el funcionamiento normal de Godot; no debemos implementar mecanismos duplicados para separarlos.
+- Se puede alternar entre distintos proyectos volviendo al Project Manager. Esto no implica ejecutar varios editores simultáneamente en una misma pestaña.
 
-La persistencia y restauración del catálogo en una nueva sesión del navegador deben probarse explícitamente; una lista visible solo durante la sesión actual no satisface el requisito.
+La validación debe comprobar que una importación termina correctamente y que el proyecto queda disponible en el Project Manager nativo.
 
 ## Verificaciones y límites
 
