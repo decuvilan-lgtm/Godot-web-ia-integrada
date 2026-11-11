@@ -9,7 +9,6 @@ Relay FastAPI para el Godot Command Center. Render transporta las peticiones; Ne
 - **Neon Object Storage:** bucket privado para bytes de capturas y archivos compartidos.
 - **Godot Web:** puesto aislado de la IA, rol `web_editor`.
 - **Godot Android:** puesto del usuario, rol `android_editor`.
-- **MCP:** interfaz estándar para hosts/agentes externos, rol `agent_controller`.
 
 ## Variables de entorno
 
@@ -31,26 +30,9 @@ No se guardan secretos en el repositorio. No registrar tokens, códigos temporal
 
 El puente efímero `/v1/sessions/*` y `/v1/editor/*` está desactivado por defecto. El único puente de producción es Command Center HTTP + Neon.
 
-## Servidor MCP remoto
+## Control desde ChatGPT
 
-Endpoint Streamable HTTP:
-
-`https://godot-web-ia-relay.onrender.com/mcp`
-
-El MCP exige `Authorization: Bearer <credencial de dispositivo>` y solo acepta dispositivos `agent_controller`. El token se valida contra el hash guardado en Neon en cada petición. El middleware rechaza credenciales ausentes, inválidas, revocadas o de otro rol antes de procesar MCP.
-
-Herramientas:
-
-- `godot_workspace_status`
-- `godot_enqueue_command`
-- `godot_command_status`
-- `godot_list_recent_commands`
-
-El MCP comparte la misma cola `command_center.commands` que la API REST. El destino de los comandos MCP está fijado a `web_editor`. La idempotencia, los límites de tamaño y la política de comandos se validan antes de insertar. El servidor no crea workspaces ni sesiones por consulta.
-
-La política permite las cinco acciones de lectura del plugin y las capturas `visual.capture` / `visual.capture_sequence` para `editor_2d` y `editor_3d`. No permite escritura, shell, ejecución de procesos ni zoom de coordenadas.
-
-**Importante:** el despliegue de un servidor MCP no lo registra automáticamente en ChatGPT. Un host externo compatible debe configurarlo y recibir una credencial `agent_controller` por el flujo de emparejamiento. No generar códigos hasta que el cliente esté listo.
+Las modificaciones del repositorio se realizan mediante la integración de GitHub. El editor web conserva su cliente HTTP del Command Center para sincronización y observación; no hay un runtime de ChatGPT conectado directamente a la cola.
 
 ## Emparejamiento
 
