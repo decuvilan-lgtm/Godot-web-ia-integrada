@@ -1,7 +1,7 @@
 # ChatGPT ↔ GitHub Bridge
 
 This is a deliberately limited bridge for ChatGPT sessions that can use the connected
-GitHub repository integration but cannot register this project's custom MCP endpoint.
+GitHub repository integration.
 
 ## Flow
 
@@ -12,8 +12,7 @@ GitHub repository integration but cannot register this project's custom MCP endp
 4. The runner posts a machine-readable result as an issue comment.
 5. ChatGPT fetches the issue and its comments through the GitHub connector.
 
-This is asynchronous GitHub Actions execution, not a direct MCP connection, not a
-persistent local agent, and not a live view of the Godot editor.
+This is asynchronous GitHub Actions execution, not a persistent local agent or a live view of the Godot editor.
 
 ## Protocol v1
 
@@ -59,5 +58,5 @@ commands, arbitrary paths, code, secrets, or free-form execution instructions.
 ## Security
 
 The workflow grants only `contents: read` and `issues: write`. It does not receive
-Render, Neon, S3, MCP, or device credentials. The runner checks out `main`, not
+Render, Neon, S3, or device credentials. The runner checks out `main`, not
 the task issue's branch. No issue content is evaluated as code or passed to a shell.
