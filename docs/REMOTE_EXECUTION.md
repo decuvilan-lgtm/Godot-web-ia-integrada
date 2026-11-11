@@ -2,12 +2,12 @@
 
 ## Provider priority
 
-The Relay dispatches fixed, allowlisted Godot tasks in this order:
+The repository supports fixed, allowlisted Godot validation tasks through its CI providers:
 
-1. **CircleCI — primary executor.** Triggered directly through the CircleCI API.
-2. **GitHub Actions — fallback executor.** Used when CircleCI is not configured or its dispatch API is unavailable.
+1. **GitHub Actions — standard path.** Manually dispatched from the repository Actions page.
+2. **CircleCI — optional path.** Triggered manually from the connected CircleCI project.
 
-Both providers run the same version-pinned Godot binary and the same repository script. They do not run arbitrary shell commands supplied by MCP.
+Both providers run the same version-pinned Godot binary and the same repository script. They do not accept arbitrary shell commands or paths.
 
 ## Fixed task profiles
 
@@ -16,19 +16,9 @@ Both providers run the same version-pinned Godot binary and the same repository 
 
 The current audit target is deliberately fixed to `examples/bridge-sandbox`, which includes a synthetic 3D fixture (mesh, material, camera, directional light, static and character physics bodies with box/capsule collision shapes, and a keyed AnimationPlayer track) so the audit proves it can read non-zero spatial, physics, and animation data. It is an infrastructure validation target, not yet the user's actual game workspace. The next integration step is to transfer a versioned project snapshot into an isolated runner workspace and run these profiles against that snapshot.
 
-## Required Render environment variables
+## Manual dispatch
 
-Set these as encrypted environment variables on the existing Relay service only after creating/configuring the CircleCI project:
-
-- `CIRCLECI_TOKEN`: CircleCI personal/API token with access only to this project.
-- `CIRCLECI_PROJECT_SLUG`: e.g. `gh/organization/repository`.
-
-Fallback variables:
-
-- `GITHUB_ACTIONS_TOKEN`: fine-grained GitHub token restricted to this repository, with Actions read/write and Contents read permissions.
-- `GITHUB_ACTIONS_REPOSITORY`: optional; defaults to `decuvilan-lgtm/Godot-web-ia-integrada`.
-
-Never commit tokens or put them in pipeline parameters. No automatic credit refill or paid upgrade should be enabled. CircleCI Free currently has a monthly credit allowance; when it is exhausted, tasks stop until the next reset. GitHub Actions remains the secondary provider and is also subject to its plan limits.
+For GitHub Actions, open the repository's `Actions` tab, choose `Remote Godot task`, select one fixed profile, provide a correlation ID, and run the workflow. The workflow checks out `main`, executes the pinned Godot task script, and uploads the evidence artifact. No Relay token or custom controller service is involved.
 
 ## CircleCI setup
 
@@ -36,7 +26,7 @@ Never commit tokens or put them in pipeline parameters. No automatic credit refi
 2. Confirm the repository uses `.circleci/config.yml` from the `main` branch.
 3. Add the CircleCI project slug and API token to Render's Relay environment.
 4. Keep the account on the Free plan and do not add a paid credit package.
-5. Deploy the Relay after the secrets are configured.
+5. Run the CircleCI pipeline manually when needed; the Relay does not dispatch it.
 
 The Relay exposes authenticated MCP tools `godot_execution_providers`, `godot_start_task`, and `godot_task_status`. The provider status tool reveals only whether the required variables are configured and their non-secret project/repository identifiers; it never returns token values. Status responses include available job artifacts and their metadata. A paired `agent_controller` is required. The status tool only reads executions from the configured provider project/repository.
 
