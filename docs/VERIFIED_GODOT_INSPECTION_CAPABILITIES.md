@@ -72,3 +72,12 @@ Cada capacidad futura debe etiquetarse como **Implementada**, **Probada**, **Apr
 - Commit de prueba: [b04ccb07c78aea2bd09d4a74b53e2ea267242595](https://github.com/gavilandavid89-pixel/Escondite/commit/b04ccb07c78aea2bd09d4a74b53e2ea267242595).
 - Validaciones disparadas por ese commit: [Visual QA run 43110383661](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110383661) y [Headless source export run 43110383804](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110383804).
 - Estado al documentar: **Pendiente de resultado**. No marcar la selección de nodos hijos como aprobada hasta que Visual QA termine y se compruebe el total de comandos y capturas.
+
+
+## Resultado de la ejecución y corrección de sintaxis (11 de noviembre de 2026)
+
+- Visual QA [run 43110383661](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110383661) terminó en fallo. Las etapas de importación, integración, las 7 regresiones y las capturas del juego terminaron correctamente.
+- El paso de inspección del editor no llegó a ejecutar el puente: GDScript rechazó la expresión que intentaba usar size()/get() sobre StringName al procesar NodePath. Por tanto, ese run no prueba el comportamiento de la espera de nodos.
+- Se corrigió el acceso al último segmento usando NodePath.get_name_count() y NodePath.get_name(). Commit: [5f354c75356d0fc55708e3fab4f061cc79269ff5](https://github.com/gavilandavid89-pixel/Escondite/commit/5f354c75356d0fc55708e3fab4f061cc79269ff5).
+- Nueva validación pendiente: [Visual QA run 43110764363](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110764363) y [Headless export run 43110764430](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43110764430).
+- Estado actual: **Pendiente**. No afirmar que la inspección de nodos hijos funciona hasta revisar el nuevo run, el número de comandos verificados y las capturas generadas.
