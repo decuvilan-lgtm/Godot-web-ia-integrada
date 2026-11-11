@@ -80,6 +80,7 @@ jobs:
           path: |
             patched-godot-web-project-manager.png
             patched-godot-web-github-import.png
+            patched-godot-web-install-confirmation.png
             patched-godot-web-diagnostics.json
           if-no-files-found: warn
           retention-days: 7
