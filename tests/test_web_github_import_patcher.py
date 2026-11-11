@@ -57,6 +57,11 @@ class WebGithubImportPatcherTests(unittest.TestCase):
         self.assertIn("https://godot-web-ia-relay.onrender.com/v1/github/import/", source)
         self.assertNotIn("api.github.com/repos/", source)
         self.assertIn("set_body_size_limit(64 * 1024 * 1024)", source)
+        # Web HTTPClient reports unknown response lengths; do not use HTTPRequest's
+        # download-to-file path, which removes successful unknown-length downloads.
+        self.assertNotIn("set_download_file(github_zip_path)", source)
+        self.assertIn("zip_file->store_buffer(p_body.ptr(), p_body.size())", source)
+        self.assertIn("request result %d, HTTP %d", source)
         self.assertIn('github_import_btn->set_text(TTRC("GitHub"))', source)
         self.assertIn("_install_project(github_zip_path, github_repo_name)", source)
 
