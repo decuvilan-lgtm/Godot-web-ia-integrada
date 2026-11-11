@@ -8,6 +8,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -103,7 +104,7 @@ def main():
                             {"url": req.url, "failure": req.failure}))
                         page.on("response", lambda res: diagnostics["responses"].append(
                             {"status": res.status, "url": res.url}) if any(x in res.url for x in
-                            ("godot.editor", ".wasm", ".worker", ".js", "api.github.com")) else None)
+                            ("godot.editor", ".wasm", ".worker", ".js", "api.github.com", "127.0.0.1:8766")) else None)
 
                         response = page.goto("http://127.0.0.1:8765/godot.editor.html",
                                              wait_until="domcontentloaded", timeout=60000)
