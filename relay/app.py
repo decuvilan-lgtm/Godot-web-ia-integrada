@@ -25,7 +25,7 @@ SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 LEGACY_BRIDGE_ENABLED = os.environ.get("RELAY_LEGACY_BRIDGE_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
 MAX_PENDING = 64
 MAX_MESSAGE_BYTES = 256 * 1024
-ALLOWED_ACTIONS = {"ping", "project.get_state", "project.list_files", "scene.inspect", "script.read"}
+ALLOWED_ACTIONS = {"ping", "project.get_state", "project.list_files", "scene.inspect", "scene.open", "scene.select_node", "script.read"}
 
 app = FastAPI(title="Godot Web IA Relay", version=APP_VERSION)
 app.add_middleware(
