@@ -1,0 +1,39 @@
+name: Export Headless Workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/export-headless-workspace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Package tracked repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          git archive --format=tar HEAD | gzip -9 > export/godot-web-ia-integrada-source.tar.gz
+          sha256sum export/godot-web-ia-integrada-source.tar.gz > export/SHA256SUMS
+          printf 'Commit: %s\n' "$(git rev-parse HEAD)" > export/REVISION.txt
+          printf 'Godot project: examples/bridge-sandbox/project.godot\n' >> export/REVISION.txt
+          tar -tzf export/godot-web-ia-integrada-source.tar.gz | head -80
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-workspace-${{ github.sha }}
+          path: export/
+          if-no-files-found: error
+          retention-days: 7
