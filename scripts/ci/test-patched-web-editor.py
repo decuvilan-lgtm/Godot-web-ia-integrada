@@ -19,6 +19,7 @@ from playwright.sync_api import sync_playwright
 BUNDLE = pathlib.Path("engine/godot/bin/godot.web.editor.wasm32.zip")
 SCREENSHOT = pathlib.Path("patched-godot-web-project-manager.png")
 IMPORT_SCREENSHOT = pathlib.Path("patched-godot-web-github-import.png")
+INSTALL_SCREENSHOT = pathlib.Path("patched-godot-web-install-confirmation.png")
 DIAGNOSTICS = pathlib.Path("patched-godot-web-diagnostics.json")
 TEST_REPOSITORY = "MCMLXXXV/godot-minimal-template"
 EXPECTED_PROJECT_TEXT = ("godot minimal project template", "godot-minimal-template")
@@ -70,7 +71,7 @@ def main():
             diagnostics = {
                 "bundle_sha256": digest, "browser_console": [], "page_errors": [],
                 "failed_requests": [], "responses": [], "startup_actions": [],
-                "github_import": {"repository": TEST_REPOSITORY, "attempted": False, "passed": False},
+                "github_import": {"repository": TEST_REPOSITORY, "attempted": False, "passed": False, "install_dialog_seen": False, "install_clicked": False, "project_listed": False},
             }
             relay_log = pathlib.Path("github-import-relay.log").open("w", encoding="utf-8")
             relay_env = os.environ.copy()
@@ -173,30 +174,73 @@ def main():
                         diagnostics["github_import"]["attempted"] = True
                         diagnostics["github_import"]["input"] = TEST_REPOSITORY
 
-                        deadline = time.monotonic() + 150
-                        observed = ""
-                        while time.monotonic() < deadline:
+                        # First prove that Godot reached its native Install Project confirmation.
+                        # The repository name alone is NOT sufficient: it also appears in this modal.
+                        install_deadline = time.monotonic() + 180
+                        install_ocr = ""
+                        while time.monotonic() < install_deadline:
+                            page.wait_for_timeout(2000)
+                            install_ocr = canvas_text(page)
+                            has_project_name = any(term in install_ocr for term in EXPECTED_PROJECT_TEXT)
+                            has_install_context = (
+                                "install project" in install_ocr
+                                or ("project path" in install_ocr and "install" in install_ocr)
+                            )
+                            if has_project_name and has_install_context:
+                                diagnostics["github_import"]["install_dialog_seen"] = True
+                                break
+                            if diagnostics["page_errors"]:
+                                break
+                        diagnostics["github_import"]["install_dialog_ocr"] = install_ocr[:4000]
+                        page.screenshot(path=str(INSTALL_SCREENSHOT), full_page=True)
+                        if not diagnostics["github_import"]["install_dialog_seen"]:
+                            raise RuntimeError(
+                                "GitHub archive download did not reach Godot's Install Project confirmation."
+                            )
+
+                        # Fixed 1440x900 Chromium viewport. This is the center of Godot's
+                        # native Install button in the confirmation dialog. Use a real click,
+                        # then prove the modal closes and the project appears in the list.
+                        page.mouse.click(818, 584)
+                        diagnostics["github_import"]["install_clicked"] = True
+
+                        list_deadline = time.monotonic() + 180
+                        final_ocr = ""
+                        while time.monotonic() < list_deadline:
                             page.wait_for_timeout(2500)
-                            observed = canvas_text(page)
-                            if any(term in observed for term in EXPECTED_PROJECT_TEXT):
+                            final_ocr = canvas_text(page)
+                            normalized = "".join(ch for ch in final_ocr if ch.isalnum())
+                            modal_still_open = (
+                                "installproject" in normalized
+                                or "projectpath" in normalized
+                            )
+                            project_name_visible = (
+                                "godotminimaltemplate" in normalized
+                                or "godotmininaltemplate" in normalized
+                            )
+                            # The name must be visible after the confirmation modal has
+                            # disappeared. This prevents the previous false positive.
+                            if project_name_visible and not modal_still_open:
+                                diagnostics["github_import"]["project_listed"] = True
                                 diagnostics["github_import"]["passed"] = True
                                 break
                             if diagnostics["page_errors"]:
                                 break
-                        diagnostics["github_import"]["ocr_text"] = observed[:4000]
+
+                        diagnostics["github_import"]["final_ocr_text"] = final_ocr[:5000]
                         diagnostics["github_import"]["responses"] = [
                             item for item in diagnostics["responses"]
                             if "127.0.0.1:8766/v1/github/import/" in item["url"]
                         ]
                         page.screenshot(path=str(SCREENSHOT), full_page=True)
-                        if not diagnostics["github_import"]["passed"]:
+                        if not diagnostics["github_import"]["project_listed"]:
                             raise RuntimeError(
-                                "GitHub import was triggered but the imported project did not appear "
-                                "in the Project Manager before timeout. Inspect GitHub import screenshot "
-                                "and OCR diagnostics."
+                                "Install was clicked, but the project was not confirmed in the "
+                                "Project Manager list after the install dialog closed. Inspect "
+                                "install-confirmation and final Project Manager screenshots/OCR."
                             )
                         if not any(item["status"] == 200 for item in diagnostics["github_import"]["responses"]):
-                            raise RuntimeError("Project appeared but no successful Relay archive response was recorded")
+                            raise RuntimeError("Project was listed but no successful Relay archive response was recorded")
                         print(f"GitHub repository import passed: {TEST_REPOSITORY}")
                     finally:
                         browser.close()
