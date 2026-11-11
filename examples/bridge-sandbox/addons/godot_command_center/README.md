@@ -19,12 +19,14 @@ El campo **API HTTPS** ya apunta al Relay de producción. Solo cámbialo para un
 - Emparejamiento seguro con credencial del dispositivo mantenida en memoria.
 - Recepción de órdenes durables y confirmación de resultados.
 - Inspección de estado del proyecto, lista de archivos, escenas y lectura de scripts.
+- Navegación de solo lectura por escenas: abrir una escena del proyecto, inspeccionar su árbol y seleccionar un nodo concreto en el panel Scene, desplegando sus antecesores y verificando la selección.
 - Captura de los SubViewports `editor_2d` y `editor_3d`, con subida a Neon mediante el proxy autenticado de Render.
 - Secuencias de imágenes en tiempo real, con cada fotograma como activo independiente.
 
 ## Límites deliberados
 
-- Es de solo lectura: no escribe archivos, no modifica escenas y no ejecuta comandos del sistema.
+- La navegación puede cambiar la pestaña de escena activa y la selección del editor, pero no escribe archivos ni modifica el contenido del proyecto.
+- No ejecuta comandos del sistema ni ofrece shell remoto.
 - No captura todavía la interfaz completa del editor ni la vista de juego.
 - No implementa zoom con restauración exacta de la vista.
 - WebP y hojas de contacto se rechazan antes de encolar la orden.
