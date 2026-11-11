@@ -27,6 +27,7 @@ No se guardan secretos en el repositorio. No registrar tokens, códigos temporal
 - `/v1/command-center/*`: emparejamiento, órdenes, leases, resultados y consulta.
 - `/v1/command-center/visual/*`: transferencias autenticadas de capturas.
 - `/v1/command-center/projects/*`: sincronización de proyectos compartidos.
+- `GET /v1/github/import/{owner}/{repo}`: descarga acotada de repositorios públicos; el Relay valida la visibilidad pública y sigue únicamente redirecciones a `codeload.github.com`.
 - `/command-center/admin`: página same-origin para emitir códigos temporales.
 
 El puente efímero `/v1/sessions/*` y `/v1/editor/*` está desactivado por defecto. El único puente de producción es Command Center HTTP + Neon.
@@ -68,5 +69,6 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 - Las órdenes expiran a los 10 minutos; los leases se renuevan por el editor.
 - La misma clave idempotente con el mismo contenido devuelve la orden existente; reutilizarla con contenido diferente produce conflicto.
 - El bucket de capturas permanece privado. El navegador no recibe credenciales S3.
+- El proxy GitHub acepta solo nombres owner/repository, limita los ZIP a 64 MiB, aplica un límite de 8 solicitudes por IP cada 10 minutos y mantiene un máximo de 3 descargas concurrentes. No acepta URLs arbitrarias ni tokens GitHub.
 - No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
 - Mantener Render en el plan Free.
