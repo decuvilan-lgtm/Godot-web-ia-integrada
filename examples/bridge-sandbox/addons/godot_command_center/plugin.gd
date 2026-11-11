@@ -607,7 +607,7 @@ func _open_scene(args: Dictionary) -> Dictionary:
 
 
 func _is_safe_scene_path(path: String) -> bool:
-	if path.length() > 512 or not path.begins_with("res://") or path.contains("..") or path.contains("\\") or path.contains(":"):
+	if path.length() > 512 or not path.begins_with("res://") or path.contains("..") or path.contains("\\"):
 		return false
 	var extension := path.get_extension().to_lower()
 	return extension in ["tscn", "scn"]
@@ -662,7 +662,7 @@ func _find_scene_dock_item(root: Node, target: Node, node_path: String) -> Dicti
 		return {}
 	var trees := base.find_children("*", "Tree", true, false)
 	for candidate in trees:
-		if not candidate is Tree:
+		if not (candidate is Tree):
 			continue
 		var tree := candidate as Tree
 		var tree_root := tree.get_root()
