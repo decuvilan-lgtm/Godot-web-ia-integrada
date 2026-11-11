@@ -26,7 +26,7 @@ REQUIRED = (
     b"Import from GitHub",
     b"Enter a public GitHub repository URL or owner/repository.",
     b"Invalid repository. Use https://github.com/owner/repository.",
-    b"GitHub download failed (HTTP %d).",
+    b"GitHub download failed (request result %d, HTTP %d). Check the repository URL and connection.",
 )
 
 class IsolatedHandler(http.server.SimpleHTTPRequestHandler):
