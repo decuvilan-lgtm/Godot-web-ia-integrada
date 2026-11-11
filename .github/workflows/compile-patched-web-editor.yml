@@ -7,15 +7,12 @@ on:
       - "engine/godot"
       - "scripts/apply-web-github-import.py"
       - "scripts/prepare-engine-source.sh"
-      - "scripts/ci/test-patched-web-editor.py"
-      - ".github/workflows/compile-patched-web-editor.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never terminate a long native engine build just because another check starts.
-# Scope concurrency to this workflow and PR; keep an active build running.
+# Keep expensive source builds separate from test-harness-only changes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
