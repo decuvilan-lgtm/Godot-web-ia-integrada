@@ -87,19 +87,13 @@ El PR #3 del repositorio `Godot-engine4-v4.7.2-stable-difusion-modificado` incor
 
 Este cliente se añade mediante el flujo reproducible del repositorio Android. Ese repositorio descarga upstream Godot 4.7.2-stable durante el workflow y aplica parches versionados; no se debe editar una copia temporal del motor.
 
-### 4. Relay FastAPI, Neon y MCP
+### 4. Relay FastAPI y Neon
 
 - Render Relay ejecuta FastAPI y es transporte; Neon Postgres es la fuente de verdad.
 - El Command Center está desplegado y usa el esquema `command_center`, el workspace `default` y la cola durable con idempotencia, leases y resultados.
-- El commit `48034bc16e8f9337fd5fffb85c54f705d2e1996e` añade un endpoint MCP Streamable HTTP en `/mcp`, usando el SDK oficial `mcp==2.3.0`. CI terminó correctamente; el despliegue de este commit en Render debe confirmarse por separado.
-- MCP valida en cada petición la credencial Bearer emparejada y exige el rol `agent_controller`. No acepta tokens de los editores Web o Android.
-- MCP reutiliza el pool de Neon y la misma tabla `commands`; no crea una cola alternativa. Sus herramientas permiten consultar dispositivos, encolar comandos allowlisted y leer resultados.
-- El destino de las herramientas MCP está fijado a `web_editor`; no se puede seleccionar el editor Android desde esa interfaz.
 - El puente WebSocket efímero anterior queda desactivado por defecto mediante `RELAY_LEGACY_BRIDGE_ENABLED=false`. El Command Center HTTP/Neon es el único puente de producción.
 - No se habilitan escritura arbitraria, shell ni ejecución de procesos. Las órdenes disponibles siguen siendo de lectura y captura visual soportada.
-- La API falla de forma cerrada si Neon no está configurado; el pool es compartido por REST y MCP. El bucket privado y las credenciales S3 solo se usan desde el relay.
 
-**Límite importante:** desplegar un servidor MCP no lo registra automáticamente dentro de ChatGPT. Para que un host externo lo invoque, debe configurarse como servidor MCP remoto y recibir una credencial de un dispositivo `agent_controller`. La conexión de ChatGPT a ese servidor todavía requiere una integración compatible y autorizada.
  
 ## Separación de datos y seguridad
 
@@ -124,12 +118,9 @@ Invariantes:
 
 ## Próximas fases
 
-1. Confirmar que Render desplegó el commit con el endpoint MCP y comprobar `/health` y `/mcp`.
 2. Abrir `examples/bridge-sandbox` en Godot Web, confirmar el dock y emparejar solo el dispositivo `web_editor`.
-3. Crear y emparejar el controlador `agent_controller` cuando el cliente MCP externo esté listo; no generar códigos antes de ese momento.
 4. Ejecutar una prueba de extremo a extremo: `godot_enqueue_command` → polling del editor → resultado → `godot_command_status`.
 5. Realizar una captura real y comprobar almacenamiento privado, metadatos, hash y recuperación.
-6. Integrar el MCP con un host externo compatible. La mera existencia del endpoint no equivale a que ChatGPT ya lo tenga registrado.
 7. Completar propuestas, diffs, validación, snapshots, aprobación y rollback antes de habilitar operaciones mutantes.
 8. Probar suspensión/reinicio del relay, reconexión, idempotencia, credenciales revocadas y aislamiento entre workspaces.
 
