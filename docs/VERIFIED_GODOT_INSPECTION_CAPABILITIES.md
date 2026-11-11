@@ -31,7 +31,7 @@ Este documento registra capacidades que ya se ejecutaron y observaron en CI usan
 |---|---|---|
 | [43106936057](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43106936057) | Correcto | 32 comandos verificados; 32 vistas capturadas; ventana y pantalla completa |
 | [43107522110](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43107522110) | Correcto | Suite headless/regresión, capturas y 32 inspecciones completadas |
-| [43108334454](https://github.com/gavilandavid-pixel/Escondite/actions/runs/43108334454) | Fallido parcialmente | Las validaciones y capturas de juego pasan; inspección se detiene en el tercer comando |
+| [43108334454](https://github.com/gavilandavid89-pixel/Escondite/actions/runs/43108334454) | Fallido parcialmente | Las validaciones y capturas de juego pasan; inspección se detiene en el tercer comando |
 
 ## Fallo conocido y límites actuales
 
