@@ -237,6 +237,39 @@ class RelayApiTests(unittest.TestCase):
         self.assertNotIn("script.write", READ_ONLY_ACTIONS)
         self.assertNotIn("shell.execute", READ_ONLY_ACTIONS)
 
+    def test_scene_navigation_commands_are_allowlisted_and_path_bounded(self):
+        from command_center import ALLOWED_ACTIONS, SCENE_NAVIGATION_ACTIONS, validate_scene_navigation_command
+
+        self.assertEqual(SCENE_NAVIGATION_ACTIONS, {"scene.open", "scene.select_node"})
+        self.assertTrue(SCENE_NAVIGATION_ACTIONS.issubset(ALLOWED_ACTIONS))
+        validate_scene_navigation_command("scene.open", {"path": "res://scenes/actors/hero.tscn"})
+        validate_scene_navigation_command("scene.select_node", {"node_path": "Hero/CollisionShape2D"})
+        validate_scene_navigation_command("scene.select_node", {"node_path": "."})
+
+        invalid_open_args = [
+            {"path": "/etc/passwd.tscn"},
+            {"path": "res://../../outside.tscn"},
+            {"path": "res://scenes/actor.gd"},
+            {"path": "res://scenes\\\\actor.tscn"},
+            {"path": "res://scene.tscn", "extra": True},
+        ]
+        for args in invalid_open_args:
+            with self.subTest(action="scene.open", args=args):
+                with self.assertRaises(HTTPException):
+                    validate_scene_navigation_command("scene.open", args)
+
+        invalid_node_args = [
+            {"node_path": "../Outside"},
+            {"node_path": "/Root/Child"},
+            {"node_path": "Root//Child"},
+            {"node_path": "Root:property"},
+            {"node_path": ""},
+        ]
+        for args in invalid_node_args:
+            with self.subTest(action="scene.select_node", args=args):
+                with self.assertRaises(HTTPException):
+                    validate_scene_navigation_command("scene.select_node", args)
+
     def test_visual_zoom_is_rejected_before_queue_until_restoration_is_ready(self):
         identity = {
             "id": "agent-controller-test",
