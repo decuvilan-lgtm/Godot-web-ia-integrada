@@ -26,7 +26,7 @@ jobs:
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
       - name: Test mobile shell patcher
         run: python -m unittest scripts/test_patch_web_shell.py -v
-      - name: Package and validate bridge sandbox
+      - name: Test interactive gameplay controller\n        run: |\n          node --check scripts/gameplay-test-controller.cjs\n          node scripts/test-gameplay-test-controller.cjs\n      - name: Package and validate bridge sandbox
         run: |
           python scripts/package-bridge-sandbox.py
           unzip -t public/bridge-sandbox.zip
