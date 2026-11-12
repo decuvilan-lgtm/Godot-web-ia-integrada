@@ -29,7 +29,8 @@ jobs:
       - name: Test interactive gameplay controller
         run: |
           node --check scripts/gameplay-test-controller.cjs
-          node scripts/test-gameplay-test-controller.cjs\n      - name: Package and validate bridge sandbox
+          node scripts/test-gameplay-test-controller.cjs
+      - name: Package and validate bridge sandbox
         run: |
           python scripts/package-bridge-sandbox.py
           unzip -t public/bridge-sandbox.zip
