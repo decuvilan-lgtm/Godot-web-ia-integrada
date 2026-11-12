@@ -26,9 +26,9 @@ echo "${EXPECTED_SHA256}  ${ARCHIVE_PATH}" | sha256sum --check -
 
 unzip -q "${ARCHIVE_PATH}" -d "${WORK_DIR}/unpacked"
 
-EDITOR_HTML="$(find "${WORK_DIR}/unpacked" -type f -name 'index.html' -print -quit)"
+EDITOR_HTML="$(find "${WORK_DIR}/unpacked" -type f -name 'godot.editor.html' -print -quit)"
 if [[ -z "${EDITOR_HTML}" ]]; then
-  echo "ERROR: the official archive contains no index.html entry point" >&2
+  echo "ERROR: the official archive contains no godot.editor.html entry point" >&2
   find "${WORK_DIR}/unpacked" -maxdepth 3 -type f -print >&2
   exit 1
 fi
