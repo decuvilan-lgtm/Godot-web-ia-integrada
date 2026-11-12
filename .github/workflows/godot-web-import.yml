@@ -376,7 +376,7 @@ jobs:
               result.openedProjectPath = openedProjectEvent ? (openedProjectEvent.text.match(/Editing project: (.+)$/)?.[1] || null) : null;
               result.projectInstallConfirmed = Boolean(editorLaunchConfirmed && result.openedProjectPath);
               if (!result.projectInstallConfirmed) throw new Error(`No se confirmó que Godot abriera el proyecto "${repo}". No se acepta el clic como prueba de instalación.`);
-              await page.waitForTimeout(15000);
+              await page.waitForTimeout(10000);
               try {
                 result.rendererResponsive = await Promise.race([
                   page.evaluate(() => ({
@@ -390,52 +390,42 @@ jobs:
                 result.rendererResponsive = false;
                 result.rendererWarning = String(probeError);
               }
-              result.status = 'functional-launch-only';
-              result.finishedAt = new Date().toISOString();
-              fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
-              fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
-              console.log('Godot informó que abrió el proyecto; la captura visual es obligatoria para aprobar la prueba completa.');
-              try {
-                if (!result.rendererResponsive) {
-                  // Avoid CDP screenshot requests when Godot blocks the WASM main thread.
-                  result.editorSequence = await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
-                  const editorScan = inspectImage('artifacts/editor-sequence-01.png');
-                  result.editorScreenshot = 'captured-x11';
-                  result.editorOcr = editorScan.text;
-                  result.editorUiDetected = /2D|3D|Script|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(editorScan.text);
-                  result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
-                  result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
-                  fs.writeFileSync('artifacts/godot-editor-open.png', fs.readFileSync('artifacts/editor-sequence-01.png'));
-                  fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
-                  if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
-                    throw new Error('Godot registró la apertura, pero X11 no detectó una interfaz de editor visible. OCR: ' + editorScan.text);
-                  }
-                  result.gamePreviewScreenshot = 'skipped-renderer-unresponsive';
-                } else {
-                // Use the Chrome DevTools protocol directly. Playwright's screenshot helper
-                // injects a stylesheet through page JS, which can hang if Godot's WASM
-                // main thread is busy during editor initialization.
-                const cdp = await page.context().newCDPSession(page);
-                const captured = await Promise.race([
-                  cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timeout')), 25000))
-                ]);
-                fs.writeFileSync('artifacts/godot-editor-open.png', Buffer.from(captured.data, 'base64'));
-                await cdp.detach();
-                const editorScan = inspectImage('artifacts/godot-editor-open.png');
-                result.editorScreenshot = 'captured';
-                result.editorOcr = editorScan.text;
-                result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-                result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
-                fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
 
-                result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
-                if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
-                  throw new Error('La captura no demuestra una interfaz de editor visible para el proyecto abierto. OCR: ' + editorScan.text);
-                }
-                result.editorSequence = await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs);
-                // Optional game-preview probe: F5 runs the project's configured main scene.
-                // Failure here must not invalidate the verified editor screenshot.
+              // El editor WASM puede tardar varios segundos adicionales en pintar su UI
+              // aunque el log "Editing project" ya haya aparecido. Esperar y volver a
+              // inspeccionar X11 evita clasificar como fallo una captura tomada demasiado pronto.
+              const editorReadyDeadline = Date.now() + 45000;
+              let editorScan = null;
+              let editorReady = false;
+              while (Date.now() < editorReadyDeadline) {
+                execFileSync('import', ['-window', 'root', 'artifacts/godot-editor-open.png'], { timeout: 15000 });
+                editorScan = inspectImage('artifacts/godot-editor-open.png');
+                editorReady = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(editorScan.text);
+                if (editorReady) break;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+              result.editorScreenshot = editorReady ? 'captured-x11-after-readiness-wait' : 'failed';
+              result.editorOcr = editorScan?.text || '';
+              result.editorUiDetected = editorReady;
+              result.projectNameVisible = normalizeLabel(editorScan?.text || '').includes(normalizedProjectLabel);
+              result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
+              fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan || {}, null, 2));
+              if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
+                throw new Error('Godot registró la apertura, pero no se detectó una interfaz de editor visible tras 45 segundos de reintentos X11. OCR: ' + (editorScan?.text || 'sin OCR'));
+              }
+
+              result.editorSequence = await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
+              const resourceErrors = events.filter(event =>
+                event.type === 'console:error' &&
+                /Parse Error:|Failed loading resource:/i.test(event.text || '')
+              );
+              result.projectResourceWarnings = resourceErrors.map(event => event.text);
+              result.projectHasResourceWarnings = resourceErrors.length > 0;
+
+              // F5 es una comprobación secundaria: no se ejecuta si el hilo WASM no responde.
+              if (!result.rendererResponsive) {
+                result.gamePreviewScreenshot = 'skipped-renderer-unresponsive';
+              } else {
                 try {
                   const previewCdp = await page.context().newCDPSession(page);
                   await previewCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
@@ -456,37 +446,8 @@ jobs:
                   result.gamePreviewScreenshot = 'warning';
                   result.gamePreviewWarning = String(previewError);
                 }
-                }
-              } catch (captureError) {
-                result.captureWarning = String(captureError);
-                // A partial sequence is a real test failure, not a reason to silently
-                // downgrade the result to a single X11 screenshot.
-                if (String(captureError).includes('Secuencia incompleta')) throw captureError;
-                // Last-resort capture from the X11 desktop. This does not need
-                // JavaScript execution or a responsive Chromium renderer.
-                try {
-                  execFileSync('import', ['-window', 'root', 'artifacts/godot-editor-open.png'], { timeout: 15000 });
-                  const editorScan = inspectImage('artifacts/godot-editor-open.png');
-                  result.editorScreenshot = 'captured-x11';
-                  result.editorOcr = editorScan.text;
-                  result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-                  result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
-                  fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
-                  result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
-                  if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
-                    throw new Error('X11 capturó la pantalla, pero no encontró una interfaz de editor visible. OCR: ' + editorScan.text);
-                  }
-                } catch (x11Error) {
-                  result.editorScreenshot = 'failed';
-                  result.x11CaptureWarning = String(x11Error);
-                  result.status = 'failed';
-                  result.finishedAt = new Date().toISOString();
-                  fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
-                  fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
-                  throw x11Error;
-                }
               }
-              result.status = 'passed';
+              result.status = result.projectHasResourceWarnings ? 'passed-with-project-warnings' : 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
