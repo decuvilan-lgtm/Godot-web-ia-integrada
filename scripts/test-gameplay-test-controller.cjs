@@ -5,12 +5,33 @@ const { validateTimeline, runGameplayTimeline } = require('./gameplay-test-contr
 
 function fakePage(failAt = null) {
   const calls = [];
+  let evaluateCount = 0;
   const maybeFail = name => {
     calls.push(name);
     if (failAt === name) throw new Error('synthetic failure');
   };
   return {
     calls,
+    evaluate: async () => {
+      evaluateCount++;
+      return evaluateCount === 1
+        ? {
+            activeElement: 'BODY',
+            activeElementId: null,
+            canvases: [{
+              index: 0, id: 'game-canvas', tabindex: '2',
+              width: 800, height: 600,
+              rect: { x: 0, y: 0, width: 800, height: 600 },
+              visible: true, parentId: 'tab-game'
+            }]
+          }
+        : {
+            focused: true, tagName: 'CANVAS', id: 'game-canvas',
+            parentId: 'tab-game',
+            rect: { x: 0, y: 0, width: 800, height: 600 },
+            activeElement: 'CANVAS', activeElementId: 'game-canvas'
+          };
+    },
     keyboard: {
       press: async key => maybeFail('press:' + key),
       down: async key => maybeFail('down:' + key),
@@ -29,8 +50,14 @@ function fakePage(failAt = null) {
 
 (async () => {
   assert.throws(() => validateTimeline({ duration_ms: 70000 }), /duration_ms/);
-  assert.throws(() => validateTimeline({ duration_ms: 1000, actions: [{ at_ms: 0, device: 'keyboard', control: 'A', state: 'execute' }] }), /teclado/);
-  assert.throws(() => validateTimeline({ duration_ms: 1000, actions: [{ at_ms: 0, device: 'mouse', state: 'click' }] }), /coordenadas/);
+  assert.throws(() => validateTimeline({
+    duration_ms: 1000,
+    actions: [{ at_ms: 0, device: 'keyboard', control: 'A', state: 'execute' }]
+  }), /teclado/);
+  assert.throws(() => validateTimeline({
+    duration_ms: 1000,
+    actions: [{ at_ms: 0, device: 'mouse', state: 'click' }]
+  }), /coordenadas/);
 
   const page = fakePage();
   const result = await runGameplayTimeline(page, {
@@ -43,7 +70,9 @@ function fakePage(failAt = null) {
       { at_ms: 100, device: 'touch', control: 'tap', state: 'tap', x: 130, y: 100 }
     ]
   }, { capture: async () => {} });
-  assert.equal(result.actions_sent, 4);\n  assert.equal(result.viewport_focus.focused, true);\n  assert.equal(result.viewport_focus.target.id, 'game-canvas');
+  assert.equal(result.actions_sent, 4);
+  assert.equal(result.viewport_focus.focused, true);
+  assert.equal(result.viewport_focus.target.id, 'game-canvas');
   assert.ok(result.events.some(event => event.type === 'timeline-complete'));
   assert.ok(page.calls.includes('down:ArrowRight'));
   assert.ok(page.calls.includes('up:ArrowRight'));
@@ -59,7 +88,7 @@ function fakePage(failAt = null) {
     ]
   }), /synthetic failure/);
   assert.ok(failingPage.calls.includes('up:A'), 'held key must be released after failure');
-  process.stdout.write('Gameplay controller tests passed.\n');
+  process.stdout.write('Gameplay controller tests passed.\\n');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
