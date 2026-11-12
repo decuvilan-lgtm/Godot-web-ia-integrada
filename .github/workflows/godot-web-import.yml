@@ -701,6 +701,15 @@ jobs:
           xvfb-run -a --server-args="-screen 0 1600x1000x24" env NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
 
+      - name: Comparar capturas antes y después de cada acción
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -d artifacts ]; then
+            . .venv/bin/activate
+            python scripts/analyze_gameplay_captures.py artifacts
+          fi
+
       - name: Crear hojas de contacto de las secuencias
         if: always()
         run: |
