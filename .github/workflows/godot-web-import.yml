@@ -908,6 +908,22 @@ jobs:
                   print(f"- {label}: {sequence.get('capturedFrames', 0)}/{sequence.get('requestedFrames', 0)} imágenes; intervalo {sequence.get('intervalMs')} ms; completa: {sequence.get('complete', False)}")
               else:
                   print(f"- {label}: sin secuencia confirmada")
+          timeline_path = Path("artifacts/gameplay-timeline.json")
+          if timeline_path.exists():
+              timeline = json.loads(timeline_path.read_text())
+              print()
+              print("### Controles de gameplay")
+              print(f"- Acciones enviadas: {timeline.get('actions_sent', 0)}/{timeline.get('actions_requested', 0)}")
+          feedback = data.get("gameplayFeedback") or {}
+          if feedback:
+              print(f"- Ataque: {'daño visible detectado' if feedback.get('attackDamageDetected') else 'sin confirmación OCR'}")
+          touch = data.get("touchMovement") or {}
+          if touch:
+              print(f"- Joystick táctil: X {touch.get('xBefore', '?')} → {touch.get('xAfter', '?')}; movimiento confirmado: {touch.get('playerPositionChanged', False)}")
+          video_path = Path("artifacts/render-session-video.json")
+          if video_path.exists():
+              video = json.loads(video_path.read_text())
+              print(f"- Grabación: {video.get('videoCount', 0)} WebM; estado: {video.get('status', 'unknown')}")
           PY
             fi
           } >> "$GITHUB_STEP_SUMMARY"
