@@ -327,7 +327,8 @@ jobs:
                 await page.waitForTimeout(500);
                 // Keep the visible name, but use a stable repository-derived folder path.
                 const pathLabel = scan.lines.find(item => /Project Path/i.test(item.text));
-                const safeFolder = repoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'godot-project';
+                const folderLabel = projectLabel.split(':').pop().trim() || projectLabel;
+                const safeFolder = folderLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'godot-project';
                 const pathY = pathLabel ? pathLabel.y + 36 : 450;
                 await page.mouse.click(650, pathY);
                 await page.keyboard.press('Control+A');
