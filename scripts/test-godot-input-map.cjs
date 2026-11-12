@@ -23,8 +23,8 @@ const source = `config/name="Generic Sample"
 renderer/rendering_method="gl_compatibility"
 `;
 
-const result = parseInputMap(source);
-assert.equal(result.action_count, 3);
+const result = parseInputMap(source + `\nplain_action={\n"deadzone": 0.3,\n"events": [Object(InputEventKey,"physical_keycode":70)]\n}`);
+assert.equal(result.action_count, 4);
 assert.equal(result.actions[0].name, 'move_right');
 assert.equal(result.actions[0].deadzone, 0.2);
 assert.equal(result.actions[0].events[0].type, 'InputEventKey');
@@ -32,6 +32,8 @@ assert.equal(result.actions[0].events[0].properties.physical_keycode, 68);
 assert.equal(result.actions[1].events.length, 2);
 assert.equal(result.actions[1].events[1].type, 'InputEventJoypadButton');
 assert.equal(result.actions[2].events[0].properties.button_index, 1);
+assert.equal(result.actions[3].name, 'plain_action');
+assert.equal(result.actions[3].events[0].properties.physical_keycode, 70);
 assert.equal(result.actions[0].confidence, 'declared');
 assert.match(result.interpretation, /no demuestra/);
 assert.equal(parseInputMap('[display]\\nwindow/size/viewport_width=1280').action_count, 0);
