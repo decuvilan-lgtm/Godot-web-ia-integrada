@@ -24,14 +24,13 @@ jobs:
           python -m py_compile scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/test_app.py relay/storage_cors.py tests/live_link/test_storage_cors.py
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
-      - name: Validate mobile shell and sandbox package
+      - name: Test mobile shell patcher
+        run: python -m unittest scripts/test_patch_web_shell.py -v
+      - name: Package and validate bridge sandbox
         run: |
-          mkdir -p public
-          printf '<html><head></head><body></body></html>\n' > public/index.html
-          python scripts/patch-web-shell.py
-          grep -q 'name="viewport"' public/index.html
           python scripts/package-bridge-sandbox.py
           unzip -t public/bridge-sandbox.zip
+
       - name: Validate required deployment configuration
         run: |
           grep -q 'runtime: static' render.yaml
