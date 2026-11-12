@@ -107,7 +107,7 @@ jobs:
           project_path = os.environ.get("PROJECT_PATH", "").strip()
           if project_path and (
               len(project_path) > 240 or project_path.startswith("/") or project_path.endswith("/")
-              or "\\" in project_path
+              or "\\" in project_path or any(ord(char) < 32 for char in project_path)
               or any(part in {"", ".", ".."} for part in project_path.split("/"))
           ):
               raise SystemExit("Ruta de proyecto no válida.")
