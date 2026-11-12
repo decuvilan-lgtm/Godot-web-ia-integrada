@@ -2,24 +2,122 @@
   "profile": "escondite-initial-gameplay-smoke",
   "repository": "gavilandavid89-pixel/Escondite",
   "branch": "main",
-  "purpose": "Opt-in smoke test for the currently observed Dragon Realm start screen. This profile is not a universal control mapping.",
+  "purpose": "Automated regression smoke test for the observed Dragon Realm menu, keyboard, combat button, and mobile joystick.",
   "observed_ui": {
     "canvas": "game-canvas",
-    "canvas_rect": { "x": 80, "y": 32.125, "width": 1280, "height": 720 },
-    "new_game_button_center_page": { "x": 1025, "y": 472 },
+    "canvas_rect": {
+      "x": 80,
+      "y": 32.125,
+      "width": 1280,
+      "height": 720
+    },
+    "new_game_button_center_page": {
+      "x": 1025,
+      "y": 472
+    },
     "visible_keyboard_hint": "A/D + SPACE + J + 1-6 + F"
   },
   "actions": [
-    { "at_ms": 1000, "device": "mouse", "state": "click", "x": 1025, "y": 472, "coordinate_space": "page", "purpose": "Start a new game from the visible menu button" },
-    { "at_ms": 2500, "device": "keyboard", "control": "D", "state": "down", "purpose": "Hold the displayed right-movement key" },
-    { "at_ms": 4000, "device": "keyboard", "control": "D", "state": "up", "purpose": "Release the movement key" },
-    { "at_ms": 4800, "device": "keyboard", "control": "Space", "state": "press", "purpose": "Test the displayed jump key" },
-    { "at_ms": 6000, "device": "keyboard", "control": "J", "state": "press", "purpose": "Test the displayed attack key" }
+    {
+      "at_ms": 1000,
+      "device": "mouse",
+      "state": "click",
+      "x": 1025,
+      "y": 472,
+      "coordinate_space": "page",
+      "purpose": "Start a new game from the visible menu button"
+    },
+    {
+      "at_ms": 2500,
+      "device": "keyboard",
+      "control": "D",
+      "state": "down",
+      "purpose": "Hold the displayed right-movement key"
+    },
+    {
+      "at_ms": 4000,
+      "device": "keyboard",
+      "control": "D",
+      "state": "up",
+      "purpose": "Release the movement key"
+    },
+    {
+      "at_ms": 4800,
+      "device": "keyboard",
+      "control": "Space",
+      "state": "press",
+      "purpose": "Test the displayed jump key"
+    },
+    {
+      "at_ms": 6000,
+      "device": "keyboard",
+      "control": "J",
+      "state": "down",
+      "purpose": "Hold the displayed attack key"
+    },
+    {
+      "at_ms": 6800,
+      "device": "keyboard",
+      "control": "J",
+      "state": "up",
+      "purpose": "Release the attack key"
+    },
+    {
+      "at_ms": 8500,
+      "device": "mouse",
+      "state": "click",
+      "x": 1200,
+      "y": 620,
+      "coordinate_space": "page",
+      "purpose": "Execute the selected basic punch"
+    },
+    {
+      "at_ms": 10000,
+      "device": "touch",
+      "control": "joystick",
+      "state": "down",
+      "x": 203,
+      "y": 647,
+      "coordinate_space": "page",
+      "purpose": "Touch the center of the visible mobile joystick"
+    },
+    {
+      "at_ms": 10500,
+      "device": "touch",
+      "control": "joystick",
+      "state": "move",
+      "x": 150,
+      "y": 647,
+      "coordinate_space": "page",
+      "purpose": "Drag the joystick left"
+    },
+    {
+      "at_ms": 11500,
+      "device": "touch",
+      "control": "joystick",
+      "state": "move",
+      "x": 150,
+      "y": 647,
+      "coordinate_space": "page",
+      "purpose": "Hold the left joystick direction"
+    },
+    {
+      "at_ms": 12000,
+      "device": "touch",
+      "control": "joystick",
+      "state": "up",
+      "x": 150,
+      "y": 647,
+      "coordinate_space": "page",
+      "purpose": "Release the joystick"
+    }
   ],
   "verification_limits": [
     "A sent browser input is not proof the game accepted it.",
-    "A visual difference alone does not establish causality.",
-    "Compare player position, scene state, HUD, and OCR before attributing behavior.",
+    "Verify movement through player coordinates on the minimap, not merely a screenshot difference.",
+    "Verify jump through the Y coordinate or visible airborne state.",
+    "Verify attack through the visible damage toast and HUD change.",
+    "Verify touch by observing the joystick knob respond and the minimap X coordinate change.",
     "Do not use this profile for other projects."
   ]
 }
