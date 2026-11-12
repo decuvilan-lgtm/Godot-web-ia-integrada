@@ -51,7 +51,7 @@ def patch_html(html: str) -> str:
         )
 
     connector = r"""
-<script id="godot-github-connector">
+<script id="godot-github-connector" data-version="branch-path-v1">
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
