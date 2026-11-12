@@ -68,7 +68,11 @@ Los artefactos se conservan durante 14 días. Las secuencias se validan por cant
 
 La meta siguiente es que el sistema pueda manejar el juego durante una ventana configurable (10 segundos por defecto), mediante entradas reales de teclado, ratón y táctil. El controlador debe registrar cada entrada, duración, foco, reacción observable, capturas y errores, y liberar controles incluso cuando la prueba falle.
 
-Los escenarios temporales no se limitan a saltar progresión. Pueden preparar y comprobar cualquier elemento del proyecto, por ejemplo:
+**El siguiente objetivo es conseguir controlar el juego mientras está ejecutándose.** El controlador base y sus pruebas unitarias ya existen, pero todavía no hemos demostrado que una entrada enviada por Playwright sea recibida y procesada por el juego real. La ejecución [43278226182](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278226182) terminó correctamente, pero utilizó una lista de acciones vacía: verificó el workflow y el timeline de observación, no movimiento ni interacción.
+
+El trabajo inmediato es detectar y enfocar correctamente el viewport del juego, enviar controles reales, comprobar sus reacciones y completar una sesión de 10 segundos con acciones verificables.
+
+**Los escenarios temporales quedan para la fase siguiente**, después de conseguir control fiable del juego en ejecución. Cuando llegue esa etapa, no se limitarán a saltar progresión: podrán preparar y comprobar cualquier elemento del proyecto, por ejemplo:
 
 - Movimiento, salto, vuelo, navegación y cámara.
 - Combate, daño, habilidades, enemigos y estados.
@@ -78,9 +82,9 @@ Los escenarios temporales no se limitan a saltar progresión. Pueden preparar y 
 - Animaciones, efectos, audio, eventos, transiciones y escenas.
 - Casos límite, errores reproducibles y combinaciones de sistemas.
 
-### Ciclo temporal autorizado
+### Ciclo temporal autorizado (fase posterior)
 
-Para estos escenarios, el flujo acordado es publicarlos temporalmente en la **rama principal del repositorio del proyecto seleccionado**, para que la revisión pueda importarse en la web. Después de la prueba, se eliminan los archivos temporales y se comprueba que el contenido funcional anterior quede restaurado.
+Este ciclo no se implementará todavía. Primero debe quedar demostrado el control interactivo del juego en ejecución. Una vez superado ese requisito, el flujo acordado será publicar temporalmente en la **rama principal del repositorio del proyecto seleccionado**, para que la revisión pueda importarse en la web. Después de la prueba, se eliminan los archivos temporales y se comprueba que el contenido funcional anterior quede restaurado.
 
 1. Registrar repositorio, SHA base, rama y estado inicial.
 2. Crear un manifiesto único con los archivos nuevos y los archivos existentes que se modificarán.
@@ -97,7 +101,7 @@ El editor web alojado en Render no necesita reconstruirse por cada cambio del pr
 
 **Estado del controlador:** la primera versión admite pulsaciones/soltados de teclado, movimiento/click/presión de ratón y toque táctil puntual. Incluye timeline con duración configurable (10 segundos por defecto), capturas periódicas y liberación de teclas/botones si ocurre un error. Las pruebas unitarias pasaron en [Actions 43278159189](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278159189); la integración E2E del navegador está en [ejecución 43278226182](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278226182). Los gestos táctiles continuos y el flujo completo de escenarios temporales aún no están terminados.
 
-**Importante:** el ciclo de escenarios en `main` es el flujo acordado, pero todavía no debe anunciarse como automatizado hasta que estén implementados y probados la publicación, sincronización y limpieza segura.
+**Prioridad actual:** lograr control real y verificable del juego en ejecución. No iniciar todavía la creación ni publicación de escenarios temporales. El ciclo en `main` queda documentado para la fase posterior, pero no está automatizado.
 
 Documentación detallada: [Pruebas interactivas y escenarios temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md).
 
@@ -128,11 +132,12 @@ Esta ejecución **no** envió controles de gameplay ni verificó movimiento, ata
 | Capturar editor y preview F5 | Verificado en E2E |
 | Secuencias y manifiestos de capturas | Verificados en E2E |
 | Controlador base de teclado, ratón y toque táctil | Implementado; pruebas unitarias pasaron |
-| Timeline configurable de acciones (10 s por defecto) | Implementado; E2E del navegador en verificación |
+| Timeline configurable y observación de 10 s | Workflow aprobado; E2E con entradas reales pendiente |
+| Controlar el juego en ejecución y verificar su reacción | Prioridad inmediata; pendiente |
 | Descubrir controles y adaptar entradas por proyecto | Pendiente |
-| Crear escenarios temporales de cualquier mecánica/interacción | Especificado; implementación pendiente |
-| Publicar escenario temporal en `main` y sincronizar commit exacto | Especificado; implementación pendiente |
-| Limpieza segura y verificación del estado restaurado | Especificado; implementación pendiente |
+| Crear escenarios temporales de cualquier mecánica/interacción | Fase posterior; bloqueado hasta validar control real |
+| Publicar escenario temporal en `main` y sincronizar commit exacto | Fase posterior; pendiente |
+| Limpieza segura y verificación del estado restaurado | Fase posterior; pendiente |
 | Aserciones funcionales mediante adaptadores de proyecto | Pendiente |
 | Actualización incremental de un proyecto ya importado | Pendiente |
 
