@@ -78,15 +78,26 @@ jobs:
           data = get_json(f"https://api.github.com/repos/{owner}/{repo}")
           if data.get("private") is not False:
               raise SystemExit("El repositorio no es público.")
+          branch = "main"
           try:
-              get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/main")
+              get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
-                  raise SystemExit("El repositorio no tiene una rama main. El importador actual usa main exclusivamente.")
+                  raise SystemExit("El repositorio no tiene una rama main. El importador actual descarga main.")
               raise
+          try:
+              project_file = get_json(f"https://api.github.com/repos/{owner}/{repo}/contents/project.godot?ref={branch}")
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  raise SystemExit("No se encontró project.godot en la raíz de main. El workflow requiere un proyecto Godot en la raíz del repositorio.")
+              raise
+          import base64
+          project_text = base64.b64decode(project_file.get("content", "")).decode("utf-8", errors="replace")
+          name_match = re.search(r'^\\s*config/name\\s*=\\s*"([^"]+)"', project_text, re.MULTILINE)
+          project_name = name_match.group(1).strip() if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\n")
-          print(f"Repositorio público validado: {owner}/{repo} (main)")
+              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nproject_name={project_name}\n")
+          print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, nombre: {project_name})")
           PY
 
       - name: Preparar navegador Chromium
@@ -109,6 +120,7 @@ jobs:
         env:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
+          PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
           EDITOR_FRAMES: ${{ inputs.editor_frames || '5' }}
           EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
@@ -131,7 +143,7 @@ jobs:
           const gameFrames = boundedInt('GAME_FRAMES', 8, 1, 24);
           const gameIntervalMs = boundedInt('GAME_INTERVAL_MS', 500, 100, 5000);
           const repoName = process.env.REPO;
-          const projectLabel = repoName;
+          const projectLabel = process.env.PROJECT_NAME || repoName;
           const normalizeLabel = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
           const normalizedProjectLabel = normalizeLabel(projectLabel);
           if (normalizedProjectLabel.length < 2) throw new Error('El nombre del repositorio no permite una identificación visual segura.');
@@ -412,7 +424,7 @@ jobs:
                   result.editorScreenshot = 'captured-x11';
                   result.editorOcr = editorScan.text;
                   result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-                  result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
+                  result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
                   fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
                   if (!result.editorUiDetected || !result.projectNameVisible) {
                     throw new Error(`X11 capturó la pantalla, pero no encontró el editor con "${projectLabel}". OCR: ` + editorScan.text);
@@ -476,6 +488,8 @@ jobs:
         env:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
+          BRANCH: ${{ steps.repo.outputs.branch }}
+          PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
           JOB_STATUS: ${{ job.status }}
         run: |
           {
@@ -483,7 +497,8 @@ jobs:
             echo
             if [ -n "${OWNER:-}" ] && [ -n "${REPO:-}" ]; then
               echo "- Repositorio: https://github.com/${OWNER}/${REPO}"
-              echo "- Rama: main"
+              echo "- Rama: ${BRANCH:-main}"
+              echo "- Nombre del proyecto Godot: ${PROJECT_NAME:-${REPO}}"
               echo "- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${OWNER}%2F${REPO}"
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
