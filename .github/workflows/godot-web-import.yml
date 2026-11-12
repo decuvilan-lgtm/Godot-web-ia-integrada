@@ -31,6 +31,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - name: Obtener helper de inspección
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts/godot_web_ocr.py
+          sparse-checkout-cone-mode: false
+
       - name: Validar URL y repositorio público
         id: repo
         env:
@@ -160,20 +168,40 @@ jobs:
                   result.projectManagerOcr = scan.text;
                 }
               }
-              if (/Create Folder/i.test(scan.text)) {
-                await clickLine(page, scan, /Create Folder/i, 'Create Folder');
-                await page.waitForTimeout(5000);
-                await page.screenshot({ path: 'artifacts/godot-install-dialog.png', fullPage: true });
-                scan = inspectImage('artifacts/godot-install-dialog.png');
+              if (/Install Project/i.test(scan.text)) {
+                const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
+                await page.mouse.click(nameLine.x, nameLine.y);
+                await page.keyboard.press('Control+A');
+                await page.keyboard.type('Dragon Realm');
+                await page.keyboard.press('Tab');
+                await page.waitForTimeout(1500);
+                await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', fullPage: true });
+                scan = inspectImage('artifacts/godot-install-dialog-ready.png');
                 result.installDialogOcr = scan.text;
-                fs.writeFileSync('artifacts/install-dialog-ocr.json', JSON.stringify(scan, null, 2));
-              }
-              if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
-                await clickLine(page, scan, /Install\s*&\s*Edit|Install\s+and\s+Edit/i, 'Install & Edit');
+                if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
+                result.projectNameSet = 'Dragon Realm';
+                await page.mouse.click(818, 634);
+                result.installButtonClicked = true;
+              } else if (/Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i.test(scan.text)) {
+                await clickLine(page, scan, /Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i, 'Install & Edit');
                 result.installAndEditClicked = true;
               } else {
-                throw new Error('Godot no presentó Install & Edit tras crear la carpeta. OCR: ' + scan.text);
+                throw new Error('No se reconoció el diálogo de instalación del Project Manager. OCR: ' + scan.text);
               }
+              let editorScan = null;
+              for (let attempt = 0; attempt < 18; attempt++) {
+                await page.waitForTimeout(5000);
+                await page.screenshot({ path: 'artifacts/godot-editor-open.png', fullPage: true });
+                editorScan = inspectImage('artifacts/godot-editor-open.png');
+                result.editorOcr = editorScan.text;
+                fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                if (/2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text)) break;
+              }
+              const editorSignals = editorScan && /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
+              if (!editorSignals) throw new Error('No se detectaron paneles del editor tras instalar el proyecto. OCR: ' + (editorScan ? editorScan.text : 'sin texto'));
+              result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
+              result.godotEngineStarted = events.some(event => /Godot Engine v4\\.7\\.2/i.test(event.text || ''));
+              if (!result.godotEngineStarted) throw new Error('No se detectó el registro de arranque del motor Godot.');
               await page.waitForTimeout(20000);
               await page.screenshot({ path: 'artifacts/godot-editor-open.png', fullPage: true });
               const editorScan = inspectImage('artifacts/godot-editor-open.png');
@@ -181,7 +209,6 @@ jobs:
               fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
               const editorSignals = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
               if (!editorSignals) throw new Error('No se detectaron paneles del editor tras Install & Edit. OCR: ' + editorScan.text);
-              result.projectNameVisible = /Escondite/i.test(editorScan.text);
               result.status = 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
@@ -226,7 +253,11 @@ jobs:
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
-            echo "La ejecución automatizada confirma la precarga del ZIP, la creación de carpeta y la apertura del editor Godot; guarda capturas y OCR de cada fase."
+            if [ "$JOB_STATUS" = "success" ]; then
+              echo "La prueba confirmó la precarga del ZIP, el arranque de Godot y la apertura del editor. Las capturas y el OCR documentan cada fase."
+            else
+              echo "La importación completa no quedó confirmada. Revisa las capturas y el diagnóstico adjuntos para localizar el bloqueo."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Guardar capturas y diagnóstico
