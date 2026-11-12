@@ -326,15 +326,14 @@ jobs:
                 await page.keyboard.press('Tab');
                 await page.waitForTimeout(500);
                 // Keep the visible name, but use a stable repository-derived folder path.
-                const pathLine = scan.lines.find(item => /\/home\/web_user\//.test(item.text));
-                if (pathLine) {
-                  const safeFolder = repoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'godot-project';
-                  await page.mouse.click(pathLine.x, pathLine.y);
-                  await page.keyboard.press('Control+A');
-                  await page.keyboard.type('/home/web_user/' + safeFolder);
-                  await page.keyboard.press('Tab');
-                  result.projectFolder = '/home/web_user/' + safeFolder;
-                }
+                const pathLabel = scan.lines.find(item => /Project Path/i.test(item.text));
+                const safeFolder = repoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'godot-project';
+                const pathY = pathLabel ? pathLabel.y + 36 : 450;
+                await page.mouse.click(650, pathY);
+                await page.keyboard.press('Control+A');
+                await page.keyboard.type('/home/web_user/' + safeFolder);
+                await page.keyboard.press('Tab');
+                result.projectFolder = '/home/web_user/' + safeFolder;
                 await page.waitForTimeout(1000);
                 await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
                 scan = inspectImage('artifacts/godot-install-dialog-ready.png');
