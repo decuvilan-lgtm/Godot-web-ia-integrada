@@ -93,8 +93,8 @@ jobs:
               raise
           import base64
           project_text = base64.b64decode(project_file.get("content", "")).decode("utf-8", errors="replace")
-          name_match = re.search(r'^\\s*config/name\\s*=\\s*"([^"]+)"', project_text, re.MULTILINE)
-          project_name = name_match.group(1).strip() if name_match else repo
+          name_match = re.search(r'^\s*config/name\s*=\s*"([^"\r\n]+)"', project_text, re.MULTILINE)
+          project_name = re.sub(r'[\r\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nproject_name={project_name}\n")
           print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, nombre: {project_name})")
