@@ -181,7 +181,7 @@ jobs:
                 result.installDialogOcr = scan.text;
                 if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
                 result.projectNameSet = 'Dragon Realm';
-                await page.mouse.click(818, 634);
+                await clickLine(page, scan, /^Install$/i, 'Install');
                 result.installButtonClicked = true;
               } else if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
                 await clickLine(page, scan, /Install\s*&\s*Edit|Install\s+and\s+Edit/i, 'Install & Edit');
