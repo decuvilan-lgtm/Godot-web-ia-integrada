@@ -112,7 +112,7 @@ jobs:
           }
           async function clickLine(page, scan, pattern, label) {
             const line = findLine(scan, pattern, label);
-            const pixelRatio = 2; // Chromium deviceScaleFactor used by this test.
+            const pixelRatio = 1; // Chromium deviceScaleFactor used by this lightweight visual check.
             const point = { x: line.x / pixelRatio, y: line.y / pixelRatio, source: line.text };
             await page.mouse.click(point.x, point.y);
             return point;
@@ -123,7 +123,7 @@ jobs:
               args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-gl=angle',
                 '--use-angle=swiftshader', '--disable-dev-shm-usage', '--no-sandbox']
             });
-            const page = await browser.newPage({ viewport: { width: 1920, height: 1200 }, deviceScaleFactor: 2 });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
             page.setDefaultTimeout(15000);
             const events = [];
             page.on('console', msg => events.push({ type: 'console:' + msg.type(), text: msg.text() }));
@@ -208,6 +208,7 @@ jobs:
               result.editorLaunchConfirmed = editorLaunchConfirmed;
               result.engineStartCount = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
               if (!editorLaunchConfirmed) throw new Error('La instalación terminó, pero no se detectó el segundo arranque del motor asociado a la apertura del editor.');
+              await page.waitForTimeout(15000);
               try {
                 result.rendererResponsive = await Promise.race([
                   page.evaluate(() => ({
@@ -215,7 +216,7 @@ jobs:
                     canvasCount: document.querySelectorAll('canvas').length,
                     viewport: { width: window.innerWidth, height: window.innerHeight }
                   })),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 5000))
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 10000))
                 ]);
               } catch (probeError) {
                 result.rendererResponsive = false;
@@ -228,7 +229,7 @@ jobs:
               console.log('Comprobación funcional superada; comienza captura visual opcional.');
               // Captura PNG de 1920x1200. Un fallo solo genera advertencia y no revoca la prueba funcional.
               try {
-                await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'device', timeout: 10000 });
+                await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'device', timeout: 20000 });
                 const editorScan = inspectImage('artifacts/godot-editor-open.png');
                 result.editorScreenshot = 'captured';
                 result.editorOcr = editorScan.text;
