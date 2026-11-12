@@ -12,6 +12,10 @@ La experiencia deseada es que Godot Web inicie automáticamente y presente el Pr
 **Nota de transición:** las secciones posteriores que describen dos puestos emparejados, Neon como fuente de verdad del proyecto, propuestas hacia Android y sincronización entre editores documentan una arquitectura anterior. Se conservan temporalmente como inventario técnico, pero no son la dirección vigente y deben auditarse antes de retirar sus componentes.
 > **Estado real (10 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. El commit `48034bc` añade además un servidor MCP remoto autenticado; CI pasó, pero su despliegue Render aún debe confirmarse. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
 
+## Conexión GitHub → Godot Web
+
+El shell incluye el botón **Conectar GitHub** y un preloader para repositorios públicos de la rama `main`. El Relay sirve el ZIP de forma acotada sin exponer credenciales. Consulta [docs/GITHUB_TO_GODOT_WEB.md](docs/GITHUB_TO_GODOT_WEB.md). La importación inicial utiliza el diálogo nativo del Project Manager; la actualización automática de proyectos ya importados aún no está disponible.
+
 ## Acceso
 
 - **Editor web de la IA:** https://godot-web-ia-integrada-rt2l.onrender.com
