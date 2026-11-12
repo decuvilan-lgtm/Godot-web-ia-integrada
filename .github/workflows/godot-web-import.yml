@@ -46,6 +46,16 @@ on:
         required: false
         default: "500"
         type: string
+      gameplay_duration_ms:
+        description: "Duración de observación interactiva (100-60000 ms)"
+        required: false
+        default: "10000"
+        type: string
+      gameplay_actions_json:
+        description: "Acciones opcionales JSON; controles explícitos del proyecto"
+        required: false
+        default: "[]"
+        type: string
 
 permissions:
   contents: read
@@ -66,7 +76,12 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             scripts/godot_web_ocr.py
+            scripts/gameplay-test-controller.cjs
+            scripts/test-gameplay-test-controller.cjs
           sparse-checkout-cone-mode: false
+
+      - name: Probar controlador de gameplay
+        run: node scripts/test-gameplay-test-controller.cjs
 
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
@@ -207,6 +222,8 @@ jobs:
           EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
           GAME_FRAMES: ${{ inputs.game_frames || '8' }}
           GAME_INTERVAL_MS: ${{ inputs.game_interval_ms || '500' }}
+          GAMEPLAY_DURATION_MS: ${{ inputs.gameplay_duration_ms || '10000' }}
+          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || '[]' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -214,6 +231,7 @@ jobs:
           const { chromium } = require('playwright');
           const { execFileSync } = require('child_process');
           const fs = require('fs');
+          const { runGameplayTimeline } = require(process.env.GITHUB_WORKSPACE + '/scripts/gameplay-test-controller.cjs');
           const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
           const boundedInt = (name, fallback, min, max) => {
             const value = Number(process.env[name] || fallback);
@@ -592,6 +610,19 @@ jobs:
                     : gameCapture.method === 'cdp'
                       ? await captureSequence(page, 'game-preview-sequence', gameFrames, gameIntervalMs)
                       : await captureSequenceX11('game-preview-sequence', gameFrames, gameIntervalMs);
+                  const gameplayDuration = Math.max(100, Math.min(60000, Math.trunc(Number(process.env.GAMEPLAY_DURATION_MS || 10000))));
+                  const gameplayActions = JSON.parse(process.env.GAMEPLAY_ACTIONS_JSON || '[]');
+                  result.gameplayTimeline = await runGameplayTimeline(page, {
+                    duration_ms: gameplayDuration,
+                    capture_interval_ms: 500,
+                    actions: gameplayActions
+                  }, {
+                    capture: async ({ index }) => {
+                      const name = 'artifacts/gameplay-frame-' + String(index).padStart(3, '0') + '.png';
+                      await page.screenshot({ path: name, fullPage: false, animations: 'disabled', timeout: 15000 });
+                    }
+                  });
+                  fs.writeFileSync('artifacts/gameplay-timeline.json', JSON.stringify(result.gameplayTimeline, null, 2));
                 } else {
                   result.gamePreviewWarning = 'No se detectó la vista Game después de enviar F5. ' + (gameCapture.scan?.text || 'Sin OCR');
                 }
