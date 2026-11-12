@@ -8,6 +8,8 @@ on:
       - "scripts/test-gameplay-test-controller.cjs"
       - "scripts/godot-input-map.cjs"
       - "scripts/test-godot-input-map.cjs"
+      - "scripts/analyze_gameplay_captures.py"
+      - "scripts/test_analyze_gameplay_captures.py"
   workflow_dispatch:
     inputs:
       repository_url:
@@ -84,6 +86,7 @@ jobs:
             scripts/test-gameplay-test-controller.cjs
             scripts/godot-input-map.cjs
             scripts/test-godot-input-map.cjs
+            scripts/analyze_gameplay_captures.py
           sparse-checkout-cone-mode: false
 
       - name: Probar controlador de gameplay
