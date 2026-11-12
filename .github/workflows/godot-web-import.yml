@@ -74,7 +74,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-          sudo apt-get install -y xvfb imagemagick
+          sudo apt-get install -y xvfb imagemagick xdotool
 
       - name: Preparar OCR para inspeccionar el Project Manager
         run: |
@@ -257,7 +257,7 @@ jobs:
                 result.editorScreenshot = 'captured';
                 result.editorOcr = editorScan.text;
                 result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-                result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
+                result.projectNameVisible = /Dragon\s*Realm/i.test(editorScan.text);
                 fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
                 if (!result.editorUiDetected || !result.projectNameVisible) {
                   throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
@@ -274,6 +274,19 @@ jobs:
                   result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
                   result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
                   fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                  // Try switching the visible workspace to the 2D scene view through real X11 input.
+                  try {
+                    execFileSync('xdotool', ['mousemove', '607', '154', 'click', '1'], { timeout: 5000 });
+                    await page.waitForTimeout(2000);
+                    execFileSync('import', ['-window', 'root', 'artifacts/godot-editor-2d.png'], { timeout: 15000 });
+                    const sceneScan = inspectImage('artifacts/godot-editor-2d.png');
+                    result.editor2dOcr = sceneScan.text;
+                    result.editor2dScreenshot = 'captured-x11';
+                    fs.writeFileSync('artifacts/editor-2d-ocr.json', JSON.stringify(sceneScan, null, 2));
+                  } catch (sceneCaptureError) {
+                    result.editor2dScreenshot = 'warning';
+                    result.editor2dCaptureWarning = String(sceneCaptureError);
+                  }
                   if (!result.editorUiDetected || !result.projectNameVisible) {
                     throw new Error('X11 capturó la pantalla, pero no encontró el editor con Dragon Realm. OCR: ' + editorScan.text);
                   }
