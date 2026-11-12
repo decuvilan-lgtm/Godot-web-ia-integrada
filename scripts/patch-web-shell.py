@@ -16,11 +16,12 @@ STARTUP_CONTRACT = (
 def patch_html(html: str) -> str:
     """Apply idempotent mobile metadata and the GitHub-to-Project-Manager bridge."""
     viewport = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-    if re.search(r'<meta[^>]+name=["\\']viewport["\\']', html, flags=re.I):
+    viewport_pattern = r"""<meta[^>]+name=["']viewport["']"""
+    if re.search(viewport_pattern, html, flags=re.I):
         html = re.sub(
-            r'<meta([^>]+name=["\\']viewport["\\'][^>]*)>',
+            r"""<meta([^>]+name=["']viewport["'][^>]*)>""",
             lambda match: '<meta' + re.sub(
-                r'content=["\\'][^"\\']*["\\']',
+                r"""content=["'][^"']*["']""",
                 'content="width=device-width, initial-scale=1, viewport-fit=cover"',
                 match.group(1),
                 flags=re.I,
@@ -30,13 +31,25 @@ def patch_html(html: str) -> str:
             flags=re.I,
         )
     else:
-        html = re.sub(r'(<head[^>]*>)', r'\\1\\n  ' + viewport, html, count=1, flags=re.I)
+        html = re.sub(
+            r"(<head[^>]*>)",
+            lambda match: match.group(1) + "\\n  " + viewport,
+            html,
+            count=1,
+            flags=re.I,
+        )
 
-    if not re.search(r'<meta[^>]+name=["\\']viewport["\\']', html, flags=re.I):
+    if not re.search(viewport_pattern, html, flags=re.I):
         raise SystemExit("ERROR: could not install mobile viewport metadata")
 
-    if not re.search(r'<title[^>]*>', html, flags=re.I):
-        html = re.sub(r'</head>', '<title>Godot Web IA Integrada</title>\\n</head>', html, count=1, flags=re.I)
+    if not re.search(r"<title[^>]*>", html, flags=re.I):
+        html = re.sub(
+            r"</head>",
+            "<title>Godot Web IA Integrada</title>\\n</head>",
+            html,
+            count=1,
+            flags=re.I,
+        )
 
     missing = [token for token in STARTUP_CONTRACT if token not in html]
     if missing:
@@ -47,7 +60,7 @@ def patch_html(html: str) -> str:
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
-  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 
   function connectRepository() {
     const value = window.prompt("Repositorio público de GitHub (owner/repository). Se usará exclusivamente main:");
@@ -80,15 +93,12 @@ def patch_html(html: str) -> str:
     const startButton = document.getElementById("startButton");
     if (!startButton || startButton.disabled) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const repo = params.get("repo");
+    const repo = new URLSearchParams(window.location.search).get("repo");
     if (repo) {
       if (!repoPattern.test(repo)) {
         window.alert("No se pudo conectar el repositorio: usa owner/repository.");
       } else {
-        const parts = repo.split("/");
-        const owner = parts[0];
-        const repository = parts[1];
+        const [owner, repository] = repo.split("/");
         try {
           const response = await fetch(
             relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive",
@@ -114,7 +124,6 @@ def patch_html(html: str) -> str:
           transfer.items.add(new File([blob], owner + "-" + repository + "-main.zip", { type: "application/zip" }));
           input.files = transfer.files;
           input.dispatchEvent(new Event("change", { bubbles: true }));
-          params.delete("repo");
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete("repo");
           window.history.replaceState(null, "", cleanUrl.toString());
