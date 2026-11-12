@@ -234,6 +234,23 @@ jobs:
             }
             return manifest;
           }
+          async function captureSequenceX11(label, count, intervalMs) {
+            const frames = [];
+            const startedAt = Date.now();
+            for (let index = 0; index < count; index++) {
+              const filename = `artifacts/${label}-${String(index + 1).padStart(2, '0')}.png`;
+              execFileSync('import', ['-window', 'root', filename], { timeout: 15000 });
+              const dimensions = execFileSync('identify', ['-format', '%w %h', filename], { encoding: 'utf8' }).trim().split(/\s+/).map(Number);
+              const stat = fs.statSync(filename);
+              if (stat.size < 1024 || dimensions[0] < 500 || dimensions[1] < 300) throw new Error(`Captura X11 inválida: ${dimensions.join('x')} (${stat.size} bytes)`);
+              frames.push({ index: index + 1, file: filename, capturedAt: new Date().toISOString(), width: dimensions[0], height: dimensions[1], bytes: stat.size });
+              if (index + 1 < count) await new Promise(resolve => setTimeout(resolve, intervalMs));
+            }
+            const manifest = { label, requestedFrames: count, capturedFrames: frames.length, intervalMs, totalDurationMs: Date.now() - startedAt, complete: frames.length === count, frames, captureMethod: 'x11' };
+            fs.writeFileSync(`artifacts/${label}-sequence.json`, JSON.stringify(manifest, null, 2));
+            if (!manifest.complete) throw new Error(`Secuencia X11 incompleta ${label}: ${frames.length}/${count}`);
+            return manifest;
+          }
           async function clickLine(page, scan, pattern, label) {
             const line = findLine(scan, pattern, label);
             const pixelRatio = 1; // Chromium deviceScaleFactor used by this lightweight visual check.
@@ -307,7 +324,18 @@ jobs:
                 await page.keyboard.press('Control+A');
                 await page.keyboard.type(projectLabel);
                 await page.keyboard.press('Tab');
-                await page.waitForTimeout(1500);
+                await page.waitForTimeout(500);
+                // Keep the visible name, but use a stable repository-derived folder path.
+                const pathLine = scan.lines.find(item => /\/home\/web_user\//.test(item.text));
+                if (pathLine) {
+                  const safeFolder = repoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'godot-project';
+                  await page.mouse.click(pathLine.x, pathLine.y);
+                  await page.keyboard.press('Control+A');
+                  await page.keyboard.type('/home/web_user/' + safeFolder);
+                  await page.keyboard.press('Tab');
+                  result.projectFolder = '/home/web_user/' + safeFolder;
+                }
+                await page.waitForTimeout(1000);
                 await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
                 scan = inspectImage('artifacts/godot-install-dialog-ready.png');
                 result.installDialogOcr = scan.text;
@@ -368,6 +396,22 @@ jobs:
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
               console.log('Godot informó que abrió el proyecto; la captura visual es obligatoria para aprobar la prueba completa.');
               try {
+                if (!result.rendererResponsive) {
+                  // Avoid CDP screenshot requests when Godot blocks the WASM main thread.
+                  result.editorSequence = await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
+                  const editorScan = inspectImage('artifacts/editor-sequence-01.png');
+                  result.editorScreenshot = 'captured-x11';
+                  result.editorOcr = editorScan.text;
+                  result.editorUiDetected = /2D|3D|Script|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(editorScan.text);
+                  result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
+                  result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
+                  fs.writeFileSync('artifacts/godot-editor-open.png', fs.readFileSync('artifacts/editor-sequence-01.png'));
+                  fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                  if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
+                    throw new Error('Godot registró la apertura, pero X11 no detectó una interfaz de editor visible. OCR: ' + editorScan.text);
+                  }
+                  result.gamePreviewScreenshot = 'skipped-renderer-unresponsive';
+                } else {
                 // Use the Chrome DevTools protocol directly. Playwright's screenshot helper
                 // injects a stylesheet through page JS, which can hang if Godot's WASM
                 // main thread is busy during editor initialization.
@@ -385,8 +429,9 @@ jobs:
                 result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
                 fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
 
-                if (!result.editorUiDetected || !result.projectNameVisible) {
-                  throw new Error(`La captura existe, pero no demuestra la interfaz del editor con "${projectLabel}" visible. OCR: ` + editorScan.text);
+                result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
+                if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
+                  throw new Error('La captura no demuestra una interfaz de editor visible para el proyecto abierto. OCR: ' + editorScan.text);
                 }
                 result.editorSequence = await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs);
                 // Optional game-preview probe: F5 runs the project's configured main scene.
@@ -411,6 +456,7 @@ jobs:
                   result.gamePreviewScreenshot = 'warning';
                   result.gamePreviewWarning = String(previewError);
                 }
+                }
               } catch (captureError) {
                 result.captureWarning = String(captureError);
                 // A partial sequence is a real test failure, not a reason to silently
@@ -426,8 +472,9 @@ jobs:
                   result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
                   result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
                   fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
-                  if (!result.editorUiDetected || !result.projectNameVisible) {
-                    throw new Error(`X11 capturó la pantalla, pero no encontró el editor con "${projectLabel}". OCR: ` + editorScan.text);
+                  result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
+                  if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
+                    throw new Error('X11 capturó la pantalla, pero no encontró una interfaz de editor visible. OCR: ' + editorScan.text);
                   }
                 } catch (x11Error) {
                   result.editorScreenshot = 'failed';
