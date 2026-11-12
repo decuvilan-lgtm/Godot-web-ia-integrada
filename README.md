@@ -1,154 +1,219 @@
 # Godot Web IA Integrada
 
-Flujo de desarrollo acordado:
+Entorno de desarrollo asistido para **proyectos Godot en general**. No está limitado a Dragon Realm ni a un juego, género o repositorio concreto. La idea es poder abrir un proyecto Godot elegido, analizarlo, modificarlo, probarlo y revisar visualmente sus resultados usando herramientas complementarias.
 
-- **GitHub `main`:** única fuente oficial de los proyectos seleccionados.
-- **ChatGPT + Godot Headless:** clonan el repositorio completo, desarrollan, prueban y publican cambios directamente en `main`. Headless no necesita Project Manager.
-- **Godot Web:** conserva su Project Manager nativo y sirve para abrir, ejecutar e inspeccionar visualmente la revisión publicada en GitHub.
-- **Android:** conserva su mecanismo de importación desde repositorios públicos; se auditará para reutilizar su lógica donde sea compatible.
+Dragon Realm se ha utilizado como uno de los proyectos de referencia para validar la importación y la inspección. Es solo un caso de prueba; no define el propósito ni la arquitectura del sistema.
 
-Godot Web inicia automáticamente y presenta el Project Manager. El shell incluye el preloader de repositorios públicos desde `main`; el build se publicó correctamente en Render. Falta la prueba de interacción real en navegador. La actualización incremental GitHub → proyecto ya importado y las pruebas visuales de extremo a extremo siguen pendientes.
+## Objetivos
 
-**Nota de transición:** las secciones posteriores que describen dos puestos emparejados, Neon como fuente de verdad del proyecto, propuestas hacia Android y sincronización entre editores documentan una arquitectura anterior. Se conservan temporalmente como inventario técnico, pero no son la dirección vigente y deben auditarse antes de retirar sus componentes.
-> **Estado real (10 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. El commit `48034bc` añade además un servidor MCP remoto autenticado; CI pasó, pero su despliegue Render aún debe confirmarse. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
+- Trabajar con distintos repositorios y proyectos Godot sin crear una instalación del editor por cada consulta.
+- Mantener cada proyecto identificado y separado para evitar mezclar archivos o resultados.
+- Desarrollar y validar cambios con Godot Headless cuando sea posible.
+- Usar Godot Web para abrir proyectos y realizar comprobaciones visuales en navegador.
+- Automatizar pruebas repetibles mediante GitHub Actions.
+- Capturar imágenes individuales y secuencias consecutivas para observar el editor y, cuando la prueba lo permita, la ejecución del juego.
+- Conservar trazabilidad: repositorio, revisión, parámetros, resultados, logs y capturas.
+- Distinguir claramente lo implementado, lo probado y lo que todavía está pendiente.
 
-## Conexión GitHub → Godot Web
+## Arquitectura general
 
-El shell incluye el botón **Conectar GitHub** y un preloader para repositorios públicos de la rama `main`. El Relay sirve el ZIP de forma acotada sin exponer credenciales. Consulta [docs/GITHUB_TO_GODOT_WEB.md](docs/GITHUB_TO_GODOT_WEB.md). La importación inicial utiliza el diálogo nativo del Project Manager; la actualización automática de proyectos ya importados aún no está disponible.
+| Componente | Responsabilidad |
+|---|---|
+| Repositorio Git | Código fuente, recursos, documentación e historial del proyecto trabajado |
+| Godot Headless | Importación, análisis, validaciones, ejecución y pruebas automatizadas sin interfaz |
+| Godot Web | Apertura del proyecto en navegador y revisión visual mediante el editor nativo |
+| GitHub Actions | Automatización de importaciones, pruebas de navegador, capturas y publicación de artefactos |
+| Relay | Entrega controlada de archivos de repositorios públicos al navegador y servicios HTTP auxiliares |
+| Render | Alojamiento del editor web y del relay |
+| Complementos Godot | Integraciones opcionales para inspección y comunicación entre herramientas |
 
-## Acceso
+Estos componentes tienen responsabilidades diferentes. Una prueba correcta en Headless no garantiza que la interfaz o el renderizado web se comporten igual; una captura visual tampoco sustituye las pruebas técnicas.
 
-- **Editor web de la IA:** https://godot-web-ia-integrada-rt2l.onrender.com
-- **Relay:** https://godot-web-ia-relay.onrender.com
-- **Salud del relay:** https://godot-web-ia-relay.onrender.com/health
-- [Repositorio de integración IA](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada)
-- [Repositorio Godot Android modificado](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado)
-- [Centro de mando Neon](https://console.neon.tech/app/projects/aged-dew-94732514)
+## Flujo de trabajo recomendado
 
-**Infraestructura:** los servicios Render existentes deben permanecer en el plan `free`. No crear ni cambiar recursos a planes pagos. El relay puede suspenderse y reiniciarse; por eso no se considera almacenamiento persistente.
+### 1. Seleccionar un proyecto
 
-## Separación de puestos
+Se identifica el repositorio y la rama que se van a trabajar. El sistema debe usar la identidad del repositorio y su revisión, no solamente el nombre visible del proyecto. El importador web actual admite repositorios públicos de GitHub desde la rama `main`.
 
-| Función | IA | Usuario |
-|---|---|---|
-| Editor | Godot Web desplegado | Godot Android |
-| Workspace | Copia remota aislada | Proyecto aceptado |
-| Inspección | Permitida mediante comandos autorizados | Local |
-| Preparar cambios | En su workspace | No aplica |
-| Aceptar cambios | No puede autoaprobar | Aprobación explícita |
-| Aplicar al proyecto aceptado | Prohibido sin aprobación | Solo tras revisión |
+Enlace de apertura:
 
-La versión web no es una interfaz móvil alternativa para el usuario. Las comprobaciones de viewport móvil solo verifican que la página no se rompa en pantallas pequeñas; no cambian la asignación de puestos.
+```text
+https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY
+```
 
-## Godot Android: fuente correcta
+Sustituir `OWNER/REPOSITORY` por el repositorio deseado. El enlace prepara la importación; la finalización todavía utiliza el Project Manager nativo de Godot.
 
-El repositorio que debemos tomar como referencia para el editor Android es **Godot-engine4-v4.7.2-stable-difusion-modificado**.
+### 2. Recuperar y preparar el proyecto
 
-Ese repositorio no almacena el árbol completo del motor. Su workflow descarga temporalmente `godotengine/godot` en el tag `4.7.2-stable`, aplica el parche mantenido en `scripts/apply_github_import_patch.py` y compila el APK. Las modificaciones propias deben incorporarse como cambios reproducibles al parche/build, no a una copia efímera del motor.
+- Obtener el contenido versionado del repositorio seleccionado.
+- Registrar el commit de origen de la copia de trabajo.
+- Mantener separados los archivos de proyectos diferentes.
+- No incluir el motor Godot ni sus ejecutables dentro del repositorio del juego.
+- Recuperar submódulos o dependencias externas por separado cuando sean necesarios.
 
-- [Repositorio y documentación del editor Android](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado)
-- [Workflow de compilación Android](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/blob/main/.github/workflows/build-godot-android-source.yml)
+### 3. Desarrollar y validar
 
-El submódulo `engine/godot` de este repositorio es una referencia upstream fijada a 4.7.2-stable; no sustituye al flujo modificado del editor Android.
+El flujo preferido para cambios de proyecto es trabajar sobre una copia local con Godot Headless:
 
-## Cliente Godot Web del Command Center
+1. Inspeccionar la estructura y las configuraciones del proyecto.
+2. Importar recursos y comprobar errores.
+3. Modificar únicamente los archivos necesarios.
+4. Ejecutar pruebas automatizadas, validaciones y escenas de prueba pertinentes.
+5. Revisar los cambios y comprobar que no se hayan alterado archivos ajenos a la tarea.
+6. Publicar en Git los archivos necesarios y registrar el commit resultante.
 
-El proyecto de prueba `examples/bridge-sandbox` incluye el complemento `godot_command_center`, habilitado como plugin del proyecto:
+Para cambios pequeños de documentación o configuración también puede ser conveniente editar directamente el repositorio. Si una edición remota afecta el proyecto ejecutable, debe incorporarse a la copia de trabajo y validarse cuando sea posible.
 
-- Empareja el puesto web con un código de un solo uso.
-- Usa el rol `web_editor` confirmado por el servidor.
-- Mantiene la credencial Bearer solo en memoria.
-- Consulta la cola durable de Neon y confirma resultados.
-- Solo permite `ping`, `project.get_state`, `project.list_files`, `scene.inspect` y `script.read`.
-- Limita rutas, cantidad de archivos, profundidad de escena y tamaño de scripts.
-- No permite escritura, shell ni ejecución de procesos.
+Consulta [Flujo de desarrollo Headless + GitHub](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md).
 
-El ZIP sandbox se importa/abre dentro del editor web para cargar este complemento. **Añadirlo al sandbox no significa que el editor web publicado ya esté emparejado ni que el agente pueda controlarlo automáticamente.** Falta la conexión real con Neon, el controlador de órdenes del agente y la prueba funcional dentro del navegador web.
+### 4. Revisar visualmente en Godot Web
 
-El complemento WebSocket anterior se conserva como referencia, pero el sandbox activa el nuevo cliente HTTP del Command Center para evitar confundir los dos protocolos.
+Godot Web permite abrir el proyecto importado en el editor nativo. La revisión visual se utiliza para detectar problemas que una prueba Headless no puede confirmar por sí sola: distribución de la interfaz, escenas visibles, recursos, renderizado y comportamiento del juego.
 
-## Cliente Godot Android
+La importación inicial desde GitHub está implementada para repositorios públicos. La actualización incremental y automática de un proyecto que ya fue importado todavía no debe darse por disponible.
 
-El PR #3 del repositorio Android incorpora un cliente experimental al addon Live Link existente:
+Consulta [Conectar repositorios públicos de GitHub a Godot Web](docs/GITHUB_TO_GODOT_WEB.md).
 
-- [PR #3 — adaptador Android](https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/pull/3)
-- Emparejamiento de un solo uso y credencial en memoria.
-- Polling de órdenes para el rol `android_editor`.
-- Mismas cinco acciones de solo lectura.
-- No modifica archivos del proyecto ni ejecuta comandos del sistema.
+## Sistema de pruebas y capturas de navegador
 
-Todavía no se ha generado y probado un APK nuevo ni se ha realizado una prueba en el teléfono físico.
+El workflow principal es:
 
-## Relay y Neon
+[**Importar repositorio en Godot Web — GitHub Actions**](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/workflows/godot-web-import.yml)
 
-El PR #1 añade al relay FastAPI existente:
+Permite ejecutar una prueba de navegador que:
 
-- API autenticada bajo `/v1/command-center`.
-- Códigos temporales de emparejamiento y tokens de dispositivo almacenados como hashes.
-- Cola durable con leases, idempotencia, resultados y eventos.
-- CORS restringido al origen del editor web.
-- Respuestas no-cache y reconexión Neon acotada.
-- Página administrativa de emparejamiento en `/command-center/admin`.
+1. Valida que la URL corresponda a un repositorio público de GitHub.
+2. Comprueba que exista la rama `main`.
+3. Abre Godot Web en Chromium bajo Xvfb.
+4. Comprueba el aislamiento del navegador y la disponibilidad de `SharedArrayBuffer`.
+5. Verifica que el relay entregue el ZIP y que el archivo quede asignado al campo oficial de importación de Godot.
+6. Espera a que el Project Manager procese el proyecto.
+7. Intenta abrir el proyecto en el editor.
+8. Comprueba mediante logs y OCR que el editor y el proyecto esperado estén visibles.
+9. Captura una imagen del editor y solicita una secuencia consecutiva.
+10. Intenta ejecutar la escena principal con F5 y, si funciona, captura el preview y otra secuencia.
 
-La API falla de forma cerrada si Neon no está configurado. Las migraciones 001–007 están instaladas/verificadas en Neon. Render conserva los secretos de Postgres y del bucket privado. La API acepta capturas `editor_2d`/`editor_3d`; WebP, hojas de contacto, captura de UI, preview y zoom siguen rechazados. Todavía falta demostrar una sesión real del editor web y recuperar una captura. El control del repositorio se realiza mediante la integración GitHub; la sincronización y observación del editor usan el Command Center HTTP existente. No hay un servidor de protocolo personalizado ni un runtime de ChatGPT conectado directamente a la cola.
+### Parámetros configurables
 
-## Servidor MCP remoto
+Al iniciar manualmente el workflow (`workflow_dispatch`) se pueden ajustar:
 
-El endpoint MCP previsto es `https://godot-web-ia-relay.onrender.com/mcp`. Acepta solo credenciales Bearer emparejadas como `agent_controller`; el destino de sus órdenes está fijado al puesto aislado `web_editor`. Las herramientas exponen estado del workspace, encolado idempotente y consulta de resultados. No hay escritura de archivos ni shell. Consulta [docs/MCP_SERVER.md](docs/MCP_SERVER.md) para el contrato y límites.
+| Parámetro | Valor predeterminado | Límite |
+|---|---:|---:|
+| `repository_url` | Repositorio de referencia Dragon Realm | URL HTTPS de GitHub |
+| `startup_timeout` | 180 s | 60–300 s |
+| `editor_frames` | 5 | 1–12 |
+| `editor_interval_ms` | 900 ms | 100–5000 ms |
+| `game_frames` | 8 | 1–24 |
+| `game_interval_ms` | 500 ms | 100–5000 ms |
 
-## Proyecto persistente y consultas múltiples
+Los valores fuera de rango se limitan al rango permitido. Las secuencias registran la cantidad solicitada, la cantidad capturada, el intervalo, la duración y los datos básicos de cada imagen.
 
-El workspace de Neon conserva el contexto del proyecto Godot Web de la IA. Cada consulta crea solo una orden independiente; no crea un proyecto, workspace ni sesión. Se pueden encolar varias consultas sobre el mismo proyecto: cada una tiene su ID e idempotency key, y el editor las procesa en cola, una por una. Las órdenes pendientes tienen una ventana de expiración de 10 minutos. Las repeticiones de una misma consulta reutilizan su clave; las consultas nuevas usan claves nuevas, pero mantienen el mismo workspace. La selección/creación de otros proyectos será una acción explícita futura, nunca un efecto secundario de consultar.
+**Limitación actual importante:** aunque la URL del repositorio es configurable, partes de la prueba visual todavía esperan el nombre de proyecto `Dragon Realm` y una ruta de instalación fija. Por eso el workflow ya puede recibir otros repositorios, pero aún no es completamente independiente del proyecto de referencia. El siguiente ajuste de generalización debe detectar el nombre/ruta real del proyecto desde los datos importados o la configuración de Godot, en vez de exigir ese nombre fijo.
 
-## Verificaciones y límites
+### Validación de cada imagen
 
-- Los tests del relay y el smoke test de Godot 4.7.2 para el sandbox han pasado en CI para el último commit validado.
-- La compilación del editor web y la observación HTTP local de tres minutos están en ejecución para el commit que incorpora el nuevo cliente web.
-- La observación HTTP local valida entrega de archivos estáticos; no equivale a una prueba de interacción real con el editor web desplegado.
-- No hay pairing Android/Web de extremo a extremo, APK actualizado probado, controlador IA operativo ni escritura remota.
-- El paquete publicado del editor web ronda los 93 MB en la última medición; debe revisarse la carga real en navegador y dispositivos antes de optimizar.
+Cada frame de una secuencia se valida antes de considerarlo capturado:
 
-## Próximas etapas
+- Debe existir una imagen PNG válida.
+- Debe superar el tamaño mínimo de archivo.
+- Debe tener dimensiones mínimas de 500 × 300.
+- Se registra su índice y metadatos.
+- El manifiesto indica si la secuencia está completa.
+- Si falta un frame solicitado, la secuencia falla en lugar de presentarse como completa.
 
-1. Importar y abrir `examples/bridge-sandbox` en el Godot Web publicado; confirmar el dock Command Center.
-2. Emparejar únicamente `web_editor` en workspace `default` y probar `ping`, estado, escena y lectura.
-3. Ejecutar una captura real `editor_2d` y verificar almacenamiento, metadatos, hash y recuperación.
-4. Probar captura `editor_3d` y una secuencia breve; comprobar fallos parciales y limpieza.
-5. Resolver una vía nativa y compatible para que ChatGPT use la API HTTP del Command Center; no añadir un servidor de protocolo personalizado ni asumir que el rol `agent_controller` ya conecta esta conversación.
-6. Mantener la copia web aislada; implementar propuestas, diffs, snapshots, validación y aprobación explícita antes de aplicar cambios al proyecto Android.
+La captura utiliza Chrome DevTools Protocol para reducir la dependencia de la ejecución de JavaScript dentro de Godot Web, cuyo hilo principal puede quedar ocupado durante la inicialización del editor.
 
-## Observación visual (en desarrollo)
+### Artefactos de Actions
 
-El protocolo visual está definido en [docs/VISUAL_OBSERVATION.md](docs/VISUAL_OBSERVATION.md) y su contrato estricto de comandos en [docs/VISUAL_COMMANDS.md](docs/VISUAL_COMMANDS.md). En producción solo están habilitados los objetivos `editor_2d` y `editor_3d`. `editor_ui`, `game_preview` y `visual.zoom_to` están documentados, pero rechazados hasta implementar sus backends y restauración de vista. Las secuencias indican cantidad e intervalo; no se permite adivinar objetivos ni sustituir una fuente por otra.
+Los artefactos se publican al terminar el workflow y se conservan durante 14 días. Según las etapas que hayan podido ejecutarse, incluyen:
 
-Neon Object Storage tiene el bucket privado `godot-visual-captures`; el Relay tiene credenciales de almacenamiento con alcance `storage:read`/`storage:write`, transferencia binaria autenticada a través del Relay y validación de imagen/metadatos. La API permite `editor_2d` y `editor_3d`, además de secuencias realtime. **El código está habilitado, pero la operación real sigue pendiente de emparejar el editor web y validar el ciclo captura → almacenamiento → recuperación**. `editor_ui`, `game_preview` y `visual.zoom_to` no se consideran disponibles.
+- `godot-project-manager.png`: Project Manager.
+- `godot-editor-open.png`: editor abierto.
+- `godot-game-preview.png`: preview del juego, si F5 funciona.
+- `editor-sequence-*.png`: frames consecutivos del editor.
+- `game-preview-sequence-*.png`: frames consecutivos del preview.
+- `editor-sequence-contact-sheet.png`: hoja de contacto del editor.
+- `game-preview-sequence-contact-sheet.png`: hoja de contacto del preview.
+- `*-sequence.json`: manifiestos con el estado y metadatos de cada secuencia.
+- `result.json`: resumen estructurado del resultado.
+- `browser-events.json`: eventos de consola, errores y solicitudes fallidas.
+- Archivos OCR y capturas de diagnóstico cuando están disponibles.
 
-## Capacidades de inspección Godot verificadas
+Una captura individual no demuestra que una secuencia esté completa. Una secuencia completa tampoco demuestra por sí sola que el juego funcione correctamente: debe revisarse junto con el resultado de ejecución, OCR, logs y demás pruebas.
 
-Se mantiene un registro de técnicas probadas en CI con Godot 4.7.2: ejecución headless, regresiones, capturas Xvfb y navegación/selección de escenas. La prueba de referencia es externa a este repositorio; no implica que el editor web ya tenga esas funciones integradas. El último intento también detectó un límite pendiente al seleccionar un nodo hijo. Consulta [capacidades verificadas, evidencias y límites](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md) antes de reutilizar o anunciar estas funciones.
+## Inspección dentro del editor Godot
 
-## Flujo de desarrollo Headless + GitHub
+El repositorio contiene un sandbox y complementos experimentales para inspección. Las capacidades documentadas incluyen lectura de estado y archivos, inspección de escenas, apertura de escenas, selección de nodos y captura de vistas 2D/3D.
 
-El trabajo técnico se realiza primero en el proyecto local de Linux con Godot Headless. Después se reflejan en GitHub los archivos locales necesarios o, cuando conviene, se editan directamente los archivos del repositorio. Linux no necesita ni tiene que conectarse a Internet; nunca se sube el motor Headless. Consulta el [flujo de desarrollo detallado](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md).
+Estas funciones tienen distintos niveles de madurez. La existencia del código o el éxito de un test aislado no significa que todas estén disponibles en la instancia publicada de Godot Web. Antes de anunciar una capacidad como operativa, revisar su estado y evidencia en:
 
-## Desarrollo
-
+- [Capacidades de inspección Godot verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
-- [Protocolo WebSocket anterior](docs/BRIDGE_PROTOCOL.md)
-- [Relay](relay/README.md)
-- [Complemento Web Command Center](examples/bridge-sandbox/addons/godot_command_center/plugin.gd)
-- [Sandbox del editor web](examples/bridge-sandbox/project.godot)
 
-## Shared projects: Godot Web and Android
+La inspección debe permanecer acotada y de solo lectura mientras no exista un flujo seguro de propuestas, diferencias, copias de recuperación y aprobación explícita para cambios remotos.
 
-The project-sync layer lets the two editors work with the same selected project while keeping separate local copies. It uses a workspace-scoped project catalog, per-file SHA-256 manifests, revisions and conflict checks. File bytes pass through the authenticated Render relay to private Neon Object Storage.
+## Seguridad y protección de proyectos
 
-- The web editor shows a **Compartir proyectos** launcher to download the connector ZIP; importing and opening that sandbox enables the **Shared Projects** dock.
-- The modified Android editor source includes the **Shared Sync** Project Manager installer, which installs and enables the same project add-on in a selected project.
-- Pair both editors separately into the same workspace, then select the same shared project.
-- Analyze is read-only; Sync is manual, incremental and conflict-blocking. The Web sandbox can clone the Android-seeded remote project after explicit confirmation, with rescue copies. Local files are rescued before remote overwrites or deletions.
-- See [docs/SHARED_PROJECT_SYNC.md](docs/SHARED_PROJECT_SYNC.md) for the API, limits and setup.
+- No incluir tokens, contraseñas ni claves privadas en el repositorio, capturas o logs.
+- No exponer credenciales de GitHub al navegador.
+- Validar las URLs antes de descargar repositorios.
+- Restringir rutas de archivos y operaciones de inspección al proyecto seleccionado.
+- No mezclar archivos, capturas o resultados de proyectos distintos.
+- No sobrescribir cambios locales sin detectar y preservar las modificaciones.
+- No habilitar shell remoto ni ejecución arbitraria como parte de una inspección.
+- Mantener separada la copia de trabajo de cualquier copia que el usuario considere aceptada.
+- Las operaciones de escritura futuras deben contar con diff, revisión base, respaldo y aprobación explícita.
 
-The shared-project schema migration is applied to production Neon. The new relay code and Android editor installer still require CI, deployment/build and a real two-editor transfer test before end-to-end readiness can be claimed.
+## Servicios desplegados
 
+- **Editor Godot Web:** https://godot-web-ia-integrada-rt2l.onrender.com/
+- **Relay:** https://godot-web-ia-relay.onrender.com/
+- **Salud del relay:** https://godot-web-ia-relay.onrender.com/health
+- **Repositorio de este sistema:** https://github.com/decuvilan-lgtm/Godot-web-ia-integrada
+
+Los servicios Render deben permanecer en el plan Free. El relay puede suspenderse por inactividad; no debe tratarse como almacenamiento persistente.
+
+## Estado actual resumido
+
+| Área | Estado |
+|---|---|
+| Editor Godot Web 4.7.2 publicado | Implementado |
+| Inicio del Project Manager en navegador | Implementado; revisar en ejecución real |
+| Importación inicial desde repositorio público `main` | Implementada |
+| URL de repositorio configurable en Actions | Implementada |
+| Apertura de proyecto en Godot Web | Probada con el proyecto de referencia |
+| Captura individual del editor mediante CDP | Probada con el proyecto de referencia |
+| Secuencias configurables de capturas | Implementadas en el workflow; falta validar el último cambio con una ejecución completa |
+| Validación de PNG y manifiestos | Implementada en el workflow |
+| Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
+| Captura del preview F5 | Probada con el proyecto de referencia; opcional y sujeta a que el proyecto pueda ejecutarse |
+| Compatibilidad general con cualquier nombre/ruta de proyecto | Pendiente: eliminar supuestos fijos de Dragon Realm |
+| Actualización incremental del proyecto ya importado | Pendiente |
+| Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
+| Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
+
+**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional.
+
+## Documentación técnica
+
+- [Arquitectura técnica](docs/ARCHITECTURE.md)
+- [Flujo de desarrollo Headless + GitHub](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md)
+- [Importación GitHub → Godot Web](docs/GITHUB_TO_GODOT_WEB.md)
+- [Capacidades de inspección verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
+- [Observación visual](docs/VISUAL_OBSERVATION.md)
+- [Contrato de comandos visuales](docs/VISUAL_COMMANDS.md)
+- [Centro de mando](docs/COMMAND_CENTER.md)
+- [Relay y variables de entorno](relay/README.md)
+- [Sandbox de integración](examples/bridge-sandbox/project.godot)
+
+## Principios para continuar el desarrollo
+
+1. El sistema es una herramienta general para proyectos Godot, no una herramienta exclusiva de Dragon Realm.
+2. Cada prueba debe recibir explícitamente el repositorio o proyecto objetivo.
+3. Los nombres de proyecto, rutas, escenas y recursos deben descubrirse dinámicamente siempre que sea posible.
+4. Las pruebas Headless y las pruebas visuales deben complementarse.
+5. Cada ejecución debe producir evidencia identificada y aislada.
+6. Las secuencias deben capturar exactamente la cantidad solicitada o marcarse como incompletas.
+7. Las capacidades no verificadas deben figurar como pendientes, sin presentarlas como terminadas.
+8. Las mejoras deben integrarse al flujo general y reutilizarse entre proyectos, evitando soluciones especiales para un solo juego.
