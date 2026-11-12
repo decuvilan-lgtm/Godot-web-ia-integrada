@@ -46,7 +46,7 @@ def validate_project_path(project_path: str) -> str:
     value = str(project_path or "").strip()
     if not value:
         return ""
-    if len(value) > 240 or "\\" in value or "\x00" in value:
+    if len(value) > 240 or value.startswith("/") or value.endswith("/") or "\\" in value or "\x00" in value:
         raise HTTPException(status_code=422, detail="Invalid project subdirectory")
     parts = value.split("/")
     if any(part in {"", ".", ".."} for part in parts):
