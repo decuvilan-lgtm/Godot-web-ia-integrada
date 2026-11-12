@@ -705,7 +705,7 @@ jobs:
               console.log(JSON.stringify(result, null, 2));
               await page.close();
               await context.close();
-              if (sessionVideo) await sessionVideo.saveAs('artifacts/render-session.webm');
+              if (sessionVideo) await sessionVideo.saveAs('artifacts/videos/render-session.webm');
               await browser.close();
             } catch (error) {
               result.status = 'failed';
@@ -722,7 +722,7 @@ jobs:
               try { await page.close(); } catch {}
               try { await context.close(); } catch {}
               if (sessionVideo) {
-                try { await sessionVideo.saveAs('artifacts/render-session.webm'); } catch (videoError) { result.videoSaveError = String(videoError); }
+                try { await sessionVideo.saveAs('artifacts/videos/render-session.webm'); } catch (videoError) { result.videoSaveError = String(videoError); }
               }
               await browser.close();
               throw error;
