@@ -1,11 +1,16 @@
 name: Importar repositorio en Godot Web
 
 on:
+  push:
+    paths:
+      - '.github/workflows/godot-web-import.yml'
+      - 'scripts/godot_web_ocr.py'
   workflow_dispatch:
     inputs:
       repository_url:
         description: "URL de un repositorio público de GitHub (se importará desde main)"
         required: true
+        default: "https://github.com/gavilandavid89-pixel/Escondite"
         type: string
       startup_timeout:
         description: "Tiempo máximo de espera del arranque de Godot (segundos)"
@@ -29,7 +34,7 @@ jobs:
       - name: Validar URL y repositorio público
         id: repo
         env:
-          REPOSITORY_URL: ${{ inputs.repository_url }}
+          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -63,32 +68,50 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
 
-      - name: Ejecutar Godot Web y comprobar importación
+      - name: Preparar OCR para inspeccionar el Project Manager
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --disable-pip-version-check pillow pytesseract
+
+      - name: Ejecutar Godot Web e importar el proyecto
         id: browser
         env:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
-          STARTUP_TIMEOUT: ${{ inputs.startup_timeout }}
+          STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
           cat > /tmp/run-godot-web-check.cjs <<'JS'
           const { chromium } = require('playwright');
+          const { execFileSync } = require('child_process');
           const fs = require('fs');
+          const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
+          const repo = \`${process.env.OWNER}/${process.env.REPO}\`;
+          const target = \`https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}\`;
+          function inspectImage(path) {
+            return JSON.parse(execFileSync('python3', ['scripts/godot_web_ocr.py', path], {
+              encoding: 'utf8',
+              env: { ...process.env, PATH: \`${process.cwd()}/.venv/bin:${process.env.PATH}\` }
+            }));
+          }
+          function findLine(scan, pattern, label) {
+            const line = scan.lines.find(item => pattern.test(item.text));
+            if (!line) throw new Error(\`No se encontró "${label}". OCR: ${scan.text}\`);
+            return line;
+          }
+          async function clickLine(page, scan, pattern, label) {
+            const line = findLine(scan, pattern, label);
+            await page.mouse.click(line.x, line.y);
+          }
           (async () => {
-            const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
-            const repo = `${process.env.OWNER}/${process.env.REPO}`;
-            const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}`;
             const browser = await chromium.launch({
               headless: true,
-              args: [
-                '--enable-webgl',
-                '--enable-unsafe-swiftshader',
-                '--use-gl=angle',
-                '--use-angle=swiftshader',
-                '--disable-dev-shm-usage',
-                '--no-sandbox'
-              ]
+              args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-gl=angle',
+                '--use-angle=swiftshader', '--disable-dev-shm-usage', '--no-sandbox']
             });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
             const events = [];
@@ -96,52 +119,95 @@ jobs:
             page.on('pageerror', error => events.push({ type: 'pageerror', text: String(error) }));
             page.on('requestfailed', request => events.push({ type: 'requestfailed', url: request.url(), error: request.failure()?.errorText }));
             let archiveStatus = null;
-            const archiveResponse = page.waitForResponse(response =>
-              response.url().includes('/v1/github/') && response.url().endsWith('/archive'),
-              { timeout }
-            );
             page.on('response', response => {
               if (response.url().includes('/v1/github/') && response.url().endsWith('/archive')) {
                 archiveStatus = response.status();
                 events.push({ type: 'archive-response', status: archiveStatus, contentType: response.headers()['content-type'] });
               }
             });
-            let result = { repository: repo, target, startedAt: new Date().toISOString() };
+            const result = { repository: repo, target, startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout });
               result.httpStatus = response?.status() ?? null;
               await page.waitForSelector('#startButton', { state: 'attached', timeout });
-              await page.waitForFunction(() => document.readyState === 'complete', null, { timeout });
-              const archive = await archiveResponse;
-              archiveStatus = archive.status();
+              await page.waitForSelector('#zip-file', { state: 'attached', timeout });
+              await page.waitForFunction(() => {
+                const input = document.querySelector('#zip-file');
+                return input?.files?.length === 1 && !new URLSearchParams(location.search).has('repo');
+              }, null, { timeout });
+              result.preloadConfirmed = true;
+              result.preloadedFilename = await page.locator('#zip-file').evaluate(el => el.files[0]?.name || null);
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
-              result.startButtonPresent = await page.locator('#startButton').count() > 0;
               result.archiveStatus = archiveStatus;
-              await page.screenshot({ path: 'artifacts/godot-web-import.png', fullPage: true });
-              if (!result.connectorButtonPresent || !result.startButtonPresent) {
-                throw new Error('No se detectó el shell esperado de Godot Web.');
+              if (archiveStatus !== 200) throw new Error('El Relay no entregó el ZIP con HTTP 200.');
+              if (!result.preloadedFilename?.endsWith('-main.zip')) throw new Error('El ZIP no quedó asignado al input oficial de Godot.');
+              await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(c => {
+                const r = c.getBoundingClientRect();
+                return c.width > 500 && c.height > 300 && r.width > 500 && r.height > 300;
+              }), null, { timeout });
+              await page.waitForTimeout(10000);
+              await page.screenshot({ path: 'artifacts/godot-project-manager.png', fullPage: true });
+              let scan = inspectImage('artifacts/godot-project-manager.png');
+              result.projectManagerOcr = scan.text;
+              fs.writeFileSync('artifacts/project-manager-ocr.json', JSON.stringify(scan, null, 2));
+              if (/Important\s*-\s*Please read/i.test(scan.text)) {
+                const welcome = page.getByRole('button', { name: /OK\s*-\s*Don't Show Again/i });
+                if (await welcome.count()) {
+                  await welcome.click({ timeout: 5000 });
+                  await page.waitForTimeout(3000);
+                  await page.screenshot({ path: 'artifacts/godot-project-manager.png', fullPage: true });
+                  scan = inspectImage('artifacts/godot-project-manager.png');
+                  result.projectManagerOcr = scan.text;
+                }
               }
-              if (archiveStatus !== 200) {
-                throw new Error('Godot Web no pudo precargar el ZIP del repositorio (estado Relay: ' + archiveStatus + ').');
+              if (/Create Folder/i.test(scan.text)) {
+                await clickLine(page, scan, /Create Folder/i, 'Create Folder');
+                await page.waitForTimeout(5000);
+                await page.screenshot({ path: 'artifacts/godot-install-dialog.png', fullPage: true });
+                scan = inspectImage('artifacts/godot-install-dialog.png');
+                result.installDialogOcr = scan.text;
+                fs.writeFileSync('artifacts/install-dialog-ocr.json', JSON.stringify(scan, null, 2));
               }
+              if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
+                await clickLine(page, scan, /Install\s*&\s*Edit|Install\s+and\s+Edit/i, 'Install & Edit');
+                result.installAndEditClicked = true;
+              } else {
+                throw new Error('Godot no presentó Install & Edit tras crear la carpeta. OCR: ' + scan.text);
+              }
+              await page.waitForTimeout(20000);
+              await page.screenshot({ path: 'artifacts/godot-editor-open.png', fullPage: true });
+              const editorScan = inspectImage('artifacts/godot-editor-open.png');
+              result.editorOcr = editorScan.text;
+              fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+              const editorSignals = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
+              if (!editorSignals) throw new Error('No se detectaron paneles del editor tras Install & Edit. OCR: ' + editorScan.text);
+              result.projectNameVisible = /Escondite/i.test(editorScan.text);
               result.status = 'passed';
+              result.finishedAt = new Date().toISOString();
+              fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
+              fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
+              console.log(JSON.stringify(result, null, 2));
+              await browser.close();
             } catch (error) {
               result.status = 'failed';
               result.error = String(error?.stack || error);
-              try { await page.screenshot({ path: 'artifacts/godot-web-import-failure.png', fullPage: true }); } catch {}
+              result.finishedAt = new Date().toISOString();
+              try {
+                await page.screenshot({ path: 'artifacts/godot-web-import-failure.png', fullPage: true });
+                const failureScan = inspectImage('artifacts/godot-web-import-failure.png');
+                result.failureOcr = failureScan.text;
+                fs.writeFileSync('artifacts/failure-ocr.json', JSON.stringify(failureScan, null, 2));
+              } catch (captureError) { result.captureError = String(captureError); }
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
               await browser.close();
               throw error;
             }
-            result.finishedAt = new Date().toISOString();
-            fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
-            fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
-            await browser.close();
-            console.log(JSON.stringify(result, null, 2));
           })().catch(error => { console.error(error); process.exit(1); });
           JS
+          . .venv/bin/activate
           NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
+
 
       - name: Publicar enlace de apertura y resultado
         if: always()
@@ -160,7 +226,7 @@ jobs:
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
-            echo "La ejecución automatizada prueba la precarga del ZIP y el arranque del shell web. La confirmación final de importación/instalación del proyecto puede seguir requiriendo los controles nativos del Project Manager."
+            echo "La ejecución automatizada confirma la precarga del ZIP, la creación de carpeta y la apertura del editor Godot; guarda capturas y OCR de cada fase."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Guardar capturas y diagnóstico
