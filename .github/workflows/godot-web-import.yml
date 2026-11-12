@@ -259,6 +259,27 @@ jobs:
                 result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
                 result.projectNameVisible = /Dragon\s*Realm/i.test(editorScan.text);
                 fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                // Switch to the 2D workspace with a real browser input event and capture it.
+                try {
+                  const sceneCdp = await page.context().newCDPSession(page);
+                  await sceneCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 603, y: 54 });
+                  await sceneCdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 603, y: 54, button: 'left', clickCount: 1 });
+                  await sceneCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 603, y: 54, button: 'left', clickCount: 1 });
+                  await page.waitForTimeout(2500);
+                  const sceneShot = await Promise.race([
+                    sceneCdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('2D workspace capture timeout')), 15000))
+                  ]);
+                  fs.writeFileSync('artifacts/godot-editor-2d.png', Buffer.from(sceneShot.data, 'base64'));
+                  const sceneScan = inspectImage('artifacts/godot-editor-2d.png');
+                  result.editor2dScreenshot = 'captured';
+                  result.editor2dOcr = sceneScan.text;
+                  fs.writeFileSync('artifacts/editor-2d-ocr.json', JSON.stringify(sceneScan, null, 2));
+                  await sceneCdp.detach();
+                } catch (sceneError) {
+                  result.editor2dScreenshot = 'warning';
+                  result.editor2dCaptureWarning = String(sceneError);
+                }
                 if (!result.editorUiDetected || !result.projectNameVisible) {
                   throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
                 }
