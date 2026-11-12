@@ -90,17 +90,17 @@ jobs:
           const { execFileSync } = require('child_process');
           const fs = require('fs');
           const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
-          const repo = \`${process.env.OWNER}/${process.env.REPO}\`;
-          const target = \`https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}\`;
+          const repo = `${process.env.OWNER}/${process.env.REPO}`;
+          const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}`;
           function inspectImage(path) {
             return JSON.parse(execFileSync('python3', ['scripts/godot_web_ocr.py', path], {
               encoding: 'utf8',
-              env: { ...process.env, PATH: \`${process.cwd()}/.venv/bin:${process.env.PATH}\` }
+              env: { ...process.env, PATH: `${process.cwd()}/.venv/bin:${process.env.PATH}` }
             }));
           }
           function findLine(scan, pattern, label) {
             const line = scan.lines.find(item => pattern.test(item.text));
-            if (!line) throw new Error(\`No se encontró "${label}". OCR: ${scan.text}\`);
+            if (!line) throw new Error(`No se encontró "${label}". OCR: ${scan.text}`);
             return line;
           }
           async function clickLine(page, scan, pattern, label) {
