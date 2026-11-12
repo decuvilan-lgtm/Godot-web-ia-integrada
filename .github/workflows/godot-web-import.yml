@@ -189,13 +189,13 @@ jobs:
               let editorLaunchConfirmed = false;
               for (let attempt = 0; attempt < 36; attempt++) {
                 const editingLogged = events.some(event => (event.text || '').includes('Editing project: /home/web_user/dragon-realm'));
-                const engineStarts = events.filter(event => /Godot Engine v4\\.7\\.2/i.test(event.text || '')).length;
+                const engineStarts = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
                 if (editingLogged && engineStarts >= 2) { editorLaunchConfirmed = true; break; }
                 await page.waitForTimeout(3000);
               }
               result.projectInstallConfirmed = true;
               result.editorLaunchConfirmed = editorLaunchConfirmed;
-              result.engineStartCount = events.filter(event => /Godot Engine v4\\.7\\.2/i.test(event.text || '')).length;
+              result.engineStartCount = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
               if (!editorLaunchConfirmed) throw new Error('La instalación terminó, pero no se detectó el segundo arranque del motor asociado a la apertura del editor.');
               try {
                 result.rendererResponsive = await page.evaluate(() => ({
