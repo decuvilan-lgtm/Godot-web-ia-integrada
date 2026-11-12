@@ -79,7 +79,7 @@ window.addEventListener("load", function () {
 </script>
 """
 if 'id="godot-auto-start"' not in html:
-    html = re.sub(r"</body\\s*>", auto_start + "\\n</body>", html, count=1, flags=re.I)
+    html = re.sub(r"</body\s*>", auto_start + "\n</body>", html, count=1, flags=re.I)
     if 'id="godot-auto-start"' not in html:
         raise SystemExit("ERROR: could not install automatic Godot Project Manager startup")
 
