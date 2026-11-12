@@ -147,6 +147,12 @@ jobs:
                 return input?.files?.length === 1 && !new URLSearchParams(location.search).has('repo');
               }, null, { timeout });
               result.preloadConfirmed = true;
+              result.browserIsolation = await page.evaluate(() => ({
+                crossOriginIsolated: window.crossOriginIsolated,
+                sharedArrayBufferAvailable: typeof SharedArrayBuffer !== 'undefined',
+                secureContext: window.isSecureContext,
+                origin: window.location.origin
+              }));
               result.preloadedFilename = await page.locator('#zip-file').evaluate(el => el.files[0]?.name || null);
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
               result.archiveStatus = archiveStatus;
@@ -212,10 +218,10 @@ jobs:
                 if (editingLogged && engineStarts >= 2) { editorLaunchConfirmed = true; break; }
                 await page.waitForTimeout(3000);
               }
-              result.projectInstallConfirmed = true;
               result.editorLaunchConfirmed = editorLaunchConfirmed;
               result.engineStartCount = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
-              if (!editorLaunchConfirmed) throw new Error('La instalación terminó, pero no se detectó el segundo arranque del motor asociado a la apertura del editor.');
+              result.projectInstallConfirmed = Boolean(editorLaunchConfirmed && events.some(event => (event.text || '').includes('Editing project: /home/web_user/dragon-realm')));
+              if (!result.projectInstallConfirmed) throw new Error('No se confirmó que Godot abriera Dragon Realm; no se acepta el clic como prueba de instalación.');
               await page.waitForTimeout(15000);
               try {
                 result.rendererResponsive = await Promise.race([
@@ -230,12 +236,11 @@ jobs:
                 result.rendererResponsive = false;
                 result.rendererWarning = String(probeError);
               }
-              result.status = 'passed';
+              result.status = 'functional-launch-only';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
-              console.log('Comprobación funcional superada; comienza captura visual opcional.');
-              // Captura PNG de 1920x1200. Un fallo solo genera advertencia y no revoca la prueba funcional.
+              console.log('Godot informó que abrió el proyecto; la captura visual es obligatoria para aprobar la prueba completa.');
               try {
                 await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'device', timeout: 20000 });
                 const editorScan = inspectImage('artifacts/godot-editor-open.png');
@@ -244,10 +249,22 @@ jobs:
                 result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
                 result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
                 fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                if (!result.editorUiDetected || !result.projectNameVisible) {
+                  throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
+                }
               } catch (captureError) {
-                result.editorScreenshot = 'warning';
+                result.editorScreenshot = 'failed';
                 result.captureWarning = String(captureError);
+                result.status = 'failed';
+                result.finishedAt = new Date().toISOString();
+                fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
+                fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
+                throw captureError;
               }
+              result.status = 'passed';
+              result.finishedAt = new Date().toISOString();
+              fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
+              fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
@@ -292,9 +309,9 @@ jobs:
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
             if [ "$JOB_STATUS" = "success" ]; then
-              echo "La prueba confirmó la precarga del ZIP, el arranque de Godot y la apertura del editor. Las capturas y el OCR documentan cada fase."
+              echo "La prueba confirmó la precarga del ZIP, la apertura del proyecto y una captura OCR verificable del editor."
             else
-              echo "La importación completa no quedó confirmada. Revisa las capturas y el diagnóstico adjuntos para localizar el bloqueo."
+              echo "La prueba no consiguió una captura verificable del editor con el proyecto abierto. Revisa el diagnóstico adjunto."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
