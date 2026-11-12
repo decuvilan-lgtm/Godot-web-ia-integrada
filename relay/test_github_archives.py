@@ -9,7 +9,7 @@ from github_archives import archive_url
 
 
 class FakeUpstream:
-    def __init__(self, status_code=200, body=b"PK\\x03\\x04fake-zip", size=None):
+    def __init__(self, status_code=200, body=b"PK" + bytes((3, 4)) + b"fake-zip", size=None):
         self.status_code = status_code
         self.url = httpx.URL("https://codeload.github.com/example/game/zip/refs/heads/main")
         self.headers = {"content-length": str(size if size is not None else len(body))}
@@ -59,7 +59,7 @@ class GitHubArchiveTests(unittest.TestCase):
         with patch("github_archives.httpx.AsyncClient", FakeClient):
             response = self.client.get("/v1/github/example/game/archive")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"PK\\x03\\x04fake-zip")
+        self.assertEqual(response.content, b"PK" + bytes((3, 4)) + b"fake-zip")
         self.assertEqual(response.headers["x-github-ref"], "main")
         self.assertEqual(response.headers["x-github-repository"], "example/game")
         self.assertIn("no-store", response.headers["cache-control"])
