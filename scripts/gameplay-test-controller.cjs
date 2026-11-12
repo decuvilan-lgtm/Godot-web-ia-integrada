@@ -119,7 +119,14 @@ async function runGameplayTimeline(page, input, options = {}) {
   let nextCapture = 0;
   let actionIndex = 0;
   const capture = typeof options.capture === 'function' ? options.capture : null;
+  let actionCaptureIndex = 0;
   const log = (type, detail = {}) => events.push({ at_ms: Date.now() - started, type, ...detail });
+  const captureCheckpoint = async (phase, action) => {
+    if (!capture) return;
+    const action_index = actionCaptureIndex;
+    await capture({ at_ms: Date.now() - started, index: events.filter(e => e.type === 'capture').length, phase, action_index, action });
+    log('capture', { phase, action_index, action: { device: action.device, control: action.control, state: action.state } });
+  };
   const waitUntil = async target => {
     while (Date.now() - started < target) {
       const remaining = target - (Date.now() - started);
@@ -127,6 +134,7 @@ async function runGameplayTimeline(page, input, options = {}) {
     }
   };
   const perform = async action => {
+    await captureCheckpoint('before-action', action);
     let inputX = action.x;
     let inputY = action.y;
     if ((action.device === 'mouse' || action.device === 'touch') && action.coordinate_space !== 'page') {
@@ -161,6 +169,8 @@ async function runGameplayTimeline(page, input, options = {}) {
       await page.touchscreen.tap(inputX, inputY);
     }
     log('input', { device: action.device, control: action.control, state: action.state, x: inputX, y: inputY, coordinate_space: action.coordinate_space });
+    await captureCheckpoint('after-action', action);
+    actionCaptureIndex++;
   };
 
   try {
