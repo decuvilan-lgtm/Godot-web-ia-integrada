@@ -234,9 +234,9 @@ jobs:
             }
             return manifest;
           }
-          async function captureEditorSnapshot(page) {
+          async function captureEditorSnapshot(page, options = {}) {
             const cdp = await page.context().newCDPSession(page);
-            const deadline = Date.now() + 90000;
+            const deadline = Date.now() + (options.timeoutMs || 90000);
             const attempts = [];
             let lastScan = null;
             let lastMethod = null;
@@ -254,14 +254,14 @@ jobs:
             try {
               while (Date.now() < deadline) {
                 for (const [method, capture] of captureMethods) {
-                  const path = 'artifacts/godot-editor-open.png';
+                  const path = options.path || 'artifacts/godot-editor-open.png';
                   try {
                     await capture(path);
                     const scan = inspectImage(path);
                     lastScan = scan;
                     lastMethod = method;
                     attempts.push({ at: new Date().toISOString(), method, ocr: scan.text.slice(0, 500) });
-                    if (/2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(scan.text)) {
+                    if ((options.readyPredicate || (value => /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(value)))(scan.text)) {
                       return { ready: true, method, scan, attempts };
                     }
                   } catch (error) {
@@ -273,7 +273,7 @@ jobs:
               return { ready: false, method: lastMethod, scan: lastScan, attempts };
             } finally {
               try { await cdp.detach(); } catch {}
-              fs.writeFileSync('artifacts/editor-capture-attempts.json', JSON.stringify(attempts, null, 2));
+              fs.writeFileSync(options.attemptsPath || 'artifacts/editor-capture-attempts.json', JSON.stringify(attempts, null, 2));
             }
           }
           async function captureSequencePlaywright(page, label, count, intervalMs) {
@@ -478,32 +478,41 @@ jobs:
               result.projectResourceWarnings = resourceErrors.map(event => event.text);
               result.projectHasResourceWarnings = resourceErrors.length > 0;
 
-              // F5 es una comprobación secundaria: no se ejecuta si el hilo WASM no responde.
-              if (!result.rendererResponsive) {
-                result.gamePreviewScreenshot = 'skipped-renderer-unresponsive';
-              } else {
-                try {
-                  const previewCdp = await page.context().newCDPSession(page);
-                  await previewCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
-                  await previewCdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
-                  await page.waitForTimeout(10000);
-                  const previewShot = await Promise.race([
-                    previewCdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('game preview capture timeout')), 15000))
-                  ]);
-                  fs.writeFileSync('artifacts/godot-game-preview.png', Buffer.from(previewShot.data, 'base64'));
-                  const previewScan = inspectImage('artifacts/godot-game-preview.png');
-                  result.gamePreviewScreenshot = 'captured';
-                  result.gamePreviewOcr = previewScan.text;
-                  fs.writeFileSync('artifacts/game-preview-ocr.json', JSON.stringify(previewScan, null, 2));
-                  await previewCdp.detach();
-                  result.gamePreviewSequence = await captureSequence(page, 'game-preview-sequence', gameFrames, gameIntervalMs);
-                } catch (previewError) {
-                  result.gamePreviewScreenshot = 'warning';
-                  result.gamePreviewWarning = String(previewError);
+              // Intentar F5 aunque el probe JS haya agotado tiempo: en pruebas previas
+              // el motor pudo renderizar el juego aun cuando ese probe no respondía.
+              try {
+                const previewInput = await page.context().newCDPSession(page);
+                await previewInput.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
+                await previewInput.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
+                await previewInput.detach();
+                await page.waitForTimeout(10000);
+                const gameCapture = await captureEditorSnapshot(page, {
+                  path: 'artifacts/godot-game-preview.png',
+                  attemptsPath: 'artifacts/game-capture-attempts.json',
+                  timeoutMs: 60000,
+                  readyPredicate: value => /\bGame\b/i.test(value) && !/Scene Project|Inspector|FileSystem/i.test(value)
+                });
+                result.gamePreviewCaptureMethod = gameCapture.method || null;
+                result.gamePreviewScreenshot = gameCapture.ready ? 'captured-' + gameCapture.method : 'warning';
+                result.gamePreviewOcr = gameCapture.scan?.text || '';
+                result.gamePreviewUiDetected = Boolean(gameCapture.ready);
+                if (gameCapture.scan) fs.writeFileSync('artifacts/game-preview-ocr.json', JSON.stringify(gameCapture.scan, null, 2));
+                if (gameCapture.ready) {
+                  result.gamePreviewSequence = gameCapture.method === 'playwright'
+                    ? await captureSequencePlaywright(page, 'game-preview-sequence', gameFrames, gameIntervalMs)
+                    : gameCapture.method === 'cdp'
+                      ? await captureSequence(page, 'game-preview-sequence', gameFrames, gameIntervalMs)
+                      : await captureSequenceX11('game-preview-sequence', gameFrames, gameIntervalMs);
+                } else {
+                  result.gamePreviewWarning = 'No se detectó la vista Game después de enviar F5. ' + (gameCapture.scan?.text || 'Sin OCR');
                 }
+              } catch (previewError) {
+                result.gamePreviewScreenshot = 'warning';
+                result.gamePreviewWarning = String(previewError);
               }
-              result.status = result.projectHasResourceWarnings ? 'passed-with-project-warnings' : 'passed';
+              result.status = result.projectHasResourceWarnings || result.gamePreviewScreenshot === 'warning'
+                ? 'passed-with-project-warnings'
+                : 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
