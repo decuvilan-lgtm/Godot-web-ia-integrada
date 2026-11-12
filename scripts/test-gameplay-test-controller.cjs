@@ -43,7 +43,7 @@ function fakePage(failAt = null) {
       { at_ms: 100, device: 'touch', control: 'tap', state: 'tap', x: 130, y: 100 }
     ]
   }, { capture: async () => {} });
-  assert.equal(result.actions_sent, 4);
+  assert.equal(result.actions_sent, 4);\n  assert.equal(result.viewport_focus.focused, true);\n  assert.equal(result.viewport_focus.target.id, 'game-canvas');
   assert.ok(result.events.some(event => event.type === 'timeline-complete'));
   assert.ok(page.calls.includes('down:ArrowRight'));
   assert.ok(page.calls.includes('up:ArrowRight'));
