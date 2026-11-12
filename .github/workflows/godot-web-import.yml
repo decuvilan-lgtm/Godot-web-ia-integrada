@@ -74,7 +74,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb imagemagick
 
       - name: Preparar OCR para inspeccionar el Project Manager
         run: |
@@ -263,13 +263,29 @@ jobs:
                   throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
                 }
               } catch (captureError) {
-                result.editorScreenshot = 'failed';
                 result.captureWarning = String(captureError);
-                result.status = 'failed';
-                result.finishedAt = new Date().toISOString();
-                fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
-                fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
-                throw captureError;
+                // Last-resort capture from the X11 desktop. This does not need
+                // JavaScript execution or a responsive Chromium renderer.
+                try {
+                  execFileSync('import', ['-window', 'root', 'artifacts/godot-editor-open.png'], { timeout: 15000 });
+                  const editorScan = inspectImage('artifacts/godot-editor-open.png');
+                  result.editorScreenshot = 'captured-x11';
+                  result.editorOcr = editorScan.text;
+                  result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
+                  result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
+                  fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
+                  if (!result.editorUiDetected || !result.projectNameVisible) {
+                    throw new Error('X11 capturó la pantalla, pero no encontró el editor con Dragon Realm. OCR: ' + editorScan.text);
+                  }
+                } catch (x11Error) {
+                  result.editorScreenshot = 'failed';
+                  result.x11CaptureWarning = String(x11Error);
+                  result.status = 'failed';
+                  result.finishedAt = new Date().toISOString();
+                  fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
+                  fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
+                  throw x11Error;
+                }
               }
               result.status = 'passed';
               result.finishedAt = new Date().toISOString();
