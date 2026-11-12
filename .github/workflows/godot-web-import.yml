@@ -95,6 +95,10 @@ jobs:
             page.on('pageerror', error => events.push({ type: 'pageerror', text: String(error) }));
             page.on('requestfailed', request => events.push({ type: 'requestfailed', url: request.url(), error: request.failure()?.errorText }));
             let archiveStatus = null;
+            const archiveResponse = page.waitForResponse(response =>
+              response.url().includes('/v1/github/') && response.url().endsWith('/archive'),
+              { timeout }
+            );
             page.on('response', response => {
               if (response.url().includes('/v1/github/') && response.url().endsWith('/archive')) {
                 archiveStatus = response.status();
@@ -107,7 +111,8 @@ jobs:
               result.httpStatus = response?.status() ?? null;
               await page.waitForSelector('#startButton', { state: 'attached', timeout });
               await page.waitForFunction(() => document.readyState === 'complete', null, { timeout });
-              await page.waitForTimeout(2500);
+              const archive = await archiveResponse;
+              archiveStatus = archive.status();
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
               result.startButtonPresent = await page.locator('#startButton').count() > 0;
               result.archiveStatus = archiveStatus;
