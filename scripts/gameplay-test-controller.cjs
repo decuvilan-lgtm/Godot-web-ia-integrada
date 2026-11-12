@@ -40,8 +40,8 @@ function validateTimeline(config) {
       if (!['move', 'click', 'down', 'up'].includes(state)) {
         throw new TypeError(`Acción de ratón no válida en el índice ${index}.`);
       }
-    } else if (state !== 'tap') {
-      throw new TypeError(`La acción táctil debe ser tap (índice ${index}).`);
+    } else if (!['tap', 'down', 'move', 'up'].includes(state)) {
+      throw new TypeError(`La acción táctil debe ser tap, down, move o up (índice ${index}).`);
     }
     const x = item.x == null ? null : integer(item.x, `actions[${index}].x`, 0, MAX_COORDINATE);
     const y = item.y == null ? null : integer(item.y, `actions[${index}].y`, 0, MAX_COORDINATE);
@@ -116,6 +116,8 @@ async function runGameplayTimeline(page, input, options = {}) {
   const events = [];
   const heldKeys = new Set();
   const heldButtons = new Set();
+  let touchSession = null;
+  let touchActive = false;
   let nextCapture = 0;
   let actionIndex = 0;
   const capture = typeof options.capture === 'function' ? options.capture : null;
@@ -132,6 +134,13 @@ async function runGameplayTimeline(page, input, options = {}) {
       const remaining = target - (Date.now() - started);
       await page.waitForTimeout(Math.min(remaining, 100));
     }
+  };
+  const dispatchTouch = async (type, x, y) => {
+    if (!touchSession) touchSession = await page.context().newCDPSession(page);
+    const touchPoints = type === 'touchEnd' ? [] : [{
+      x, y, id: 1, radiusX: 1, radiusY: 1, force: 1
+    }];
+    await touchSession.send('Input.dispatchTouchEvent', { type, touchPoints });
   };
   const perform = async action => {
     await captureCheckpoint('before-action', action);
@@ -165,8 +174,28 @@ async function runGameplayTimeline(page, input, options = {}) {
         await page.mouse.up({ button: action.button });
         heldButtons.delete(action.button);
       }
+    } else if (action.device === 'touch') {
+      if (action.state === 'tap') {
+        if (touchActive) throw new Error('No se puede iniciar un toque tap mientras otro dedo sigue presionado.');
+        await dispatchTouch('touchStart', inputX, inputY);
+        touchActive = true;
+        await page.waitForTimeout(60);
+        await dispatchTouch('touchEnd', inputX, inputY);
+        touchActive = false;
+      } else if (action.state === 'down') {
+        if (touchActive) throw new Error('Ya hay un toque presionado; libera el dedo antes de iniciar otro.');
+        await dispatchTouch('touchStart', inputX, inputY);
+        touchActive = true;
+      } else if (action.state === 'move') {
+        if (!touchActive) throw new Error('No se puede mover un toque sin un down previo.');
+        await dispatchTouch('touchMove', inputX, inputY);
+      } else {
+        if (!touchActive) throw new Error('No se puede liberar un toque sin un down previo.');
+        await dispatchTouch('touchEnd', inputX, inputY);
+        touchActive = false;
+      }
     } else {
-      await page.touchscreen.tap(inputX, inputY);
+      throw new Error(`Dispositivo no implementado: ${action.device}`);
     }
     log('input', { device: action.device, control: action.control, state: action.state, x: inputX, y: inputY, coordinate_space: action.coordinate_space });
     await captureCheckpoint('after-action', action);
@@ -201,6 +230,16 @@ async function runGameplayTimeline(page, input, options = {}) {
     }
     for (const button of heldButtons) {
       try { await page.mouse.up({ button }); log('auto-release', { device: 'mouse', button }); } catch {}
+    }
+    if (touchActive && touchSession) {
+      try {
+        await dispatchTouch('touchEnd', 0, 0);
+        touchActive = false;
+        log('auto-release', { device: 'touch' });
+      } catch {}
+    }
+    if (touchSession) {
+      try { await touchSession.detach(); } catch {}
     }
   }
   return { requested_duration_ms: config.duration_ms, elapsed_ms: Date.now() - started, actions_requested: config.actions.length, actions_sent: actionIndex, viewport_focus: viewportFocus, events };
