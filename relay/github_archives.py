@@ -43,7 +43,7 @@ def validate_branch(branch: str) -> str:
 
 
 def validate_project_path(project_path: str) -> str:
-    value = str(project_path or "").strip().strip("/")
+    value = str(project_path or "").strip()
     if not value:
         return ""
     if len(value) > 240 or "\\" in value or "\x00" in value:
@@ -86,6 +86,20 @@ def _file_chunks(file_obj) -> Iterator[bytes]:
         if not chunk:
             break
         yield chunk
+
+
+def _validate_root_project(archive) -> None:
+    try:
+        with zipfile.ZipFile(archive, "r") as source:
+            names = set(source.namelist())
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=502, detail="GitHub response was not a valid ZIP archive") from exc
+    roots = {name.split("/", 1)[0] for name in names if "/" in name}
+    if len(roots) != 1:
+        raise HTTPException(status_code=502, detail="GitHub archive has an unexpected directory layout")
+    root = next(iter(roots))
+    if f"{root}/project.godot" not in names:
+        raise HTTPException(status_code=422, detail="Could not find project.godot at repository root; supply the project subdirectory")
 
 
 def _select_project_subdirectory(archive, project_path: str):
@@ -203,9 +217,8 @@ async def public_repository_archive(
             archive.close()
             archive = selected
         else:
-            # Root projects must be explicit; a nested project must use the path query.
-            checked = _select_project_subdirectory(archive, "")
-            checked.close()
+            # Root projects must be explicit; nested projects use the path query.
+            _validate_root_project(archive)
             archive.seek(0)
 
         branch_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", selected_branch).strip(".-") or "branch"
