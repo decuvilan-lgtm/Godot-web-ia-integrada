@@ -1,0 +1,25 @@
+{
+  "profile": "escondite-initial-gameplay-smoke",
+  "repository": "gavilandavid89-pixel/Escondite",
+  "branch": "main",
+  "purpose": "Opt-in smoke test for the currently observed Dragon Realm start screen. This profile is not a universal control mapping.",
+  "observed_ui": {
+    "canvas": "game-canvas",
+    "canvas_rect": { "x": 80, "y": 32.125, "width": 1280, "height": 720 },
+    "new_game_button_center_page": { "x": 1025, "y": 472 },
+    "visible_keyboard_hint": "A/D + SPACE + J + 1-6 + F"
+  },
+  "actions": [
+    { "at_ms": 1000, "device": "mouse", "state": "click", "x": 1025, "y": 472, "coordinate_space": "page", "purpose": "Start a new game from the visible menu button" },
+    { "at_ms": 2500, "device": "keyboard", "control": "D", "state": "down", "purpose": "Hold the displayed right-movement key" },
+    { "at_ms": 4000, "device": "keyboard", "control": "D", "state": "up", "purpose": "Release the movement key" },
+    { "at_ms": 4800, "device": "keyboard", "control": "Space", "state": "press", "purpose": "Test the displayed jump key" },
+    { "at_ms": 6000, "device": "keyboard", "control": "J", "state": "press", "purpose": "Test the displayed attack key" }
+  ],
+  "verification_limits": [
+    "A sent browser input is not proof the game accepted it.",
+    "A visual difference alone does not establish causality.",
+    "Compare player position, scene state, HUD, and OCR before attributing behavior.",
+    "Do not use this profile for other projects."
+  ]
+}
