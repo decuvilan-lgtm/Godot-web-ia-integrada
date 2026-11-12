@@ -33,7 +33,7 @@ def validate_branch(branch: str) -> str:
         or value.startswith("/")
         or value.endswith("/")
         or "//" in value
-        or any(part in {"", ".", ".."} for part in parts)
+        or any(part in {"", ".", ".."} or part.startswith(".") or part.lower().endswith(".lock") for part in parts)
         or value.endswith(".")
         or "@{" in value
         or any(char in value for char in ("~", "^", ":", "?", "*", "[", "\\", " "))
