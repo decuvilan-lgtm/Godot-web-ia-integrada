@@ -14,7 +14,11 @@ class AssetParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        for key in ("src", "href"):
+        # Only fetch-bearing references are required in the published bundle.
+        # Anchor hrefs may intentionally point to optional documentation/downloads
+        # hosted elsewhere (for example the upstream editor's demo ZIP links).
+        keys = ("src", "href") if tag == "link" else ("src",)
+        for key in keys:
             value = attrs.get(key)
             if not value:
                 continue
