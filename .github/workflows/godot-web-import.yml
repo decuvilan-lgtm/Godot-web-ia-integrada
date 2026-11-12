@@ -259,7 +259,7 @@ jobs:
           GAME_FRAMES: ${{ inputs.game_frames || '8' }}
           GAME_INTERVAL_MS: ${{ inputs.game_interval_ms || '500' }}
           GAMEPLAY_DURATION_MS: ${{ inputs.gameplay_duration_ms || '10000' }}
-          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && contains(github.event.head_commit.message, '[gameplay-smoke]') && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"press"}]') || '[]' }}
+          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"press"}]') || '[]' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/videos
