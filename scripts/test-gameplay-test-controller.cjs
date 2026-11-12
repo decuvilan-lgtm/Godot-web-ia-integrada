@@ -21,7 +21,7 @@ function fakePage(failAt = null) {
             canvases: [{
               index: 0, id: 'game-canvas', tabindex: '2',
               width: 800, height: 600,
-              rect: { x: 0, y: 0, width: 800, height: 600 },
+              rect: { x: 50, y: 25, width: 800, height: 600 },
               visible: true, parentId: 'tab-game'
             }]
           }
@@ -67,10 +67,11 @@ function fakePage(failAt = null) {
       { at_ms: 0, device: 'keyboard', control: 'ArrowRight', state: 'down' },
       { at_ms: 60, device: 'keyboard', control: 'ArrowRight', state: 'up' },
       { at_ms: 80, device: 'mouse', control: 'primary', state: 'click', x: 120, y: 90 },
-      { at_ms: 100, device: 'touch', control: 'tap', state: 'tap', x: 130, y: 100 }
+      { at_ms: 100, device: 'touch', control: 'tap', state: 'tap', x: 130, y: 100 },
+      { at_ms: 110, device: 'mouse', control: 'primary', state: 'click', x: 500, y: 500, coordinate_space: 'normalized' }
     ]
   }, { capture: async () => {} });
-  assert.equal(result.actions_sent, 4);
+  assert.equal(result.actions_sent, 5);
   assert.equal(result.viewport_focus.focused, true);
   assert.equal(result.viewport_focus.target.id, 'game-canvas');
   assert.ok(result.events.some(event => event.type === 'timeline-complete'));
@@ -78,6 +79,7 @@ function fakePage(failAt = null) {
   assert.ok(page.calls.includes('up:ArrowRight'));
   assert.ok(page.calls.includes('click:120:90'));
   assert.ok(page.calls.includes('tap:130:100'));
+  assert.ok(page.calls.includes('click:450:325'), 'normalized canvas coordinates must map to the visible canvas rectangle');
 
   const failingPage = fakePage('press:Space');
   await assert.rejects(() => runGameplayTimeline(failingPage, {
