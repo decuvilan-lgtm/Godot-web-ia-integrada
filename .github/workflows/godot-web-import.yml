@@ -608,7 +608,6 @@ jobs:
         env:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
-          BRANCH: ${{ steps.repo.outputs.branch }}
           PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
           BRANCH: ${{ steps.repo.outputs.branch }}
           BRANCH_IS_DEFAULT: ${{ steps.repo.outputs.branch_is_default }}
