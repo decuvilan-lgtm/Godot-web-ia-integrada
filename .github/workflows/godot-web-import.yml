@@ -182,8 +182,8 @@ jobs:
                 result.projectNameSet = 'Dragon Realm';
                 await page.mouse.click(818, 634);
                 result.installButtonClicked = true;
-              } else if (/Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i.test(scan.text)) {
-                await clickLine(page, scan, /Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i, 'Install & Edit');
+              } else if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
+                await clickLine(page, scan, /Install\s*&\s*Edit|Install\s+and\s+Edit/i, 'Install & Edit');
                 result.installAndEditClicked = true;
               } else {
                 throw new Error('No se reconoció el diálogo de instalación del Project Manager. OCR: ' + scan.text);
@@ -200,15 +200,8 @@ jobs:
               const editorSignals = editorScan && /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
               if (!editorSignals) throw new Error('No se detectaron paneles del editor tras instalar el proyecto. OCR: ' + (editorScan ? editorScan.text : 'sin texto'));
               result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
-              result.godotEngineStarted = events.some(event => /Godot Engine v4\\.7\\.2/i.test(event.text || ''));
+              result.godotEngineStarted = events.some(event => /Godot Engine v4\.7\.2/i.test(event.text || ''));
               if (!result.godotEngineStarted) throw new Error('No se detectó el registro de arranque del motor Godot.');
-              await page.waitForTimeout(20000);
-              await page.screenshot({ path: 'artifacts/godot-editor-open.png', fullPage: true });
-              const editorScan = inspectImage('artifacts/godot-editor-open.png');
-              result.editorOcr = editorScan.text;
-              fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
-              const editorSignals = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-              if (!editorSignals) throw new Error('No se detectaron paneles del editor tras Install & Edit. OCR: ' + editorScan.text);
               result.status = 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
