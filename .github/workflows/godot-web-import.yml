@@ -619,8 +619,9 @@ jobs:
                     capture_interval_ms: 500,
                     actions: gameplayActions
                   }, {
-                    capture: async ({ index }) => {
-                      const name = 'artifacts/gameplay-frame-' + String(index).padStart(3, '0') + '.png';
+                    capture: async ({ index, phase, action_index }) => {
+                      const label = phase ? `-${phase}-${String(action_index).padStart(3, '0')}` : '-interval';
+                      const name = 'artifacts/gameplay-frame-' + String(index).padStart(3, '0') + label + '.png';
                       await page.screenshot({ path: name, fullPage: false, animations: 'disabled', timeout: 15000 });
                     }
                   });
