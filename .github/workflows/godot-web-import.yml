@@ -189,7 +189,7 @@ jobs:
                 throw new Error('No se reconoció el diálogo de instalación del Project Manager. OCR: ' + scan.text);
               }
               let editorScan = null;
-              for (let attempt = 0; attempt < 18; attempt++) {
+              for (let attempt = 0; attempt < 24; attempt++) {
                 await page.waitForTimeout(5000);
                 await page.screenshot({ path: 'artifacts/godot-editor-open.png', fullPage: true });
                 editorScan = inspectImage('artifacts/godot-editor-open.png');
