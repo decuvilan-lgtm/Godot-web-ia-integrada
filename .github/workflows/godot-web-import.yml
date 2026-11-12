@@ -264,7 +264,7 @@ jobs:
           GAME_FRAMES: ${{ inputs.game_frames || '8' }}
           GAME_INTERVAL_MS: ${{ inputs.game_interval_ms || '500' }}
           GAMEPLAY_DURATION_MS: ${{ inputs.gameplay_duration_ms || '16000' }}
-          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"down"},{"at_ms":6800,"device":"keyboard","control":"J","state":"up"},{"at_ms":8500,"device":"mouse","state":"click","x":1200,"y":620},{"at_ms":10000,"device":"touch","control":"joystick","state":"down","x":203,"y":647},{"at_ms":10500,"device":"touch","control":"joystick","state":"move","x":260,"y":647},{"at_ms":11500,"device":"touch","control":"joystick","state":"move","x":260,"y":647},{"at_ms":12000,"device":"touch","control":"joystick","state":"up","x":260,"y":647}]') || '[]' }}
+          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"down"},{"at_ms":6800,"device":"keyboard","control":"J","state":"up"},{"at_ms":8500,"device":"mouse","state":"click","x":1200,"y":620},{"at_ms":10000,"device":"touch","control":"joystick","state":"down","x":203,"y":647},{"at_ms":10500,"device":"touch","control":"joystick","state":"move","x":150,"y":647},{"at_ms":11500,"device":"touch","control":"joystick","state":"move","x":150,"y":647},{"at_ms":12000,"device":"touch","control":"joystick","state":"up","x":150,"y":647}]') || '[]' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/videos
@@ -714,6 +714,35 @@ jobs:
                       attackDamageDetected: /PUNO\s+BASICO.*\d+.*DA/i.test(feedbackScan.text.toUpperCase())
                     };
                     fs.writeFileSync('artifacts/gameplay-feedback-ocr.json', JSON.stringify(result.gameplayFeedback, null, 2));
+                  }
+                  const touchBeforeFrame = actionFrames.find(name => name.endsWith('before-action-007.png'));
+                  const touchAfterFrame = actionFrames.find(name => name.endsWith('after-action-009.png'));
+                  if (repo === 'gavilandavid89-pixel/Escondite' && touchBeforeFrame && touchAfterFrame) {
+                    const cropScript = "from PIL import Image; import sys; im=Image.open(sys.argv[1]); im.crop((1160,190,1350,210)).resize((1140,120)).save(sys.argv[2])";
+                    const beforeCrop = 'artifacts/touch-position-before.png';
+                    const afterCrop = 'artifacts/touch-position-after.png';
+                    for (const [source, destination] of [
+                      ['artifacts/' + touchBeforeFrame, beforeCrop],
+                      ['artifacts/' + touchAfterFrame, afterCrop]
+                    ]) {
+                      execFileSync('python3', ['-c', cropScript, source, destination], {
+                        env: { ...process.env, PATH: `${process.cwd()}/.venv/bin:${process.env.PATH}` }
+                      });
+                    }
+                    const beforeText = inspectImage(beforeCrop).text;
+                    const afterText = inspectImage(afterCrop).text;
+                    const beforeX = beforeText.match(/POS\\s+X\\s+(\\d+)/i)?.[1] || null;
+                    const afterX = afterText.match(/POS\\s+X\\s+(\\d+)/i)?.[1] || null;
+                    result.touchMovement = {
+                      beforeFrame: touchBeforeFrame,
+                      afterFrame: touchAfterFrame,
+                      beforeOcr: beforeText,
+                      afterOcr: afterText,
+                      xBefore: beforeX,
+                      xAfter: afterX,
+                      playerPositionChanged: beforeX !== null && afterX !== null && beforeX !== afterX
+                    };
+                    fs.writeFileSync('artifacts/touch-movement-ocr.json', JSON.stringify(result.touchMovement, null, 2));
                   }
                 } else {
                   result.gamePreviewWarning = 'No se detectó la vista Game después de enviar F5. ' + (gameCapture.scan?.text || 'Sin OCR');
