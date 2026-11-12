@@ -39,11 +39,12 @@ Los proyectos usados como referencias durante el desarrollo (incluidos Dragon Re
 9. Guardar un timeline con marcas de tiempo, acciones enviadas, foco, capturas, eventos de consola y errores disponibles.
 10. Emitir un resultado estructurado y conservarlo junto a los artefactos del workflow.
 
-### Controles que debe soportar el controlador
+### Controles del controlador inicial
 
 - Teclado: key down, key up y pulsaciones cortas.
-- Ratón: movimiento, click, doble click y mantener/soltar botones.
-- Puntero/táctil: pointer down/move/up y gestos táctiles compatibles con el navegador.
+- Ratón: movimiento, click y mantener/soltar botones.
+- Táctil: toque puntual (tap) mediante el dispositivo táctil de Playwright.
+- Los gestos táctiles continuos, arrastre táctil y doble click quedan como ampliaciones pendientes.
 - Secuencias combinadas y esperas.
 - Duración total y duración de cada acción configurables.
 
@@ -196,11 +197,13 @@ Si el editor ya contiene una copia importada, el sistema debe detectar si corres
 
 La prueba E2E actual ya demuestra: importación del ZIP, selección explícita de rama, apertura del proyecto en Godot Web, detección del editor, ejecución F5 y captura de secuencias del editor y del juego. También comprueba el Relay con un fixture en subcarpeta.
 
+El controlador base de teclado, ratón y toque táctil, la validación del timeline y la liberación segura de teclas están implementados. Las pruebas unitarias del controlador pasaron en Actions (ejecución 43278159189). La integración con el workflow de navegador se está verificando en la ejecución 43278226182.
+
 Todavía falta implementar y verificar:
 
-1. Controlador de teclado, ratón y táctil para gameplay.
-2. Timeline de acciones con duración, liberación garantizada y captura sincronizada.
-3. Duración de observación configurable (10 segundos por defecto).
+1. Ampliar el controlador con gestos táctiles continuos, arrastre y doble click.
+2. Validar el controlador dentro del navegador Godot Web con proyectos reales y entradas configuradas.
+3. Confirmar en E2E el timeline de duración configurable (10 segundos por defecto), las capturas sincronizadas y la liberación garantizada de controles.
 4. Creación/publicación/sincronización de escenarios temporales en `main`, seguida de limpieza auditable.
 5. Contrato/adapter por proyecto para controles, escenarios y aserciones funcionales.
 6. Limpieza verificable de archivos temporales en `main` y comprobación del redeploy limpio.
