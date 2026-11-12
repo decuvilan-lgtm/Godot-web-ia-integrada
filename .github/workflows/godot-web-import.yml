@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       repository_url:
-        description: "URL de un repositorio público de GitHub (se importará desde main)"
+        description: "URL de cualquier repositorio público de GitHub con proyecto Godot en la raíz (rama main)"
         required: true
         default: "https://github.com/gavilandavid89-pixel/Escondite"
         type: string
@@ -130,7 +130,12 @@ jobs:
           const editorIntervalMs = boundedInt('EDITOR_INTERVAL_MS', 900, 100, 5000);
           const gameFrames = boundedInt('GAME_FRAMES', 8, 1, 24);
           const gameIntervalMs = boundedInt('GAME_INTERVAL_MS', 500, 100, 5000);
-          const repo = `${process.env.OWNER}/${process.env.REPO}`;
+          const repoName = process.env.REPO;
+          const projectLabel = repoName;
+          const normalizeLabel = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normalizedProjectLabel = normalizeLabel(projectLabel);
+          if (normalizedProjectLabel.length < 2) throw new Error('El nombre del repositorio no permite una identificación visual segura.');
+          const repo = `${process.env.OWNER}/${repoName}`;
           const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}`;
           function inspectImage(path) {
             return JSON.parse(execFileSync('python3', ['scripts/godot_web_ocr.py', path], {
@@ -243,7 +248,7 @@ jobs:
                 events.push({ type: 'archive-response', status: archiveStatus, contentType: response.headers()['content-type'] });
               }
             });
-            const result = { repository: repo, target, startedAt: new Date().toISOString() };
+            const result = { repository: repo, projectLabel, target, startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout });
               result.httpStatus = response?.status() ?? null;
@@ -288,14 +293,14 @@ jobs:
                 const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
                 await page.mouse.click(nameLine.x, nameLine.y);
                 await page.keyboard.press('Control+A');
-                await page.keyboard.type('Dragon Realm');
+                await page.keyboard.type(projectLabel);
                 await page.keyboard.press('Tab');
                 await page.waitForTimeout(1500);
                 await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
                 scan = inspectImage('artifacts/godot-install-dialog-ready.png');
                 result.installDialogOcr = scan.text;
-                if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
-                result.projectNameSet = 'Dragon Realm';
+                if (!normalizeLabel(scan.text).includes(normalizedProjectLabel)) throw new Error(`No se pudo establecer el nombre "${projectLabel}" en el diálogo de instalación. OCR: ` + scan.text);
+                result.projectNameSet = projectLabel;
                 const installLine = scan.lines.find(item => /^Install$/i.test(item.text));
                 let clickPoint;
                 if (installLine) {
@@ -320,15 +325,17 @@ jobs:
               // Validación funcional independiente de las capturas.
               let editorLaunchConfirmed = false;
               for (let attempt = 0; attempt < 36; attempt++) {
-                const editingLogged = events.some(event => (event.text || '').includes('Editing project: /home/web_user/dragon-realm'));
+                const editingEvent = events.find(event => (event.text || '').includes('Editing project: /home/web_user/'));
                 const engineStarts = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
-                if (editingLogged && engineStarts >= 2) { editorLaunchConfirmed = true; break; }
+                if (editingEvent && engineStarts >= 2) { editorLaunchConfirmed = true; break; }
                 await page.waitForTimeout(3000);
               }
               result.editorLaunchConfirmed = editorLaunchConfirmed;
               result.engineStartCount = events.filter(event => /Godot Engine v4\.7\.2/i.test(event.text || '')).length;
-              result.projectInstallConfirmed = Boolean(editorLaunchConfirmed && events.some(event => (event.text || '').includes('Editing project: /home/web_user/dragon-realm')));
-              if (!result.projectInstallConfirmed) throw new Error('No se confirmó que Godot abriera Dragon Realm; no se acepta el clic como prueba de instalación.');
+              const openedProjectEvent = events.find(event => (event.text || '').includes('Editing project: /home/web_user/'));
+              result.openedProjectPath = openedProjectEvent ? (openedProjectEvent.text.match(/Editing project: (.+)$/)?.[1] || null) : null;
+              result.projectInstallConfirmed = Boolean(editorLaunchConfirmed && result.openedProjectPath);
+              if (!result.projectInstallConfirmed) throw new Error(`No se confirmó que Godot abriera el proyecto "${repo}". No se acepta el clic como prueba de instalación.`);
               await page.waitForTimeout(15000);
               try {
                 result.rendererResponsive = await Promise.race([
@@ -363,11 +370,11 @@ jobs:
                 result.editorScreenshot = 'captured';
                 result.editorOcr = editorScan.text;
                 result.editorUiDetected = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem/i.test(editorScan.text);
-                result.projectNameVisible = /Dragon\s*Realm/i.test(editorScan.text);
+                result.projectNameVisible = normalizeLabel(editorScan.text).includes(normalizedProjectLabel);
                 fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
 
                 if (!result.editorUiDetected || !result.projectNameVisible) {
-                  throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
+                  throw new Error(`La captura existe, pero no demuestra la interfaz del editor con "${projectLabel}" visible. OCR: ` + editorScan.text);
                 }
                 result.editorSequence = await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs);
                 // Optional game-preview probe: F5 runs the project's configured main scene.
@@ -408,7 +415,7 @@ jobs:
                   result.projectNameVisible = /Dragon Realm/i.test(editorScan.text);
                   fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan, null, 2));
                   if (!result.editorUiDetected || !result.projectNameVisible) {
-                    throw new Error('X11 capturó la pantalla, pero no encontró el editor con Dragon Realm. OCR: ' + editorScan.text);
+                    throw new Error(`X11 capturó la pantalla, pero no encontró el editor con "${projectLabel}". OCR: ` + editorScan.text);
                   }
                 } catch (x11Error) {
                   result.editorScreenshot = 'failed';
@@ -482,9 +489,9 @@ jobs:
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
             if [ "$JOB_STATUS" = "success" ]; then
-              echo "La prueba confirmó la precarga del ZIP, la apertura del proyecto y una captura OCR verificable del editor."
+              echo "La prueba confirmó la precarga del ZIP, la apertura de ${OWNER}/${REPO} y una captura OCR verificable del editor."
             else
-              echo "La prueba no consiguió una captura verificable del editor con el proyecto abierto. Revisa el diagnóstico adjunto."
+              echo "La prueba no consiguió una captura verificable del repositorio seleccionado con el proyecto abierto. Revisa el diagnóstico adjunto."
             fi
             if [ -f artifacts/result.json ]; then
               python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
