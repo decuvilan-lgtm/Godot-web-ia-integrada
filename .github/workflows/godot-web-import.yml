@@ -698,7 +698,7 @@ jobs:
                   });
                   fs.writeFileSync('artifacts/gameplay-timeline.json', JSON.stringify(result.gameplayTimeline, null, 2));
                   const actionFrames = fs.readdirSync('artifacts')
-                    .filter(name => /^gameplay-frame-\d+-after-action-\d+\.png$/.test(name))
+                    .filter(name => /^gameplay-frame-\d+-(?:before|after)-action-\d+\.png$/.test(name))
                     .sort();
                   const finalActionFrame = actionFrames.find(name => name.endsWith('after-action-006.png')) || actionFrames[actionFrames.length - 1];
                   if (repo === 'gavilandavid89-pixel/Escondite' && finalActionFrame) {
@@ -731,8 +731,8 @@ jobs:
                     }
                     const beforeText = inspectImage(beforeCrop).text;
                     const afterText = inspectImage(afterCrop).text;
-                    const beforeX = beforeText.match(/POS\\s+X\\s+(\\d+)/i)?.[1] || null;
-                    const afterX = afterText.match(/POS\\s+X\\s+(\\d+)/i)?.[1] || null;
+                    const beforeX = beforeText.match(/POS\s+X\s+(\d+)/i)?.[1] || null;
+                    const afterX = afterText.match(/POS\s+X\s+(\d+)/i)?.[1] || null;
                     result.touchMovement = {
                       beforeFrame: touchBeforeFrame,
                       afterFrame: touchAfterFrame,
