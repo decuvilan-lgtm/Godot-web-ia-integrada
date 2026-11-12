@@ -263,6 +263,27 @@ jobs:
                 if (!result.editorUiDetected || !result.projectNameVisible) {
                   throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
                 }
+                // Optional game-preview probe: F5 runs the project's configured main scene.
+                // Failure here must not invalidate the verified editor screenshot.
+                try {
+                  const previewCdp = await page.context().newCDPSession(page);
+                  await previewCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
+                  await previewCdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'F5', code: 'F5', windowsVirtualKeyCode: 116 });
+                  await page.waitForTimeout(10000);
+                  const previewShot = await Promise.race([
+                    previewCdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('game preview capture timeout')), 15000))
+                  ]);
+                  fs.writeFileSync('artifacts/godot-game-preview.png', Buffer.from(previewShot.data, 'base64'));
+                  const previewScan = inspectImage('artifacts/godot-game-preview.png');
+                  result.gamePreviewScreenshot = 'captured';
+                  result.gamePreviewOcr = previewScan.text;
+                  fs.writeFileSync('artifacts/game-preview-ocr.json', JSON.stringify(previewScan, null, 2));
+                  await previewCdp.detach();
+                } catch (previewError) {
+                  result.gamePreviewScreenshot = 'warning';
+                  result.gamePreviewWarning = String(previewError);
+                }
               } catch (captureError) {
                 result.captureWarning = String(captureError);
                 // Last-resort capture from the X11 desktop. This does not need
