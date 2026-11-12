@@ -63,10 +63,42 @@ function extractObjects(value) {
       }
     }
     const fields = parseFields(value.slice(start, end));
-    events.push({ type: match[1], properties: fields });
+    events.push({ type: match[1], properties: fields, descriptor: describeEvent(match[1], fields) });
     pattern.lastIndex = end + 1;
   }
   return events;
+}
+
+
+const SPECIAL_KEYS = new Map([
+  [4194305, 'Escape'], [4194306, 'Tab'], [4194308, 'Backspace'],
+  [4194309, 'Enter'], [4194311, 'Insert'], [4194312, 'Delete'],
+  [4194315, 'Home'], [4194316, 'End'], [4194319, 'ArrowLeft'],
+  [4194320, 'ArrowUp'], [4194321, 'ArrowRight'], [4194322, 'ArrowDown'],
+  [4194323, 'PageUp'], [4194324, 'PageDown']
+]);
+
+function describeEvent(type, properties) {
+  if (type === 'InputEventKey') {
+    const code = properties.physical_keycode || properties.keycode || properties.key_label || 0;
+    let label = SPECIAL_KEYS.get(code);
+    if (!label && code >= 32 && code <= 126) label = String.fromCharCode(code).toUpperCase();
+    return { device: 'keyboard', control: label || 'keycode:' + code, raw_code: code };
+  }
+  if (type === 'InputEventMouseButton') {
+    const buttons = { 1: 'LeftClick', 2: 'RightClick', 3: 'MiddleClick', 4: 'WheelUp', 5: 'WheelDown' };
+    const code = properties.button_index;
+    return { device: 'mouse', control: buttons[code] || 'mouse_button:' + code, raw_code: code };
+  }
+  if (type === 'InputEventJoypadButton') {
+    return { device: 'gamepad', control: 'button:' + properties.button_index, raw_code: properties.button_index };
+  }
+  if (type === 'InputEventJoypadMotion') {
+    return { device: 'gamepad', control: 'axis:' + properties.axis + ':' + properties.axis_value, raw_code: properties.axis };
+  }
+  if (type === 'InputEventScreenTouch') return { device: 'touch', control: 'screen_touch', raw_code: properties.index };
+  if (type === 'InputEventScreenDrag') return { device: 'touch', control: 'screen_drag', raw_code: properties.index };
+  return { device: 'other', control: type, raw_code: null };
 }
 
 function parseInputMap(text) {
@@ -127,4 +159,4 @@ if (require.main === module) {
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 }
 
-module.exports = { parseInputMap, extractObjects, splitTopLevel };
+module.exports = { parseInputMap, extractObjects, splitTopLevel, describeEvent };
