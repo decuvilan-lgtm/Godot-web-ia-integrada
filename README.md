@@ -1,13 +1,15 @@
 # Godot Web IA Integrada
 
-Entorno de desarrollo con **dos puestos de trabajo separados** que comparten un proyecto sin pisarse:
+Flujo de desarrollo acordado:
 
-- **Puesto de la IA: Godot Web desplegado en Render.** Este es el editor remoto que utiliza el agente para inspeccionar y preparar trabajo en un workspace aislado.
-- **Puesto del usuario: Godot Android.** Es el editor del usuario en su teléfono. No se sustituye por la web ni se le pide que use el editor web móvil.
-- **Centro de mando: Neon Postgres + relay Render Free.** Mantiene identidades, emparejamientos, órdenes, resultados, revisiones, snapshots y propuestas. Postgres es la fuente de verdad; Render es transporte.
+- **GitHub `main`:** única fuente oficial de los proyectos seleccionados.
+- **ChatGPT + Godot Headless:** clonan el repositorio completo, desarrollan, prueban y publican cambios directamente en `main`. Headless no necesita Project Manager.
+- **Godot Web:** conserva su Project Manager nativo y sirve para abrir, ejecutar e inspeccionar visualmente la revisión publicada en GitHub.
+- **Android:** conserva su mecanismo de importación desde repositorios públicos; se auditará para reutilizar su lógica donde sea compatible.
 
-La regla central es que el agente trabaja en su copia web. Nunca sobrescribe directamente el proyecto aceptado en Android. Los cambios futuros se presentarán como propuestas con diff, validación y snapshot; solo se aplicarán tras aprobación explícita.
+La experiencia deseada es que Godot Web inicie automáticamente y presente el Project Manager al entrar. El autoarranque está en implementación; la actualización automática GitHub → proyecto web y las pruebas visuales de extremo a extremo siguen pendientes.
 
+**Nota de transición:** las secciones posteriores que describen dos puestos emparejados, Neon como fuente de verdad del proyecto, propuestas hacia Android y sincronización entre editores documentan una arquitectura anterior. Se conservan temporalmente como inventario técnico, pero no son la dirección vigente y deben auditarse antes de retirar sus componentes.
 > **Estado real (10 nov 2026):** editor Godot Web 4.7.2 publicado; Relay conectado a Neon en Render; credencial de Object Storage limitada a `storage:read` y `storage:write` configurada como secreto; bucket privado `godot-visual-captures`; capturas `editor_2d` y `editor_3d` habilitadas en la API y cliente Godot; secuencias realtime disponibles. CI de relay y smoke test Godot pasan. **Todavía falta emparejar el editor web y demostrar una captura real almacenada y recuperada**. El commit `48034bc` añade además un servidor MCP remoto autenticado; CI pasó, pero su despliegue Render aún debe confirmarse. Captura de UI completa, game preview y zoom siguen fuera de servicio. No hay escritura remota habilitada.
 
 ## Acceso
