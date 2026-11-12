@@ -483,6 +483,7 @@ jobs:
               recordVideo: { dir: 'artifacts/videos', size: { width: 1440, height: 900 } }
             });
             const page = await context.newPage();
+            const sessionVideo = page.video();
             page.setDefaultTimeout(15000);
             const events = [];
             page.on('console', msg => events.push({ type: 'console:' + msg.type(), text: msg.text() }));
