@@ -35,7 +35,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin", "X-Command-Id", "X-Frame-Index", "X-Project-Path", "X-Base-SHA256", "X-File-SHA256", "Last-Event-ID"],
-    expose_headers=["X-File-SHA256"],
+    expose_headers=["X-File-SHA256", "X-GitHub-Ref"],
 )
 
 @dataclass
