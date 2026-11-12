@@ -447,6 +447,20 @@ jobs:
           xvfb-run -a --server-args="-screen 0 1600x1000x24" env NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
 
+      - name: Crear hojas de contacto de las secuencias
+        if: always()
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          editor_frames=(artifacts/editor-sequence-*.png)
+          game_frames=(artifacts/game-preview-sequence-*.png)
+          if [ "${#editor_frames[@]}" -gt 0 ]; then
+            montage "${editor_frames[@]}" -tile 5x -geometry 480x300+8+8 artifacts/editor-sequence-contact-sheet.png
+          fi
+          if [ "${#game_frames[@]}" -gt 0 ]; then
+            montage "${game_frames[@]}" -tile 4x -geometry 480x300+8+8 artifacts/game-preview-sequence-contact-sheet.png
+          fi
+
       - name: Publicar enlace de apertura y resultado
         if: always()
         env:
@@ -468,6 +482,21 @@ jobs:
               echo "La prueba confirmó la precarga del ZIP, la apertura del proyecto y una captura OCR verificable del editor."
             else
               echo "La prueba no consiguió una captura verificable del editor con el proyecto abierto. Revisa el diagnóstico adjunto."
+            fi
+            if [ -f artifacts/result.json ]; then
+              python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/result.json").read_text())
+          print()
+          print("### Secuencias visuales")
+          for key, label in (("editorSequence", "Editor"), ("gamePreviewSequence", "Juego")):
+              sequence = data.get(key)
+              if sequence:
+                  print(f"- {label}: {sequence.get('capturedFrames', 0)}/{sequence.get('requestedFrames', 0)} imágenes; intervalo {sequence.get('intervalMs')} ms; completa: {sequence.get('complete', False)}")
+              else:
+                  print(f"- {label}: sin secuencia confirmada")
+          PY
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
