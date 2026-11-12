@@ -33,7 +33,7 @@ def patch_html(html: str) -> str:
     else:
         html = re.sub(
             r"(<head[^>]*>)",
-            lambda match: match.group(1) + "\\n  " + viewport,
+            lambda match: match.group(1) + chr(10) + "  " + viewport,
             html,
             count=1,
             flags=re.I,
@@ -45,7 +45,7 @@ def patch_html(html: str) -> str:
     if not re.search(r"<title[^>]*>", html, flags=re.I):
         html = re.sub(
             r"</head>",
-            "<title>Godot Web IA Integrada</title>\\n</head>",
+            "<title>Godot Web IA Integrada</title>" + chr(10) + "</head>",
             html,
             count=1,
             flags=re.I,
@@ -141,7 +141,13 @@ def patch_html(html: str) -> str:
 """.replace("__RELAY_URL__", RELAY_URL)
 
     if 'id="godot-github-connector"' not in html:
-        html = re.sub(r"</body\\s*>", connector + "\\n</body>", html, count=1, flags=re.I)
+        html = re.sub(
+            r"</body\s*>",
+            lambda match: connector + chr(10) + match.group(0),
+            html,
+            count=1,
+            flags=re.I,
+        )
         if 'id="godot-github-connector"' not in html:
             raise SystemExit("ERROR: could not install GitHub connector")
 
