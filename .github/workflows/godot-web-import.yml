@@ -137,6 +137,45 @@ jobs:
           print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, ruta {project_file_path}, nombre: {project_name})")
           PY
 
+      - name: Verificar Relay desplegado con rama y subcarpeta
+        id: relay_live
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python - <<'PY'
+          import io, json, os, urllib.request, zipfile
+          url = "https://godot-web-ia-relay.onrender.com/v1/github/godotengine/godot-demo-projects/archive?branch=master&path=2d%2Fplatformer"
+          result = {"url": url, "status": "failed"}
+          try:
+              request = urllib.request.Request(url, headers={"Origin": "https://godot-web-ia-integrada-rt2l.onrender.com", "User-Agent": "Godot-Web-Live-Relay-Check"})
+              with urllib.request.urlopen(request, timeout=90) as response:
+                  body = response.read()
+                  result["httpStatus"] = response.status
+                  result["selectedBranch"] = response.headers.get("X-GitHub-Ref")
+                  result["corsExposeHeaders"] = response.headers.get("Access-Control-Expose-Headers", "")
+                  result["bytes"] = len(body)
+                  with zipfile.ZipFile(io.BytesIO(body)) as archive:
+                      names = set(archive.namelist())
+                  result["projectAtZipRoot"] = "project.godot" in names
+                  result["nestedProjectRepacked"] = result["projectAtZipRoot"] and any(name.startswith("assets/") for name in names)
+                  if response.status != 200 or result["selectedBranch"] != "master" or not result["projectAtZipRoot"] or not result["nestedProjectRepacked"]:
+                      raise RuntimeError("El Relay público no cumple el contrato de rama/subcarpeta.")
+                  if "x-github-ref" not in result["corsExposeHeaders"].lower():
+                      raise RuntimeError("X-GitHub-Ref no está expuesta a CORS.")
+                  result["status"] = "passed"
+          except Exception as error:
+              result["error"] = str(error)
+              with open("artifacts/live-relay-check.json", "w", encoding="utf-8") as file:
+                  json.dump(result, file, ensure_ascii=False, indent=2)
+              raise
+          with open("artifacts/live-relay-check.json", "w", encoding="utf-8") as file:
+              json.dump(result, file, ensure_ascii=False, indent=2)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("result=passed\n")
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          PY
+
       - name: Preparar navegador Chromium
         run: |
           npm init -y
@@ -161,6 +200,7 @@ jobs:
           BRANCH: ${{ steps.repo.outputs.branch }}
           BRANCH_IS_DEFAULT: ${{ steps.repo.outputs.branch_is_default }}
           PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
+          LIVE_RELAY_CHECK: ${{ steps.relay_live.outcome }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
           EDITOR_FRAMES: ${{ inputs.editor_frames || '5' }}
           EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
@@ -399,6 +439,7 @@ jobs:
               result.preloadedFilename = await page.locator('#zip-file').evaluate(el => el.files[0]?.name || null);
               result.repositoryBranch = process.env.BRANCH;
               result.branchResolvedByRelay = process.env.BRANCH_IS_DEFAULT === 'true';
+              result.liveRelayCheck = process.env.LIVE_RELAY_CHECK || 'not-run';
               result.projectSubdirectory = process.env.PROJECT_PATH || '';
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
               result.archiveStatus = archiveStatus;
@@ -557,7 +598,7 @@ jobs:
                 result.gamePreviewScreenshot = 'warning';
                 result.gamePreviewWarning = String(previewError);
               }
-              result.status = result.projectHasResourceWarnings || result.gamePreviewScreenshot === 'warning'
+              result.status = result.projectHasResourceWarnings || result.gamePreviewScreenshot === 'warning' || result.liveRelayCheck !== 'success'
                 ? 'passed-with-project-warnings'
                 : 'passed';
               result.finishedAt = new Date().toISOString();
