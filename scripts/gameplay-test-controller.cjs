@@ -48,7 +48,14 @@ function validateTimeline(config) {
     if ((device === 'mouse' || device === 'touch') && (x === null || y === null)) {
       throw new TypeError(`La acción ${index} necesita coordenadas x e y.`);
     }
-    return { at_ms: atMs, device, control, state, x, y, button: item.button || 'left' };
+    const coordinate_space = item.coordinate_space || 'page';
+    if (!['page', 'canvas', 'normalized'].includes(coordinate_space)) {
+      throw new TypeError(`Espacio de coordenadas no válido en la acción ${index}.`);
+    }
+    if (coordinate_space === 'normalized' && ((x !== null && x > 1000) || (y !== null && y > 1000))) {
+      throw new TypeError(`Las coordenadas normalizadas deben estar entre 0 y 1000 (índice ${index}).`);
+    }
+    return { at_ms: atMs, device, control, state, x, y, coordinate_space, button: item.button || 'left' };
   }).sort((a, b) => a.at_ms - b.at_ms);
   return { duration_ms: durationMs, capture_interval_ms: captureIntervalMs, actions: normalized };
 }
@@ -120,6 +127,15 @@ async function runGameplayTimeline(page, input, options = {}) {
     }
   };
   const perform = async action => {
+    let inputX = action.x;
+    let inputY = action.y;
+    if ((action.device === 'mouse' || action.device === 'touch') && action.coordinate_space !== 'page') {
+      const rect = viewportFocus.target.rect;
+      if (!rect || !rect.width || !rect.height) throw new Error('No hay geometría válida del canvas para transformar coordenadas.');
+      const scale = action.coordinate_space === 'normalized' ? 1000 : 1;
+      inputX = Math.round(rect.x + (action.x / scale) * rect.width);
+      inputY = Math.round(rect.y + (action.y / scale) * rect.height);
+    }
     if (action.device === 'keyboard') {
       if (action.state === 'press') {
         await page.keyboard.press(action.control);
@@ -131,9 +147,9 @@ async function runGameplayTimeline(page, input, options = {}) {
         heldKeys.delete(action.control);
       }
     } else if (action.device === 'mouse') {
-      await page.mouse.move(action.x ?? 0, action.y ?? 0);
+      await page.mouse.move(inputX ?? 0, inputY ?? 0);
       if (action.state === 'click') {
-        await page.mouse.click(action.x, action.y, { button: action.button });
+        await page.mouse.click(inputX, inputY, { button: action.button });
       } else if (action.state === 'down') {
         await page.mouse.down({ button: action.button });
         heldButtons.add(action.button);
@@ -142,9 +158,9 @@ async function runGameplayTimeline(page, input, options = {}) {
         heldButtons.delete(action.button);
       }
     } else {
-      await page.touchscreen.tap(action.x, action.y);
+      await page.touchscreen.tap(inputX, inputY);
     }
-    log('input', { device: action.device, control: action.control, state: action.state, x: action.x, y: action.y });
+    log('input', { device: action.device, control: action.control, state: action.state, x: inputX, y: inputY, coordinate_space: action.coordinate_space });
   };
 
   try {
