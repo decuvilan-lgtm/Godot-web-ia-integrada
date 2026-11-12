@@ -65,5 +65,23 @@ if 'id="shared-project-sync-launcher"' not in html:
     if 'id="shared-project-sync-launcher"' not in html:
         raise SystemExit("ERROR: could not add the shared-project connector entry point")
 
+# Start the official Project Manager automatically after the page is fully loaded.
+# The official start button already performs the supported initialization path.
+auto_start = r"""
+<script id="godot-auto-start">
+window.addEventListener("load", function () {
+  const startButton = document.getElementById("startButton");
+  // Keep Godot's own missing-feature checks authoritative (e.g. SharedArrayBuffer).
+  if (!startButton || startButton.disabled) return;
+  if (typeof closeWelcomeModal === "function") closeWelcomeModal(false);
+  startButton.click();
+}, { once: true });
+</script>
+"""
+if 'id="godot-auto-start"' not in html:
+    html = re.sub(r"</body\\s*>", auto_start + "\\n</body>", html, count=1, flags=re.I)
+    if 'id="godot-auto-start"' not in html:
+        raise SystemExit("ERROR: could not install automatic Godot Project Manager startup")
+
 entry.write_text(html, encoding="utf-8")
 print("Mobile viewport metadata: OK")
