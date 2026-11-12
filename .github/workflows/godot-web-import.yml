@@ -415,7 +415,7 @@ jobs:
             page.on('requestfailed', request => events.push({ type: 'requestfailed', url: request.url(), error: request.failure()?.errorText }));
             let archiveStatus = null;
             page.on('response', response => {
-              if (response.url().includes('/v1/github/') && response.url().endsWith('/archive')) {
+              if (response.url().includes('/v1/github/') && new URL(response.url()).pathname.endsWith('/archive')) {
                 archiveStatus = response.status();
                 events.push({ type: 'archive-response', status: archiveStatus, contentType: response.headers()['content-type'] });
               }
