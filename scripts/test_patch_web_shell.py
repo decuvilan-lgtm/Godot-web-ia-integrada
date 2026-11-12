@@ -25,7 +25,12 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn('button.id = "godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
         self.assertIn("credentials:", result)
-        self.assertIn("target.searchParams.set", result)
+        self.assertIn('target.searchParams.set("repo", repo)', result)
+        self.assertIn('target.searchParams.set("branch", branch)', result)
+        self.assertIn('target.searchParams.set("path", projectPath)', result)
+        self.assertIn('archiveUrl.searchParams.set("branch", branch)', result)
+        self.assertIn('archiveUrl.searchParams.set("path", projectPath)', result)
+        self.assertIn("validProjectPath", result)
         self.assertIn("startButton.click()", result)
         self.assertNotIn("Compartir proyectos", result)
 
