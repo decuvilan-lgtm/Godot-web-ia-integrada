@@ -23,7 +23,7 @@ const source = `config/name="Generic Sample"
 renderer/rendering_method="gl_compatibility"
 `;
 
-const result = parseInputMap(source + `\nplain_action={\n"deadzone": 0.3,\n"events": [Object(InputEventKey,"physical_keycode":70)]\n}`);
+const result = parseInputMap(source.replace('[rendering]', 'plain_action={\n"deadzone": 0.3,\n"events": [Object(InputEventKey,"physical_keycode":70)]\n}\n[rendering]'));
 assert.equal(result.action_count, 4);
 assert.equal(result.actions[0].name, 'move_right');
 assert.equal(result.actions[0].deadzone, 0.2);
