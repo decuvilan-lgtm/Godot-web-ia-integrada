@@ -183,7 +183,15 @@ jobs:
                 result.installDialogOcr = scan.text;
                 if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
                 result.projectNameSet = 'Dragon Realm';
-                const clickPoint = await clickLine(page, scan, /^Install$/i, 'botón Install');
+                const installLine = scan.lines.find(item => /^Install$/i.test(item.text));
+                let clickPoint;
+                if (installLine) {
+                  clickPoint = await clickLine(page, scan, /^Install$/i, 'botón Install');
+                } else {
+                  const viewport = page.viewportSize();
+                  clickPoint = { x: viewport.width * 0.552, y: viewport.height * 0.61, source: 'fallback: Install button in centered Godot dialog' };
+                  await page.mouse.click(clickPoint.x, clickPoint.y);
+                }
                 result.installActionClicked = 'Install';
                 result.installClickPoint = clickPoint;
                 result.installButtonClicked = true;
