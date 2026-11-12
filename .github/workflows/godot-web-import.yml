@@ -35,7 +35,7 @@ jobs:
           python - <<'PY'
           import json, os, re, urllib.request, urllib.error
           raw = os.environ["REPOSITORY_URL"].strip()
-          match = re.fullmatch(r"https://github\\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
+          match = re.fullmatch(r"https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
           if not match:
               raise SystemExit("Usa una URL https://github.com/owner/repository (sin rutas adicionales).")
           owner, repo = match.groups()
@@ -53,13 +53,14 @@ jobs:
                   raise SystemExit("El repositorio no tiene una rama main. El importador actual usa main exclusivamente.")
               raise
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"owner={owner}\\nrepo={repo}\\nfull_name={owner}/{repo}\\n")
+              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\n")
           print(f"Repositorio público validado: {owner}/{repo} (main)")
           PY
 
       - name: Preparar navegador Chromium
         run: |
-          npm init -y\n          npm install --no-save playwright
+          npm init -y
+          npm install --no-save playwright
           npx playwright install --with-deps chromium
 
       - name: Ejecutar Godot Web y comprobar importación
