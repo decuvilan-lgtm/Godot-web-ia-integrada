@@ -394,6 +394,9 @@ jobs:
                 }
               } catch (captureError) {
                 result.captureWarning = String(captureError);
+                // A partial sequence is a real test failure, not a reason to silently
+                // downgrade the result to a single X11 screenshot.
+                if (String(captureError).includes('Secuencia incompleta')) throw captureError;
                 // Last-resort capture from the X11 desktop. This does not need
                 // JavaScript execution or a responsive Chromium renderer.
                 try {
