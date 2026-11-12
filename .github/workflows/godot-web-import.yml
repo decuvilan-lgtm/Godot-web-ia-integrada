@@ -177,7 +177,8 @@ jobs:
           from pathlib import Path
           data = json.loads(Path("artifacts/project-input-map.json").read_text())
           print("Acciones declaradas:", data["action_count"])
-          lines = ["# Mapa de entradas detectado", "", "Los nombres de acciones son etiquetas del proyecto, no una garantía de su función.", "", "| Acción | Controles declarados |", "|---|---|"]          for action in data["actions"]:
+          lines = ["# Mapa de entradas detectado", "", "Los nombres de acciones son etiquetas del proyecto, no una garantía de su función.", "", "| Acción | Controles declarados |", "|---|---|"]
+          for action in data["actions"]:
               controls = [event.get("descriptor", {}).get("control", event["type"]) for event in action["events"]]
               device_names = sorted({event.get("descriptor", {}).get("device", "other") for event in action["events"]})
               summary = ", ".join(controls) if controls else "sin eventos reconocidos"
