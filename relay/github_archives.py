@@ -79,7 +79,7 @@ async def public_repository_archive(owner: str, repository: str):
                         archive.write(chunk)
 
         archive.seek(0)
-        if archive.read(4) != b"PK\\x03\\x04":
+        if archive.read(4) != b"PK" + bytes((3, 4)):
             raise HTTPException(status_code=502, detail="GitHub response was not a valid ZIP archive")
         archive.seek(0)
         safe_name = f"{owner}-{repository}-main.zip"
