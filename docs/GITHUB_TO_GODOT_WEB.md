@@ -61,7 +61,7 @@ La importación visual del proyecto de referencia confirmó:
 - F5 abre el menú del juego y permite 8/8 capturas consecutivas.
 - Las imágenes PNG se validan y sus manifiestos registran dimensiones, tiempos y tamaños.
 
-La ejecución también registró una advertencia del proyecto de referencia: `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`. No impidió abrir el editor ni mostrar el menú inicial, pero requiere revisar el proyecto por separado.
+La ejecución 43160054574 confirmó la importación del repositorio raíz `Escondite`, el editor visible y el menú inicial del juego, con 5/5 y 8/8 capturas respectivamente. También registró `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`; no impidió mostrar el menú inicial, pero requiere revisar ese proyecto por separado.
 
 ## Límites y estado de despliegue
 
@@ -69,7 +69,7 @@ La ejecución también registró una advertencia del proyecto de referencia: `Pa
 - No reemplaza automáticamente archivos locales; una actualización futura debe preservar cambios del usuario y ofrecer comparación.
 - Todavía no registra el SHA del commit importado como metadato del proyecto.
 - La importación inicial termina en el diálogo nativo de Godot; no automatiza controles internos del canvas que no formen parte del shell web.
-- El código de rama predeterminada y subcarpetas está implementado y cubierto por pruebas del repositorio. Su disponibilidad en el sitio público depende de que Render despliegue los commits más recientes. La última consulta de despliegues aún mostraba una revisión anterior, por lo que no se debe dar esa parte por activa en producción hasta comprobar el nuevo deploy.
+- El código de rama predeterminada y subcarpetas está implementado y cubierto por pruebas unitarias. Sin embargo, la comprobación directa del Relay público devolvió HTTP 404 para `godotengine/godot-demo-projects`, rama `master`, ruta `2d/platformer` (run 43160054574). La importación E2E de ese proyecto terminó con el Project Manager vacío (run 43160118114). Por tanto, la compatibilidad de rama/subcarpeta aún no está activa en el servicio público. Render continúa mostrando como último despliegue una revisión anterior (`9b7ca3f`), aunque el servicio informa auto-deploy habilitado.
 
 ## Responsabilidad del asistente
 
