@@ -490,7 +490,7 @@ jobs:
                   path: 'artifacts/godot-game-preview.png',
                   attemptsPath: 'artifacts/game-capture-attempts.json',
                   timeoutMs: 60000,
-                  readyPredicate: value => /\bGame\b/i.test(value) && !/Scene Project|Inspector|FileSystem/i.test(value)
+                  readyPredicate: value => /Game/i.test(value) && !/Scene Project|Inspector|FileSystem/i.test(value)
                 });
                 result.gamePreviewCaptureMethod = gameCapture.method || null;
                 result.gamePreviewScreenshot = gameCapture.ready ? 'captured-' + gameCapture.method : 'warning';
