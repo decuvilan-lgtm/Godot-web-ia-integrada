@@ -282,7 +282,7 @@ jobs:
             for (let index = 0; index < count; index++) {
               const filename = `artifacts/${label}-${String(index + 1).padStart(2, '0')}.png`;
               await page.screenshot({ path: filename, fullPage: false, timeout: 20000 });
-              const dimensions = execFileSync('identify', ['-format', '%w %h', filename], { encoding: 'utf8' }).trim().split(/\\s+/).map(Number);
+              const dimensions = execFileSync('identify', ['-format', '%w %h', filename], { encoding: 'utf8' }).trim().split(/\s+/).map(Number);
               const stat = fs.statSync(filename);
               if (stat.size < 1024 || dimensions[0] < 500 || dimensions[1] < 300) throw new Error(`Captura Playwright inválida: ${dimensions.join('x')} (${stat.size} bytes)`);
               frames.push({ index: index + 1, file: filename, capturedAt: new Date().toISOString(), width: dimensions[0], height: dimensions[1], bytes: stat.size });
