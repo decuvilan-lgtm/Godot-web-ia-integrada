@@ -35,10 +35,16 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertEqual(once, twice)
         self.assertEqual(twice.count('id="godot-github-connector"'), 1)
 
-    def test_fails_closed_if_upstream_startup_contract_changes(self):
-        broken = FIXTURE.replace("function startEditor(zip)", "function boot(zip)")
-        with self.assertRaises(SystemExit):
-            patch_html(broken)
+    def test_accepts_changed_upstream_godot_internal_markup(self):
+        changed = FIXTURE.replace('id="startButton"', 'id="new-start-control"')
+        changed = changed.replace('id="zip-file"', 'id="new-zip-control"')
+        self.assertIn('id="godot-github-connector"', patch_html(changed))
+
+    def test_rejects_incomplete_html_document(self):
+        for broken in ("", "<html><head></head></html>", "<html><body></body></html>"):
+            with self.subTest(broken=broken):
+                with self.assertRaises(SystemExit):
+                    patch_html(broken)
 
 
 if __name__ == "__main__":
