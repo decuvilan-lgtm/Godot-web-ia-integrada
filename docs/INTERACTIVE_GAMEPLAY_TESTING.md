@@ -11,8 +11,8 @@ Los proyectos usados como referencias durante el desarrollo (incluidos Dragon Re
 1. Abrir cualquier proyecto Godot compatible mediante el flujo de importación existente.
 2. Ejecutar el juego y manejarlo mediante entradas reales del navegador: teclado, ratón y eventos táctiles.
 3. Observar su comportamiento durante una ventana de prueba configurable; el valor inicial recomendado es 10 segundos.
-4. Crear escenas temporales de prueba dentro de una copia/branch aislada del repositorio seleccionado.
-5. Sincronizar esa revisión temporal con Godot Web, abrir directamente la escena o iniciar el juego en el escenario preparado.
+4. Crear escenarios temporales de prueba dentro del proyecto Godot seleccionado. Los escenarios pueden cubrir cualquier mecánica, interacción, interfaz, sistema o estado.
+5. Publicar temporalmente los archivos del escenario en la rama principal del repositorio seleccionado, esperar la actualización del sitio y sincronizar esa revisión exacta con Godot Web.
 6. Comparar el comportamiento observado con instrucciones y resultados esperados.
 7. Eliminar la escena, scripts, recursos y rama temporales al finalizar, sin dejar cambios en el proyecto original.
 
@@ -21,7 +21,7 @@ Los proyectos usados como referencias durante el desarrollo (incluidos Dragon Re
 - **Agnóstico al proyecto:** no codificar rutas, nombres, escenas principales, controles, recursos ni mecánicas de un proyecto de referencia.
 - **No asumir controles:** leer la configuración del adaptador/manifest o inspeccionar el proyecto. Si no se conoce el mapeo, informar qué falta; no inventar teclas ni botones.
 - **Entradas reales:** Playwright debe enviar eventos de teclado, ratón o puntero/touch al juego que se está ejecutando. No reemplazar el juego por una simulación de sus resultados.
-- **Aislamiento y reversibilidad:** preparar las escenas en una rama temporal o copia de trabajo aislada. No escribir pruebas temporales directamente sobre la rama estable del usuario.
+- **Temporalidad controlada:** el escenario se publica temporalmente en la rama principal, como autorizó el usuario, y se elimina al terminar. Registrar el commit base, cada archivo creado/modificado y los commits propios de la prueba. No sobrescribir ni descartar cambios ajenos.
 - **No borrar trabajo del usuario:** la limpieza solo puede retirar los archivos temporales identificados por el manifiesto y creados por esta ejecución.
 - **Evidencia:** separar observación visual, telemetría funcional, errores del motor y resultado de Actions. Una captura por sí sola no demuestra una mecánica interna.
 - **No declarar éxito prematuramente:** el resultado debe distinguir entre importación, apertura, entrada enviada, reacción visual y aserciones funcionales.
@@ -71,21 +71,21 @@ Es un formato ilustrativo: los controles simbólicos se resuelven mediante la co
 Esta es la vía preferida cuando la mecánica está demasiado avanzada para alcanzarla desde el inicio normal del juego.
 
 1. Registrar repositorio, commit base, rama, subcarpeta y estado inicial.
-2. Crear una rama temporal de prueba basada en el commit seleccionado (o una copia aislada equivalente).
+2. Registrar el SHA exacto de `main` y comprobar que no haya otra prueba temporal activa. Crear un manifiesto de ejecución con un identificador único y una lista de archivos reservados para esta prueba.
 3. Descargar/importar el proyecto en el entorno de trabajo.
 4. Inspeccionar sus escenas, scripts, recursos, autoloads, configuración de entrada y dependencias.
 5. Crear dentro del proyecto una escena temporal que reutilice los sistemas y recursos reales necesarios. Añadir scripts auxiliares mínimos solo cuando hagan falta para preparar el estado inicial o exponer resultados.
 6. Añadir un manifiesto que identifique inequívocamente todos los archivos creados para esta prueba.
 7. Configurar la escena como punto de entrada temporal mediante un override de ejecución o una configuración de prueba; no cambiar permanentemente la escena principal del usuario.
-8. Publicar la revisión temporal en la rama aislada y hacer que el importador vuelva a sincronizar esa revisión en Godot Web.
+8. Publicar los archivos temporales en `main` mediante commits identificables. Esperar a que Render publique la revisión correspondiente y comprobar el estado del despliegue. Importar en Godot Web el commit exacto que contiene el escenario.
 9. Abrir el proyecto, ejecutar la escena temporal y realizar la prueba interactiva.
 10. Evaluar capturas y aserciones; si falla, conservar evidencia y corregir/repetir en la misma rama temporal.
-11. Al terminar, eliminar únicamente los archivos de prueba enumerados y la rama temporal, o descartar la copia temporal completa. No fusionar esa rama en la rama original.
-12. Verificar que la rama original y su commit permanecen sin cambios.
+11. Al terminar, eliminar únicamente los archivos creados por la prueba y restaurar exactamente los archivos preexistentes que se hayan modificado, usando commits normales en `main`. No usar force-push, reset ni revertir commits ajenos.
+12. Verificar que `main` vuelve a contener el contenido funcional previo a la prueba, que los cambios ajenos siguen intactos y que Render vuelve a desplegar la revisión limpia.
 
-La escena temporal vive **dentro del proyecto Godot real**, por lo que puede reutilizar scripts, recursos, autoloads y sistemas auténticos. No es una maqueta externa ni una simulación independiente del juego.
+El escenario temporal vive **dentro del proyecto Godot real**, por lo que puede reutilizar scripts, recursos, autoloads y sistemas auténticos. No es una maqueta externa ni una simulación independiente del juego. La rama principal puede mostrar temporalmente esos archivos en la web; la limpieza posterior los retira mediante commits auditables.
 
-### Qué puede contener una escena temporal
+### Qué puede contener un escenario temporal
 
 - El jugador/personaje real y su configuración.
 - Enemigos, NPC u objetos necesarios.
@@ -174,7 +174,10 @@ Si el editor ya contiene una copia importada, el sistema debe detectar si corres
 - Mantener una lista allowlist de archivos temporales creados por la ejecución.
 - No eliminar archivos preexistentes ni modificar recursos del proyecto que no sean temporales.
 - Si se modifica un archivo existente para habilitar el escenario, registrar el diff y restaurarlo exactamente al finalizar.
-- Preferir rama temporal descartable a modificaciones en la rama de trabajo del usuario.
+- La publicación temporal en `main` requiere autorización explícita (concedida para este flujo), registro del SHA base y serialización de pruebas para evitar solapamientos.
+- Nunca usar force-push, reset --hard ni operaciones que eliminen commits de terceros.
+- Antes de limpiar, comparar el HEAD actual con los commits propios de la prueba. Si hay commits ajenos posteriores o cambios inesperados, detener la limpieza automática y preservar el estado para revisión.
+- Borrar solo rutas nuevas enumeradas en el manifiesto; restaurar archivos existentes desde su contenido/SHA original.
 - La limpieza se ejecuta tanto después del éxito como del fallo, salvo que el usuario solicite conservar el entorno de diagnóstico.
 - Antes de borrar, verificar que el commit/branch objetivo es el temporal creado por esta ejecución.
 - Publicar evidencia de limpieza: archivos retirados, rama eliminada y commit base intacto.
@@ -198,9 +201,9 @@ Todavía falta implementar y verificar:
 1. Controlador de teclado, ratón y táctil para gameplay.
 2. Timeline de acciones con duración, liberación garantizada y captura sincronizada.
 3. Duración de observación configurable (10 segundos por defecto).
-4. Creación/publicación/sincronización de escenas temporales en una rama aislada.
+4. Creación/publicación/sincronización de escenarios temporales en `main`, seguida de limpieza auditable.
 5. Contrato/adapter por proyecto para controles, escenarios y aserciones funcionales.
-6. Limpieza verificable de archivos y ramas temporales.
+6. Limpieza verificable de archivos temporales en `main` y comprobación del redeploy limpio.
 7. Informe combinado visual + funcional.
 
 No describir estas capacidades pendientes como ya disponibles hasta que existan pruebas automatizadas y artefactos que lo demuestren.
