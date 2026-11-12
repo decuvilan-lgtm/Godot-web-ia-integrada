@@ -58,4 +58,4 @@ Cuando el usuario indique un repositorio público, ChatGPT puede preparar el enl
 7. Recargar la web y comprobar que los proyectos importados persisten en IndexedDB.
 8. Confirmar que no se sobrescribe ningún proyecto ya importado al conectar otro repositorio.
 
-**Estado:** el proxy y el preloader están implementados en main. El despliegue del Relay y del shell, junto con las pruebas reales en navegador, siguen pendientes de confirmación. La actualización automática de proyectos ya importados y la trazabilidad SHA siguen siendo trabajo futuro.
+**Estado:** el proxy Relay y el shell web están desplegados en Render; el build del shell pasó y el Relay compiló/desplegó correctamente. Falta probar el flujo completo en un navegador Godot Web real, incluida la respuesta ZIP y el diálogo de importación. La actualización automática de proyectos ya importados y la trazabilidad SHA siguen siendo trabajo futuro.
