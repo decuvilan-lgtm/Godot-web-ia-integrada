@@ -65,6 +65,10 @@ if 'id="shared-project-sync-launcher"' not in html:
     if 'id="shared-project-sync-launcher"' not in html:
         raise SystemExit("ERROR: could not add the shared-project connector entry point")
 
+# Fail the build if the upstream HTML changes the startup contract.
+if 'id="startButton"' not in html or "function startEditor(zip)" not in html or "'--project-manager'" not in html:
+    raise SystemExit("ERROR: official Godot Web Project Manager startup contract changed")
+
 # Start the official Project Manager automatically after the page is fully loaded.
 # The official start button already performs the supported initialization path.
 auto_start = r"""
@@ -85,3 +89,4 @@ if 'id="godot-auto-start"' not in html:
 
 entry.write_text(html, encoding="utf-8")
 print("Mobile viewport metadata: OK")
+print("Godot Project Manager auto-start: OK")
