@@ -242,7 +242,16 @@ jobs:
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
               console.log('Godot informó que abrió el proyecto; la captura visual es obligatoria para aprobar la prueba completa.');
               try {
-                await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'device', timeout: 20000 });
+                // Use the Chrome DevTools protocol directly. Playwright's screenshot helper
+                // injects a stylesheet through page JS, which can hang if Godot's WASM
+                // main thread is busy during editor initialization.
+                const cdp = await page.context().newCDPSession(page);
+                const captured = await Promise.race([
+                  cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timeout')), 25000))
+                ]);
+                fs.writeFileSync('artifacts/godot-editor-open.png', Buffer.from(captured.data, 'base64'));
+                await cdp.detach();
                 const editorScan = inspectImage('artifacts/godot-editor-open.png');
                 result.editorScreenshot = 'captured';
                 result.editorOcr = editorScan.text;
