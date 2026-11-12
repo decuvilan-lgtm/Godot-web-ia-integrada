@@ -62,7 +62,7 @@ def patch_html(html: str) -> str:
     return !value || (
       branchPattern.test(value) && !value.startsWith("/") && !value.endsWith("/") &&
       !value.includes("//") && !value.includes("..") && !value.endsWith(".") &&
-      !value.includes("@{") && !["~", "^", ":", "?", "*", "[", "]", "\\\\", " "].some(char => value.includes(char)) &&
+      !value.includes("@{") && !["~", "^", ":", "?", "*", "[", "]", "\\", " "].some(char => value.includes(char)) &&
       value.split("/").every(part => part && part !== "." && part !== "..")
     );
   }
