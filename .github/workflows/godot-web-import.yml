@@ -207,7 +207,7 @@ jobs:
               raise SystemExit("El perfil de controles no contiene una lista válida de acciones.")
           serialized = json.dumps(actions, separators=(",", ":"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("actions=" + serialized + "\\n")
+              output.write("actions=" + serialized + "\n")
           print(f"Perfil cargado: {profile.get('profile')} ({len(actions)} acciones)")
           PY
 
