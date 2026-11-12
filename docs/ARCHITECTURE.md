@@ -24,6 +24,10 @@ Referencias:
 - https://docs.godotengine.org/en/4.7/tutorials/editor/using_the_web_editor.html
 - https://github.com/godotengine/godot/blob/4.7.2-stable/misc/dist/html/editor.html
 
+### Conexión de repositorios GitHub
+
+El mecanismo inicial de conexión está descrito en [Conectar repositorios públicos de GitHub a Godot Web](GITHUB_TO_GODOT_WEB.md). ChatGPT puede preparar un enlace ?repo=owner/repository; el shell web solicita el ZIP público de main al Relay, lo precarga en el campo ZIP oficial y deja que el Project Manager nativo realice la importación. No se exponen tokens GitHub al navegador. La importación final aún utiliza el diálogo nativo. La actualización automática de un proyecto ya importado y la trazabilidad del SHA todavía no están implementadas.
+
 ### Aislamiento de proyectos
 
 - Cada proyecto conserva su identidad y directorio propio en el almacenamiento web.
