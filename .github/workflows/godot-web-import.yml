@@ -173,13 +173,14 @@ jobs:
           from pathlib import Path
           data = json.loads(Path("artifacts/project-input-map.json").read_text())
           print("Acciones declaradas:", data["action_count"])
+          lines = ["# Mapa de entradas detectado", "", "Los nombres de acciones son etiquetas del proyecto, no una garantía de su función.", "", "| Acción | Controles declarados |", "|---|---|"]
           for action in data["actions"]:
-              controls = []
-              for event in action["events"]:
-                  props = event["properties"]
-                  code = props.get("physical_keycode", props.get("keycode", props.get("button_index", "?")))
-                  controls.append(event["type"] + ":" + str(code))
-              print("- " + action["name"] + ": " + (", ".join(controls) if controls else "sin eventos reconocidos"))
+              controls = [event.get("descriptor", {}).get("control", event["type"]) for event in action["events"]]
+              device_names = sorted({event.get("descriptor", {}).get("device", "other") for event in action["events"]})
+              summary = ", ".join(controls) if controls else "sin eventos reconocidos"
+              lines.append("| " + action["name"] + " | " + summary + " (" + ", ".join(device_names) + ") |")
+              print("- " + action["name"] + ": " + summary)
+          Path("artifacts/project-input-map-summary.md").write_text("\\n".join(lines) + "\\n")
           PY
           echo "input_map=generated" >> "$GITHUB_OUTPUT"
 
