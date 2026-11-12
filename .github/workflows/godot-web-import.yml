@@ -112,8 +112,10 @@ jobs:
           }
           async function clickLine(page, scan, pattern, label) {
             const line = findLine(scan, pattern, label);
-            const pixelRatio = await page.evaluate(() => window.devicePixelRatio || 1);
-            await page.mouse.click(line.x / pixelRatio, line.y / pixelRatio);
+            const pixelRatio = 2; // Chromium deviceScaleFactor used by this test.
+            const point = { x: line.x / pixelRatio, y: line.y / pixelRatio, source: line.text };
+            await page.mouse.click(point.x, point.y);
+            return point;
           }
           (async () => {
             const browser = await chromium.launch({
@@ -182,10 +184,24 @@ jobs:
                 if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
                 result.projectNameSet = 'Dragon Realm';
                 const actionLine = findLine(scan, /^(?:Install|Edit Now)$/i, 'Install / Edit Now');
-                await page.mouse.click(actionLine.x, actionLine.y);
-                result.installActionClicked = actionLine.text.trim();
-                result.installButtonClicked = /^Install$/i.test(actionLine.text.trim());
-                result.editNowClicked = /^Edit Now$/i.test(actionLine.text.trim());
+                const clickPoint = await clickLine(page, scan, /Install/i, 'Install');
+                result.installActionClicked = 'Install';
+                result.installClickPoint = clickPoint;
+                result.installButtonClicked = true;
+                await page.waitForTimeout(5000);
+                await page.screenshot({ path: 'artifacts/godot-after-install-click.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'css', timeout: 20000 });
+                const afterInstallScan = inspectImage('artifacts/godot-after-install-click.png');
+                result.afterInstallClickOcr = afterInstallScan.text;
+                fs.writeFileSync('artifacts/after-install-click-ocr.json', JSON.stringify(afterInstallScan, null, 2));
+                if (/Install Project/i.test(afterInstallScan.text)) {
+                  await page.keyboard.press('Enter');
+                  await page.waitForTimeout(5000);
+                  await page.screenshot({ path: 'artifacts/godot-after-install-enter.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'css', timeout: 20000 });
+                  const enterScan = inspectImage('artifacts/godot-after-install-enter.png');
+                  result.afterEnterOcr = enterScan.text;
+                  fs.writeFileSync('artifacts/after-install-enter-ocr.json', JSON.stringify(enterScan, null, 2));
+                  if (/Install Project/i.test(enterScan.text)) throw new Error('Godot mantiene abierto el diálogo incluso después de activar Install con clic y Enter. OCR: ' + enterScan.text);
+                }
               } else if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
                 await clickLine(page, scan, /Instal+l?\s*(?:&|and)\s*Edit/i, 'Install & Edit');
                 result.installAndEditClicked = true;
