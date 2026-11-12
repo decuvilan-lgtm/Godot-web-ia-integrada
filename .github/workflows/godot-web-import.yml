@@ -166,11 +166,12 @@ jobs:
         id: input_map
         run: |
           set -euo pipefail
-          node scripts/godot-input-map.cjs /tmp/godot-project.godot > artifacts-project-input-map.json
+          mkdir -p artifacts
+          node scripts/godot-input-map.cjs /tmp/godot-project.godot > artifacts/project-input-map.json
           python - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path("artifacts-project-input-map.json").read_text())
+          data = json.loads(Path("artifacts/project-input-map.json").read_text())
           print("Acciones declaradas:", data["action_count"])
           for action in data["actions"]:
               controls = []
