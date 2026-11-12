@@ -79,27 +79,37 @@ jobs:
           python - <<'PY'
           import base64, json, os, re, urllib.parse, urllib.request, urllib.error
           raw = os.environ["REPOSITORY_URL"].strip()
-          match = re.fullmatch(r"https://github\\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
+          match = re.fullmatch(r"https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
           if not match:
               raise SystemExit("Usa una URL https://github.com/owner/repository (sin rutas adicionales).")
           owner, repo = match.groups()
+
           def get_json(url):
               req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "Godot-Web-Import-Action"})
               with urllib.request.urlopen(req, timeout=20) as response:
                   return json.load(response)
+
           data = get_json(f"https://api.github.com/repos/{owner}/{repo}")
           if data.get("private") is not False:
               raise SystemExit("El repositorio no es público.")
+
           branch = os.environ.get("REQUESTED_BRANCH", "").strip() or str(data.get("default_branch") or "")
+          forbidden_ref_chars = "~^:?*[]\\ "
           if (not re.fullmatch(r"[A-Za-z0-9._/-]{1,128}", branch)
               or branch.startswith("/") or branch.endswith("/") or "//" in branch or ".." in branch
-              or branch.endswith(".") or "@{" in branch or re.search(r"[~^:?*\\\\\\[\\] ]", branch)
-              or any(part in {"", ".", ".."} for part in branch.split("/"))):
+              or branch.endswith(".") or "@{" in branch
+              or any(char in branch for char in forbidden_ref_chars)
+              or any(part in {"", ".", ".."} or part.startswith(".") or part.lower().endswith(".lock") for part in branch.split("/"))):
               raise SystemExit("Nombre de rama no válido.")
+
           project_path = os.environ.get("PROJECT_PATH", "").strip()
-          if (len(project_path) > 240 or project_path.startswith("/") or project_path.endswith("/")
-              or "\\\\" in project_path or any(part in {"", ".", ".."} for part in project_path.split("/")) if project_path else False):
+          if project_path and (
+              len(project_path) > 240 or project_path.startswith("/") or project_path.endswith("/")
+              or "\\" in project_path
+              or any(part in {"", ".", ".."} for part in project_path.split("/"))
+          ):
               raise SystemExit("Ruta de proyecto no válida.")
+
           branch_ref = urllib.parse.quote(branch, safe="")
           try:
               get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_ref}")
@@ -107,6 +117,7 @@ jobs:
               if exc.code == 404:
                   raise SystemExit(f"No existe la rama {branch}.")
               raise
+
           project_file_path = (project_path + "/" if project_path else "") + "project.godot"
           encoded_path = urllib.parse.quote(project_file_path, safe="/")
           try:
@@ -115,11 +126,12 @@ jobs:
               if exc.code == 404:
                   raise SystemExit(f"No se encontró {project_file_path} en la rama {branch}.")
               raise
+
           project_text = base64.b64decode(project_file.get("content", "")).decode("utf-8", errors="replace")
-          name_match = re.search(r'^\\s*config/name\\s*=\\s*"([^"\\r\\n]+)"', project_text, re.MULTILINE)
-          project_name = re.sub(r'[\\r\\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
+          name_match = re.search(r'^\s*config/name\s*=\s*"([^"\r\n]+)"', project_text, re.MULTILINE)
+          project_name = re.sub(r'[\r\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"owner={owner}\\nrepo={repo}\\nfull_name={owner}/{repo}\\nbranch={branch}\\nproject_path={project_path}\\nproject_name={project_name}\\n")
+              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nproject_path={project_path}\nproject_name={project_name}\n")
           print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, ruta {project_file_path}, nombre: {project_name})")
           PY
 
