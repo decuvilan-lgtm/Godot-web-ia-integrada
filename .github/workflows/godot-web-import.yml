@@ -56,7 +56,7 @@ on:
       gameplay_actions_json:
         description: "Acciones opcionales JSON; controles explícitos del proyecto"
         required: false
-        default: '[{"at_ms":1000,"device":"mouse","control":"left","state":"click","x":1024,"y":472},{"at_ms":3500,"device":"keyboard","control":"D","state":"down"},{"at_ms":5000,"device":"keyboard","control":"D","state":"up"},{"at_ms":5500,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6500,"device":"keyboard","control":"J","state":"press"},{"at_ms":7500,"device":"keyboard","control":"F","state":"press"}]'
+        default: '[]'
         type: string
 
 permissions:
