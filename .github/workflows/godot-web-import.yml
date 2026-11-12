@@ -610,6 +610,9 @@ jobs:
           REPO: ${{ steps.repo.outputs.repo }}
           BRANCH: ${{ steps.repo.outputs.branch }}
           PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
+          BRANCH: ${{ steps.repo.outputs.branch }}
+          BRANCH_IS_DEFAULT: ${{ steps.repo.outputs.branch_is_default }}
+          PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
           JOB_STATUS: ${{ job.status }}
         run: |
           {
@@ -617,9 +620,19 @@ jobs:
             echo
             if [ -n "${OWNER:-}" ] && [ -n "${REPO:-}" ]; then
               echo "- Repositorio: https://github.com/${OWNER}/${REPO}"
-              echo "- Rama: ${BRANCH:-main}"
+              echo "- Rama: ${BRANCH:-predeterminada}"
+              echo "- Carpeta del proyecto: ${PROJECT_PATH:-raíz}"
               echo "- Nombre del proyecto Godot: ${PROJECT_NAME:-${REPO}}"
-              echo "- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${OWNER}%2F${REPO}"
+              python - <<'PY'
+          import os
+          from urllib.parse import urlencode
+          params = {"repo": f"{os.environ['OWNER']}/{os.environ['REPO']}"}
+          if os.environ.get("BRANCH_IS_DEFAULT") != "true":
+              params["branch"] = os.environ.get("BRANCH", "")
+          if os.environ.get("PROJECT_PATH"):
+              params["path"] = os.environ["PROJECT_PATH"]
+          print("- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?" + urlencode(params))
+          PY
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
