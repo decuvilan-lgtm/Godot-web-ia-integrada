@@ -2,7 +2,7 @@
 
 ## Decisiones acordadas: GitHub como origen y Godot Web como inspector visual
 
-Esta sección registra la dirección acordada para el flujo de desarrollo asistido. Es una decisión de arquitectura; no implica que todo esté implementado o probado.
+Esta sección registra la dirección acordada para el flujo de desarrollo asistido. Es una decisión de arquitectura; no implica que todo esté implementado o probado. Las secciones posteriores de este documento contienen componentes y decisiones de una arquitectura anterior (puestos emparejados, propuestas hacia Android y sincronización Neon); deben tratarse como legado pendiente de auditoría, no como requisitos que contradigan esta dirección nueva.
 
 - **GitHub, rama `main`:** única fuente oficial y única rama de trabajo para este flujo.
 - **ChatGPT + Godot Headless:** obtienen el repositorio completo, lo inspeccionan, desarrollan, ejecutan pruebas y publican commits directamente en `main`. Headless no necesita Project Manager: trabaja sobre el repositorio clonado y su `project.godot`.
