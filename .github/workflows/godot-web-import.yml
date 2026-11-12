@@ -623,16 +623,7 @@ jobs:
               echo "- Rama: ${BRANCH:-predeterminada}"
               echo "- Carpeta del proyecto: ${PROJECT_PATH:-raíz}"
               echo "- Nombre del proyecto Godot: ${PROJECT_NAME:-${REPO}}"
-              python - <<'PY'
-          import os
-          from urllib.parse import urlencode
-          params = {"repo": f"{os.environ['OWNER']}/{os.environ['REPO']}"}
-          if os.environ.get("BRANCH_IS_DEFAULT") != "true":
-              params["branch"] = os.environ.get("BRANCH", "")
-          if os.environ.get("PROJECT_PATH"):
-              params["path"] = os.environ["PROJECT_PATH"]
-          print("- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?" + urlencode(params))
-          PY
+              echo "- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${OWNER}%2F${REPO}"
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
             echo
