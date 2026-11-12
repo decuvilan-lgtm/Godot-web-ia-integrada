@@ -177,8 +177,7 @@ jobs:
           from pathlib import Path
           data = json.loads(Path("artifacts/project-input-map.json").read_text())
           print("Acciones declaradas:", data["action_count"])
-          lines = ["# Mapa de entradas detectado", "", "Los nombres de acciones son etiquetas del proyecto, no una garantía de su función.", "", "| Acción | Controles declarados |", "|---|---|"]
-          for action in data["actions"]:
+          lines = ["# Mapa de entradas detectado", "", "Los nombres de acciones son etiquetas del proyecto, no una garantía de su función.", "", "| Acción | Controles declarados |", "|---|---|"]          for action in data["actions"]:
               controls = [event.get("descriptor", {}).get("control", event["type"]) for event in action["events"]]
               device_names = sorted({event.get("descriptor", {}).get("device", "other") for event in action["events"]})
               summary = ", ".join(controls) if controls else "sin eventos reconocidos"
@@ -357,8 +356,7 @@ jobs:
               try { await cdp.detach(); } catch {}
             }
             const capturedFrames = frames.filter(frame => frame.bytes > 0).length;
-            const manifest = {
-              label,
+            const manifest = {              label,
               requestedFrames: count,
               capturedFrames,
               intervalMs,
@@ -478,7 +476,7 @@ jobs:
               args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-gl=angle',
                 '--use-angle=swiftshader', '--disable-dev-shm-usage', '--no-sandbox']
             });
-            const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+            const context = await browser.newContext({\n              viewport: { width: 1440, height: 900 },\n              deviceScaleFactor: 1,\n              recordVideo: { dir: 'artifacts/videos', size: { width: 1440, height: 900 } }\n            });\n            const page = await context.newPage();
             page.setDefaultTimeout(15000);
             const events = [];
             page.on('console', msg => events.push({ type: 'console:' + msg.type(), text: msg.text() }));
@@ -537,8 +535,7 @@ jobs:
                   result.projectManagerOcr = scan.text;
                 }
               }
-              if (/Install Project/i.test(scan.text)) {
-                const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
+              if (/Install Project/i.test(scan.text)) {                const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
                 await page.mouse.click(nameLine.x, nameLine.y);
                 await page.keyboard.press('Control+A');
                 await page.keyboard.type(projectLabel);
@@ -717,12 +714,11 @@ jobs:
               throw error;
             }
           })().catch(error => { console.error(error); process.exit(1); });
-          JS
-          . .venv/bin/activate
+          JS          . .venv/bin/activate
           xvfb-run -a --server-args="-screen 0 1600x1000x24" env NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
 
-      - name: Comparar capturas antes y después de cada acción
+      - name: Verificar y catalogar grabación de la sesión Render\n        if: always()\n        run: |\n          set -euo pipefail\n          mkdir -p artifacts/videos\n          python - <<'PY'\n          import json\n          from pathlib import Path\n          videos = sorted(Path('artifacts/videos').glob('*.webm'))\n          manifest = {\n              'target': 'https://godot-web-ia-integrada-rt2l.onrender.com/',\n              'capture': 'Playwright browser video recording',\n              'format': 'webm',\n              'videoCount': len(videos),\n              'videos': [{'file': str(p), 'bytes': p.stat().st_size} for p in videos],\n              'status': 'recorded' if videos and all(p.stat().st_size > 1024 for p in videos) else 'missing-or-empty'\n          }\n          Path('artifacts/render-session-video.json').write_text(json.dumps(manifest, indent=2) + '\\n')\n          print(json.dumps(manifest, indent=2))\n          if not videos or any(p.stat().st_size <= 1024 for p in videos):\n              raise SystemExit('No se generó una grabación WebM válida de la sesión Render.')\n          PY\n\n      - name: Comparar capturas antes y después de cada acción
         if: always()
         run: |
           set -euo pipefail
