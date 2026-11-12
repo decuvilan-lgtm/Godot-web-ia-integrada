@@ -598,13 +598,15 @@ jobs:
                 result.gamePreviewScreenshot = 'warning';
                 result.gamePreviewWarning = String(previewError);
               }
-              result.status = result.projectHasResourceWarnings
-                ? 'passed-with-project-warnings'
-                : result.gamePreviewScreenshot === 'warning'
-                  ? 'passed-with-preview-warnings'
-                  : result.liveRelayCheck !== 'success'
-                    ? 'passed-with-deployment-warnings'
-                    : 'passed';
+              result.status = result.projectHasResourceWarnings && result.liveRelayCheck !== 'success'
+                ? 'passed-with-project-and-deployment-warnings'
+                : result.projectHasResourceWarnings
+                  ? 'passed-with-project-warnings'
+                  : result.gamePreviewScreenshot === 'warning'
+                    ? 'passed-with-preview-warnings'
+                    : result.liveRelayCheck !== 'success'
+                      ? 'passed-with-deployment-warnings'
+                      : 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
@@ -681,6 +683,12 @@ jobs:
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/result.json").read_text())
+          print()
+          print("### Verificación del Relay en producción")
+          live_status = data.get("liveRelayCheck", "not-run")
+          print(f"- Rama/subcarpeta: **{live_status}**")
+          if live_status != "success":
+              print("- Revisa `live-relay-check.json` en el artefacto; la importación raíz no sustituye esta comprobación.")
           print()
           print("### Secuencias visuales")
           for key, label in (("editorSequence", "Editor"), ("gamePreviewSequence", "Juego")):
