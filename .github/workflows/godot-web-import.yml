@@ -74,6 +74,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
+          sudo apt-get install -y xvfb
 
       - name: Preparar OCR para inspeccionar el Project Manager
         run: |
@@ -119,7 +120,7 @@ jobs:
           }
           (async () => {
             const browser = await chromium.launch({
-              headless: true,
+              headless: false,
               args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-gl=angle',
                 '--use-angle=swiftshader', '--disable-dev-shm-usage', '--no-sandbox']
             });
@@ -297,7 +298,7 @@ jobs:
           })().catch(error => { console.error(error); process.exit(1); });
           JS
           . .venv/bin/activate
-          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
+          xvfb-run -a --server-args="-screen 0 1600x1000x24" env NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
 
       - name: Publicar enlace de apertura y resultado
