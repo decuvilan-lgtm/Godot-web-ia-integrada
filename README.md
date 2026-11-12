@@ -108,7 +108,9 @@ Al iniciar manualmente el workflow (`workflow_dispatch`) se pueden ajustar:
 
 Los valores fuera de rango se limitan al rango permitido. Las secuencias registran la cantidad solicitada, la cantidad capturada, el intervalo, la duración y los datos básicos de cada imagen.
 
-**Limitación actual importante:** aunque la URL del repositorio es configurable, partes de la prueba visual todavía esperan el nombre de proyecto `Dragon Realm` y una ruta de instalación fija. Por eso el workflow ya puede recibir otros repositorios, pero aún no es completamente independiente del proyecto de referencia. El siguiente ajuste de generalización debe detectar el nombre/ruta real del proyecto desde los datos importados o la configuración de Godot, en vez de exigir ese nombre fijo.
+**Detección dinámica del proyecto:** el workflow valida el repositorio público seleccionado, comprueba que exista `project.godot` en la raíz de `main`, lee `config/name` desde ese archivo y usa ese nombre en el diálogo nativo de instalación y en la verificación OCR. La apertura se confirma leyendo la ruta real `Editing project:` emitida por Godot bajo `/home/web_user/`; ya no depende del nombre Dragon Realm ni de una carpeta fija. El nombre del repositorio se usa como alternativa si `config/name` no está definido.
+
+**Límites actuales:** el relay y el workflow siguen descargando exclusivamente la rama `main`, y el proyecto Godot debe tener `project.godot` en la raíz del repositorio. Los proyectos alojados en subcarpetas o cuya rama principal tenga otro nombre requieren ampliar el importador antes de considerarlos compatibles.
 
 ### Validación de cada imagen
 
@@ -188,7 +190,8 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
 | Captura del preview F5 | Probada con el proyecto de referencia; opcional y sujeta a que el proyecto pueda ejecutarse |
-| Compatibilidad general con cualquier nombre/ruta de proyecto | Pendiente: eliminar supuestos fijos de Dragon Realm |
+| Detección dinámica de nombre/ruta del proyecto en repositorios compatibles | Implementada en el workflow; falta validar con varios repositorios reales |
+| Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Pendiente |
 | Actualización incremental del proyecto ya importado | Pendiente |
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
 | Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
