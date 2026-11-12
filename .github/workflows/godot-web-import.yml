@@ -728,7 +728,8 @@ jobs:
               throw error;
             }
           })().catch(error => { console.error(error); process.exit(1); });
-          JS          . .venv/bin/activate
+          JS
+          . .venv/bin/activate
           xvfb-run -a --server-args="-screen 0 1600x1000x24" env NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
 
