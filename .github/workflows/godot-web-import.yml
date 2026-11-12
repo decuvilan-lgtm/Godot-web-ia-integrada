@@ -112,7 +112,8 @@ jobs:
           }
           async function clickLine(page, scan, pattern, label) {
             const line = findLine(scan, pattern, label);
-            await page.mouse.click(line.x, line.y);
+            const pixelRatio = await page.evaluate(() => window.devicePixelRatio || 1);
+            await page.mouse.click(line.x / pixelRatio, line.y / pixelRatio);
           }
           (async () => {
             const browser = await chromium.launch({
@@ -175,7 +176,7 @@ jobs:
                 await page.keyboard.type('Dragon Realm');
                 await page.keyboard.press('Tab');
                 await page.waitForTimeout(1500);
-                await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'css', timeout: 20000 });
+                await page.screenshot({ path: 'artifacts/godot-install-dialog-ready.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
                 scan = inspectImage('artifacts/godot-install-dialog-ready.png');
                 result.installDialogOcr = scan.text;
                 if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
