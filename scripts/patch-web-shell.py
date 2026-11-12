@@ -6,13 +6,12 @@ import re
 
 RELAY_URL = "https://godot-web-ia-relay.onrender.com"
 def patch_html(html: str) -> str:
-    """Apply idempotent mobile metadata and the GitHub-to-Project-Manager bridge."""
-    """Validate document structure, not Godot's private/version-dependent JS API."""
-    if not re.search(r"<html\\b", html, flags=re.I):
+    """Apply mobile metadata and connector; validate structure, not private Godot APIs."""
+    if not re.search(r"<html\b", html, flags=re.I):
         raise SystemExit("ERROR: input is not an HTML document (missing <html>)")
-    if not re.search(r"<head\\b", html, flags=re.I):
+    if not re.search(r"<head\b", html, flags=re.I):
         raise SystemExit("ERROR: HTML document has no <head>")
-    if not re.search(r"<body\\b", html, flags=re.I) or not re.search(r"</body\\s*>", html, flags=re.I):
+    if not re.search(r"<body\b", html, flags=re.I) or not re.search(r"</body\s*>", html, flags=re.I):
         raise SystemExit("ERROR: HTML document has no complete <body>")
 
     viewport = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
