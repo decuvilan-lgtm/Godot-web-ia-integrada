@@ -22,7 +22,7 @@ class WebShellPatchTests(unittest.TestCase):
         result = patch_html(FIXTURE)
         self.assertIn("viewport-fit=cover", result)
         self.assertIn('id="godot-github-connector"', result)
-        self.assertIn('id="godot-connect-github"', result)
+        self.assertIn('button.id = "godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
         self.assertIn("credentials:", result)
         self.assertIn("target.searchParams.set", result)
