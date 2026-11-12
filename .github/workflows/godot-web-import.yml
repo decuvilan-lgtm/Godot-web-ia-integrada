@@ -71,9 +71,9 @@ jobs:
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
         env:
-          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
-          REQUESTED_BRANCH: ${{ inputs.branch || '' }}
-          PROJECT_PATH: ${{ inputs.project_path || '' }}
+          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/godotengine/godot-demo-projects' }}
+          REQUESTED_BRANCH: ${{ inputs.branch || 'master' }}
+          PROJECT_PATH: ${{ inputs.project_path || '2d/platformer' }}
         run: |
           set -euo pipefail
           python - <<'PY'
