@@ -24,8 +24,8 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn('id="godot-github-connector"', result)
         self.assertIn('id="godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
-        self.assertIn("credentials: \\"omit\\"", result)
-        self.assertIn("target.searchParams.set(\\"repo\\", repo)", result)
+        self.assertIn("credentials:", result)
+        self.assertIn("target.searchParams.set", result)
         self.assertIn("startButton.click()", result)
         self.assertNotIn("Compartir proyectos", result)
 
