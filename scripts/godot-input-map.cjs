@@ -99,7 +99,7 @@ function parseInputMap(text) {
       const match = line.match(/^(?:"((?:[^"\\]|\\.)+)"|([A-Za-z0-9_./-]+))\s*=\s*\{(.*)$/);
       if (!match) continue;
       current = { name: (match[1] || match[2]).replace(/\\"/g, '"'), deadzone: null };
-      buffer = match[2];
+      buffer = match[3];
       collecting = true;
       depth = 1 + (([...buffer.matchAll(/\{/g)].length) - ([...buffer.matchAll(/\}/g)].length));
     } else {
