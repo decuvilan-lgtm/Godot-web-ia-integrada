@@ -33,12 +33,15 @@ Estos componentes tienen responsabilidades diferentes. Una prueba correcta en He
 
 ### 1. Seleccionar un proyecto
 
-Se identifica el repositorio y la rama que se van a trabajar. El sistema debe usar la identidad del repositorio y su revisión, no solamente el nombre visible del proyecto. El importador web actual admite repositorios públicos de GitHub desde la rama `main`.
+Se identifica el repositorio y la rama que se van a trabajar. El sistema debe usar la identidad del repositorio y su revisión, no solamente el nombre visible del proyecto. El importador en código admite repositorios públicos de GitHub, la rama predeterminada o una rama indicada, y una carpeta opcional que contenga `project.godot`. La disponibilidad de los cambios más recientes en Render debe comprobarse por separado.
 
 Enlace de apertura:
 
 ```text
 https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY
+
+# Rama y carpeta opcionales:
+https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY&branch=master&path=2d/platformer
 ```
 
 Sustituir `OWNER/REPOSITORY` por el repositorio deseado. El enlace prepara la importación; la finalización todavía utiliza el Project Manager nativo de Godot.
@@ -83,7 +86,7 @@ El workflow principal es:
 Permite ejecutar una prueba de navegador que:
 
 1. Valida que la URL corresponda a un repositorio público de GitHub.
-2. Comprueba que exista la rama `main`.
+2. Resuelve la rama predeterminada o valida la rama indicada.
 3. Abre Godot Web en Chromium bajo Xvfb.
 4. Comprueba el aislamiento del navegador y la disponibilidad de `SharedArrayBuffer`.
 5. Verifica que el relay entregue el ZIP y que el archivo quede asignado al campo oficial de importación de Godot.
@@ -100,6 +103,8 @@ Al iniciar manualmente el workflow (`workflow_dispatch`) se pueden ajustar:
 | Parámetro | Valor predeterminado | Límite |
 |---|---:|---:|
 | `repository_url` | Repositorio de referencia Dragon Realm | URL HTTPS de GitHub |
+| `branch` | Vacío = rama predeterminada | Nombre de rama válido |
+| `project_path` | Vacío = raíz | Ruta relativa a la carpeta con `project.godot` |
 | `startup_timeout` | 180 s | 60–300 s |
 | `editor_frames` | 5 | 1–12 |
 | `editor_interval_ms` | 900 ms | 100–5000 ms |
@@ -108,9 +113,9 @@ Al iniciar manualmente el workflow (`workflow_dispatch`) se pueden ajustar:
 
 Los valores fuera de rango se limitan al rango permitido. Las secuencias registran la cantidad solicitada, la cantidad capturada, el intervalo, la duración y los datos básicos de cada imagen.
 
-**Detección dinámica del proyecto:** el workflow valida el repositorio público seleccionado, comprueba que exista `project.godot` en la raíz de `main`, lee `config/name` desde ese archivo y usa ese nombre en el diálogo nativo de instalación y en la verificación OCR. La apertura se confirma leyendo la ruta real `Editing project:` emitida por Godot bajo `/home/web_user/`; ya no depende del nombre Dragon Realm ni de una carpeta fija. El nombre del repositorio se usa como alternativa si `config/name` no está definido.
+**Detección dinámica del proyecto:** el workflow valida el repositorio público, resuelve la rama y comprueba `project.godot` en la raíz o en la carpeta indicada. Lee `config/name` desde ese archivo y usa ese nombre en el diálogo nativo de instalación. La apertura se confirma mediante el log `Editing project:` y la ruta real del proyecto bajo `/home/web_user/`.
 
-**Límites actuales:** el relay y el workflow siguen descargando exclusivamente la rama `main`, y el proyecto Godot debe tener `project.godot` en la raíz del repositorio. Los proyectos alojados en subcarpetas o cuya rama principal tenga otro nombre requieren ampliar el importador antes de considerarlos compatibles.
+**Compatibilidad:** el código del Relay admite ramas predeterminadas o explícitas y reempaqueta proyectos de subcarpetas para que `project.godot` quede en la raíz del ZIP. Las pruebas unitarias cubren ambos casos. La activación de estas capacidades en el sitio público depende de que Render despliegue la revisión más reciente.
 
 ### Validación de cada imagen
 
@@ -123,7 +128,7 @@ Cada frame de una secuencia se valida antes de considerarlo capturado:
 - El manifiesto indica si la secuencia está completa.
 - Si falta un frame solicitado, la secuencia falla en lugar de presentarse como completa.
 
-La verificación del editor usa capturas X11 del escritorio porque el hilo WASM de Godot puede bloquear las llamadas de Playwright/CDP durante la inicialización. Después de detectar el log `Editing project:`, el workflow espera y vuelve a capturar durante un máximo de 45 segundos; solo aprueba la interfaz cuando OCR encuentra elementos reales del editor y la ruta del proyecto ya fue confirmada por los logs. Esto evita confundir una captura prematura del Project Manager con una apertura fallida.
+La verificación visual usa capturas escalonadas de Playwright, CDP y X11 durante un máximo de 90 segundos. El indicador `rendererResponsive` queda como diagnóstico y no bloquea la prueba por sí solo. Se exige OCR de la interfaz del editor y confirmación de la ruta mediante logs. Después de F5 se vuelve a capturar la vista Game y, cuando se detecta, se obtiene una secuencia independiente.
 
 Los errores de carga de recursos del proyecto (por ejemplo, `Parse Error` o `Failed loading resource`) se registran por separado como advertencias del proyecto. No invalidan por sí solos que el editor haya abierto y sea visible, pero sí impiden describir el proyecto como completamente limpio o listo para ejecutar. La prueba del editor y la salud interna del proyecto son resultados distintos.
 
@@ -184,22 +189,22 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 |---|---|
 | Editor Godot Web 4.7.2 publicado | Implementado |
 | Inicio del Project Manager en navegador | Implementado; revisar en ejecución real |
-| Importación inicial desde repositorio público `main` | Implementada |
-| URL de repositorio configurable en Actions | Implementada |
-| Apertura de proyecto en Godot Web | Ruta confirmada por logs; verificación visual multicaptura en validación |
-| Captura individual del editor | Estrategia escalonada Playwright/CDP/X11 implementada; la estabilidad debe confirmarse con ejecución real |
-| Secuencias configurables de capturas | Implementadas; la secuencia del editor usa el canal que consiguió una captura OCR válida |
+| Importación inicial desde repositorio público | Implementada en código; despliegue actualizado pendiente de verificar |
+| URL, rama y subcarpeta configurables en Actions | Implementadas en código y cubiertas por pruebas |
+| Apertura de proyecto en Godot Web | Probada: ruta confirmada y editor visible |
+| Captura individual del editor | Probada con Playwright/CDP; secuencia completa 5/5 |
+| Secuencias configurables de capturas | Probadas: editor 5/5 y juego 8/8; dimensiones PNG verificadas |
 | Advertencias de carga del proyecto | Se separan de la verificación de apertura; requieren revisar los recursos del proyecto objetivo |
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
-| Captura del preview F5 | Probada con el proyecto de referencia; opcional y sujeta a que el proyecto pueda ejecutarse |
+| Captura del preview F5 | Probada: se abrió el menú inicial y se capturaron 8/8 frames |
 | Detección dinámica de nombre/ruta del proyecto en repositorios compatibles | Implementada; validación visual del proyecto de referencia pendiente de corregir |
-| Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Pendiente |
+| Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Implementada en código y con pruebas unitarias; E2E y despliegue público pendientes |
 | Actualización incremental del proyecto ya importado | Pendiente |
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
 | Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
 
-**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional. La ejecución 43156155421 confirmó la ruta del proyecto, pero las capturas X11 permanecieron vacías y el respaldo de Playwright agotó tiempo; por eso no se consideró exitosa. El commit `dd27efc` incorporó captura escalonada Playwright/CDP/X11 y reintentos de 90 segundos. La nueva ejecución 43156941611 está validando ese cambio; hasta que termine y se inspeccionen sus artefactos, la captura visual no se marca como resuelta. En una ejecución anterior también apareció `Parse Error: Busy` en `res://scenes/ui/hud.tscn`; se mantiene como advertencia histórica pendiente de reproducir, no como error confirmado en la última prueba.
+**Evidencia visual:** la ejecución [43158048268](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43158048268) abrió el editor y el juego de referencia. El editor produjo 5/5 capturas y el menú del juego 8/8. El estado fue `passed-with-project-warnings` porque Godot informó `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`; ese error pertenece al proyecto de referencia y no impidió mostrar su menú inicial. La ejecución 43158048268 también detectó un defecto en el manifiesto de dimensiones de la secuencia Playwright; el parseo se corrigió en el commit `1e65b78`, cuya validación posterior debe confirmar que los campos ancho/alto ya no aparecen nulos.\n\n**Despliegue:** Render informa que el servicio Relay tiene auto-deploy habilitado, pero su último despliegue visible sigue apuntando a una revisión anterior. Por ello, las mejoras de rama/subcarpeta y la versión más reciente del shell están documentadas como implementadas en el repositorio, no como ya activas en producción. La verificación final requiere que Render registre un despliegue nuevo y repetir la prueba con un proyecto en subcarpeta.
 
 ## Documentación técnica
 
