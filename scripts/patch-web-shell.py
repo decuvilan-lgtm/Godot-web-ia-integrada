@@ -55,19 +55,51 @@ def patch_html(html: str) -> str:
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
-  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+  const branchPattern = /^[A-Za-z0-9._/-]{1,128}$/;
+
+  function validBranch(value) {
+    return !value || (
+      branchPattern.test(value) && !value.startsWith("/") && !value.endsWith("/") &&
+      !value.includes("//") && !value.includes("..") && !value.endsWith(".") &&
+      !value.includes("@{") && !/[~^:?*\\[\\]\\\\ ]/.test(value) &&
+      value.split("/").every(part => part && part !== "." && part !== "..")
+    );
+  }
+
+  function validProjectPath(value) {
+    return !value || (
+      value.length <= 240 && !value.startsWith("/") && !value.endsWith("/") &&
+      !value.includes("\\\\") && value.split("/").every(part => part && part !== "." && part !== "..")
+    );
+  }
 
   function connectRepository() {
-    const value = window.prompt("Repositorio público de GitHub (owner/repository). Se usará exclusivamente main:");
+    const value = window.prompt("Repositorio público de GitHub (owner/repository):");
     if (!value) return;
     const repo = value.trim();
     if (!repoPattern.test(repo)) {
       window.alert("Formato no válido. Escribe owner/repository, sin URL.");
       return;
     }
-    if (!window.confirm("Se recargará Godot Web para precargar " + repo + " (main). Guarda antes cualquier cambio local no publicado. ¿Continuar?")) return;
+    const branch = (window.prompt("Rama de GitHub (vacío = rama predeterminada):", "") || "").trim();
+    if (!validBranch(branch)) {
+      window.alert("Nombre de rama no válido.");
+      return;
+    }
+    const projectPath = (window.prompt("Carpeta que contiene project.godot (vacío = raíz):", "") || "").trim();
+    if (!validProjectPath(projectPath)) {
+      window.alert("Ruta de proyecto no válida. Usa carpetas separadas por /.");
+      return;
+    }
+    const description = repo + (branch ? " · " + branch : " · rama predeterminada") + (projectPath ? " · " + projectPath : " · raíz");
+    if (!window.confirm("Se recargará Godot Web para precargar " + description + ". Guarda antes cualquier cambio local no publicado. ¿Continuar?")) return;
     const target = new URL(window.location.href);
     target.searchParams.set("repo", repo);
+    if (branch) target.searchParams.set("branch", branch);
+    else target.searchParams.delete("branch");
+    if (projectPath) target.searchParams.set("path", projectPath);
+    else target.searchParams.delete("path");
     window.location.assign(target.toString());
   }
 
@@ -79,7 +111,7 @@ def patch_html(html: str) -> str:
     button.type = "button";
     button.className = "btn tab-btn";
     button.textContent = "Conectar GitHub";
-    button.title = "Precargar un repositorio público desde la rama main";
+    button.title = "Precargar un repositorio público, una rama y una carpeta Godot";
     button.addEventListener("click", connectRepository);
     bar.appendChild(button);
   });
@@ -88,15 +120,23 @@ def patch_html(html: str) -> str:
     const startButton = document.getElementById("startButton");
     if (!startButton || startButton.disabled) return;
 
-    const repo = new URLSearchParams(window.location.search).get("repo");
+    const params = new URLSearchParams(window.location.search);
+    const repo = params.get("repo");
     if (repo) {
-      if (!repoPattern.test(repo)) {
-        window.alert("No se pudo conectar el repositorio: usa owner/repository.");
+      const branch = (params.get("branch") || "").trim();
+      const projectPath = (params.get("path") || "").trim();
+      if (!repoPattern.test(repo) || !validBranch(branch) || !validProjectPath(projectPath)) {
+        window.alert("No se pudo conectar el repositorio: revisa owner/repository, rama y carpeta del proyecto.");
       } else {
         const [owner, repository] = repo.split("/");
         try {
+          const archiveUrl = new URL(
+            relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive"
+          );
+          if (branch) archiveUrl.searchParams.set("branch", branch);
+          if (projectPath) archiveUrl.searchParams.set("path", projectPath);
           const response = await fetch(
-            relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive",
+            archiveUrl.toString(),
             { method: "GET", mode: "cors", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer" }
           );
           if (!response.ok) {
@@ -115,15 +155,19 @@ def patch_html(html: str) -> str:
           if (!input || typeof DataTransfer === "undefined") {
             throw new Error("Este navegador no permite precargar el ZIP automáticamente.");
           }
+          const selectedBranch = response.headers.get("X-GitHub-Ref") || branch || "default";
+          const branchFile = selectedBranch.replace(/[^A-Za-z0-9._-]+/g, "-");
           const transfer = new DataTransfer();
-          transfer.items.add(new File([blob], owner + "-" + repository + "-main.zip", { type: "application/zip" }));
+          transfer.items.add(new File([blob], owner + "-" + repository + "-" + branchFile + ".zip", { type: "application/zip" }));
           input.files = transfer.files;
           input.dispatchEvent(new Event("change", { bubbles: true }));
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete("repo");
+          cleanUrl.searchParams.delete("branch");
+          cleanUrl.searchParams.delete("path");
           window.history.replaceState(null, "", cleanUrl.toString());
         } catch (error) {
-          window.alert("No se pudo descargar " + repo + " desde main: " + String(error.message || error));
+          window.alert("No se pudo descargar " + repo + ": " + String(error.message || error));
         }
       }
     }
