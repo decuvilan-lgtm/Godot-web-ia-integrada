@@ -114,27 +114,75 @@ jobs:
           async function captureSequence(page, label, count, intervalMs) {
             const cdp = await page.context().newCDPSession(page);
             const frames = [];
+            const startedAt = Date.now();
+            const timeoutCall = async (promise, ms, message) => {
+              let timer;
+              try {
+                return await Promise.race([
+                  promise,
+                  new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })
+                ]);
+              } finally {
+                if (timer) clearTimeout(timer);
+              }
+            };
             try {
               for (let index = 0; index < count; index++) {
                 const filename = `artifacts/${label}-${String(index + 1).padStart(2, '0')}.png`;
+                const frameStartedAt = Date.now();
                 try {
-                  const shot = await Promise.race([
-                    cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('sequence screenshot timeout')), 12000))
-                  ]);
-                  fs.writeFileSync(filename, Buffer.from(shot.data, 'base64'));
-                  frames.push({ index: index + 1, file: filename, capturedAt: new Date().toISOString(), bytes: fs.statSync(filename).size });
+                  const shot = await timeoutCall(
+                    cdp.send('Page.captureScreenshot', {
+                      format: 'png',
+                      fromSurface: true,
+                      captureBeyondViewport: false,
+                      optimizeForSpeed: true
+                    }),
+                    15000,
+                    'sequence screenshot timeout'
+                  );
+                  const bytes = Buffer.from(shot.data, 'base64');
+                  if (bytes.length < 1024 || bytes.toString('hex', 0, 8) !== '89504e470d0a1a0a') {
+                    throw new Error('La captura no es un PNG válido o está vacía.');
+                  }
+                  const width = bytes.readUInt32BE(16);
+                  const height = bytes.readUInt32BE(20);
+                  if (width < 500 || height < 300) {
+                    throw new Error(`Resolución inesperada: ${width}x${height}`);
+                  }
+                  fs.writeFileSync(filename, bytes);
+                  frames.push({
+                    index: index + 1,
+                    file: filename,
+                    capturedAt: new Date().toISOString(),
+                    elapsedMs: Date.now() - frameStartedAt,
+                    width,
+                    height,
+                    bytes: bytes.length
+                  });
                 } catch (error) {
                   frames.push({ index: index + 1, file: filename, error: String(error) });
                   break;
                 }
-                if (index + 1 < count) await page.waitForTimeout(intervalMs);
+                if (index + 1 < count) await new Promise(resolve => setTimeout(resolve, intervalMs));
               }
             } finally {
               try { await cdp.detach(); } catch {}
             }
-            const manifest = { label, requestedFrames: count, capturedFrames: frames.filter(frame => frame.bytes > 0).length, intervalMs, frames };
+            const capturedFrames = frames.filter(frame => frame.bytes > 0).length;
+            const manifest = {
+              label,
+              requestedFrames: count,
+              capturedFrames,
+              intervalMs,
+              totalDurationMs: Date.now() - startedAt,
+              complete: capturedFrames === count,
+              frames
+            };
             fs.writeFileSync(`artifacts/${label}-sequence.json`, JSON.stringify(manifest, null, 2));
+            if (!manifest.complete) {
+              throw new Error(`Secuencia incompleta ${label}: ${capturedFrames}/${count} imágenes. Revisa el manifiesto.`);
+            }
             return manifest;
           }
           async function clickLine(page, scan, pattern, label) {
