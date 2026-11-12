@@ -16,6 +16,26 @@ on:
         required: false
         default: "180"
         type: string
+      editor_frames:
+        description: "Cantidad de capturas consecutivas del editor (1-12)"
+        required: false
+        default: "5"
+        type: string
+      editor_interval_ms:
+        description: "Intervalo entre capturas del editor en milisegundos"
+        required: false
+        default: "900"
+        type: string
+      game_frames:
+        description: "Cantidad de capturas consecutivas del juego (1-24)"
+        required: false
+        default: "8"
+        type: string
+      game_interval_ms:
+        description: "Intervalo entre capturas del juego en milisegundos"
+        required: false
+        default: "500"
+        type: string
 
 permissions:
   contents: read
@@ -90,6 +110,10 @@ jobs:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
+          EDITOR_FRAMES: ${{ inputs.editor_frames || '5' }}
+          EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
+          GAME_FRAMES: ${{ inputs.game_frames || '8' }}
+          GAME_INTERVAL_MS: ${{ inputs.game_interval_ms || '500' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -98,6 +122,14 @@ jobs:
           const { execFileSync } = require('child_process');
           const fs = require('fs');
           const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
+          const boundedInt = (name, fallback, min, max) => {
+            const value = Number(process.env[name] || fallback);
+            return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.trunc(value))) : fallback;
+          };
+          const editorFrames = boundedInt('EDITOR_FRAMES', 5, 1, 12);
+          const editorIntervalMs = boundedInt('EDITOR_INTERVAL_MS', 900, 100, 5000);
+          const gameFrames = boundedInt('GAME_FRAMES', 8, 1, 24);
+          const gameIntervalMs = boundedInt('GAME_INTERVAL_MS', 500, 100, 5000);
           const repo = `${process.env.OWNER}/${process.env.REPO}`;
           const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}`;
           function inspectImage(path) {
@@ -337,7 +369,7 @@ jobs:
                 if (!result.editorUiDetected || !result.projectNameVisible) {
                   throw new Error('La captura existe, pero no demuestra la interfaz del editor con Dragon Realm visible. OCR: ' + editorScan.text);
                 }
-                result.editorSequence = await captureSequence(page, 'editor-sequence', 5, 900);
+                result.editorSequence = await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs);
                 // Optional game-preview probe: F5 runs the project's configured main scene.
                 // Failure here must not invalidate the verified editor screenshot.
                 try {
@@ -355,7 +387,7 @@ jobs:
                   result.gamePreviewOcr = previewScan.text;
                   fs.writeFileSync('artifacts/game-preview-ocr.json', JSON.stringify(previewScan, null, 2));
                   await previewCdp.detach();
-                  result.gamePreviewSequence = await captureSequence(page, 'game-preview-sequence', 8, 500);
+                  result.gamePreviewSequence = await captureSequence(page, 'game-preview-sequence', gameFrames, gameIntervalMs);
                 } catch (previewError) {
                   result.gamePreviewScreenshot = 'warning';
                   result.gamePreviewWarning = String(previewError);
