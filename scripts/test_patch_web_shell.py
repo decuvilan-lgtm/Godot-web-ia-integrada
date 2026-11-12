@@ -21,7 +21,7 @@ class WebShellPatchTests(unittest.TestCase):
     def test_installs_project_manager_and_github_connector(self):
         result = patch_html(FIXTURE)
         self.assertIn("viewport-fit=cover", result)
-        self.assertIn('id="godot-github-connector"', result)
+        self.assertIn('id="godot-github-connector" data-version="branch-path-v1"', result)
         self.assertIn('button.id = "godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
         self.assertIn("credentials:", result)
