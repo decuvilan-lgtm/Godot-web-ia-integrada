@@ -116,9 +116,13 @@ class GitHubArchiveTests(unittest.TestCase):
 
     def test_public_root_project_archive_is_streamed(self):
         with patch("github_archives.httpx.AsyncClient", FakeClient):
-            response = self.client.get("/v1/github/example/game/archive?branch=main")
+            response = self.client.get(
+                "/v1/github/example/game/archive?branch=main",
+                headers={"Origin": "https://godot-web-ia-integrada-rt2l.onrender.com"},
+            )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["x-github-ref"], "main")
+        self.assertIn("x-github-ref", response.headers.get("access-control-expose-headers", "").lower())
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
             self.assertIn("game-main/project.godot", archive.namelist())
             self.assertIn("game-main/README.md", archive.namelist())
