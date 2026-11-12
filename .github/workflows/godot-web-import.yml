@@ -279,6 +279,25 @@ jobs:
                   result.gamePreviewScreenshot = 'captured';
                   result.gamePreviewOcr = previewScan.text;
                   fs.writeFileSync('artifacts/game-preview-ocr.json', JSON.stringify(previewScan, null, 2));
+                  // Start a disposable new game in this isolated CI browser to capture the actual world.
+                  try {
+                    await previewCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1024, y: 472 });
+                    await previewCdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 1024, y: 472, button: 'left', clickCount: 1 });
+                    await previewCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 1024, y: 472, button: 'left', clickCount: 1 });
+                    await page.waitForTimeout(8000);
+                    const worldShot = await Promise.race([
+                      previewCdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }),
+                      new Promise((_, reject) => setTimeout(() => reject(new Error('game world capture timeout')), 15000))
+                    ]);
+                    fs.writeFileSync('artifacts/godot-game-world.png', Buffer.from(worldShot.data, 'base64'));
+                    const worldScan = inspectImage('artifacts/godot-game-world.png');
+                    result.gameWorldScreenshot = 'captured';
+                    result.gameWorldOcr = worldScan.text;
+                    fs.writeFileSync('artifacts/game-world-ocr.json', JSON.stringify(worldScan, null, 2));
+                  } catch (worldError) {
+                    result.gameWorldScreenshot = 'warning';
+                    result.gameWorldWarning = String(worldError);
+                  }
                   await previewCdp.detach();
                 } catch (previewError) {
                   result.gamePreviewScreenshot = 'warning';
