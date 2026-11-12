@@ -71,9 +71,9 @@ jobs:
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
         env:
-          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/godotengine/godot-demo-projects' }}
-          REQUESTED_BRANCH: ${{ inputs.branch || 'master' }}
-          PROJECT_PATH: ${{ inputs.project_path || '2d/platformer' }}
+          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
+          REQUESTED_BRANCH: ${{ inputs.branch || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || '' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -598,9 +598,13 @@ jobs:
                 result.gamePreviewScreenshot = 'warning';
                 result.gamePreviewWarning = String(previewError);
               }
-              result.status = result.projectHasResourceWarnings || result.gamePreviewScreenshot === 'warning' || result.liveRelayCheck !== 'success'
+              result.status = result.projectHasResourceWarnings
                 ? 'passed-with-project-warnings'
-                : 'passed';
+                : result.gamePreviewScreenshot === 'warning'
+                  ? 'passed-with-preview-warnings'
+                  : result.liveRelayCheck !== 'success'
+                    ? 'passed-with-deployment-warnings'
+                    : 'passed';
               result.finishedAt = new Date().toISOString();
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
