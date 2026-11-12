@@ -186,9 +186,9 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Inicio del Project Manager en navegador | Implementado; revisar en ejecución real |
 | Importación inicial desde repositorio público `main` | Implementada |
 | URL de repositorio configurable en Actions | Implementada |
-| Apertura de proyecto en Godot Web | La ruta queda confirmada por logs; verificación visual en corrección por capturas X11 con espera/reintentos |
-| Captura individual del editor mediante CDP | No fiable cuando el hilo WASM está bloqueado; X11 es el método de verificación principal |
-| Secuencias configurables de capturas | Implementadas; el último ajuste espera a que la interfaz sea visible antes de capturar |
+| Apertura de proyecto en Godot Web | Ruta confirmada por logs; verificación visual multicaptura en validación |
+| Captura individual del editor | Estrategia escalonada Playwright/CDP/X11 implementada; la estabilidad debe confirmarse con ejecución real |
+| Secuencias configurables de capturas | Implementadas; la secuencia del editor usa el canal que consiguió una captura OCR válida |
 | Advertencias de carga del proyecto | Se separan de la verificación de apertura; requieren revisar los recursos del proyecto objetivo |
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
@@ -199,7 +199,7 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
 | Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
 
-**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional. La última ejecución analizada (run 43155551700) confirmó que el proyecto llegó a abrirse en Godot y que la captura de diagnóstico posterior mostraba el editor, pero el chequeo X11 inicial ocurrió demasiado pronto. También registró errores `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`. El run no se considera exitoso: se corrigió la espera/verificación visual en el commit siguiente y falta validar esa corrección con una nueva ejecución.
+**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional. La ejecución 43156155421 confirmó la ruta del proyecto, pero las capturas X11 permanecieron vacías y el respaldo de Playwright agotó tiempo; por eso no se consideró exitosa. El commit `dd27efc` incorporó captura escalonada Playwright/CDP/X11 y reintentos de 90 segundos. La nueva ejecución 43156941611 está validando ese cambio; hasta que termine y se inspeccionen sus artefactos, la captura visual no se marca como resuelta. En una ejecución anterior también apareció `Parse Error: Busy` en `res://scenes/ui/hud.tscn`; se mantiene como advertencia histórica pendiente de reproducir, no como error confirmado en la última prueba.
 
 ## Documentación técnica
 
