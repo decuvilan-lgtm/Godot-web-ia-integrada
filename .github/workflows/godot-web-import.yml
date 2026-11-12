@@ -59,7 +59,7 @@ jobs:
 
       - name: Preparar navegador Chromium
         run: |
-          npm install --no-save playwright
+          npm init -y\n          npm install --no-save playwright
           npx playwright install --with-deps chromium
 
       - name: Ejecutar Godot Web y comprobar importación
@@ -140,7 +140,7 @@ jobs:
             console.log(JSON.stringify(result, null, 2));
           })().catch(error => { console.error(error); process.exit(1); });
           JS
-          node /tmp/run-godot-web-check.cjs
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/run-godot-web-check.cjs
 
       - name: Publicar enlace de apertura y resultado
         if: always()
