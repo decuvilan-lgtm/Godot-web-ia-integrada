@@ -272,6 +272,7 @@ jobs:
           const { chromium } = require('playwright');
           const { execFileSync } = require('child_process');
           const fs = require('fs');
+          const pathModule = require('path');
           const { runGameplayTimeline } = require(process.env.GITHUB_WORKSPACE + '/scripts/gameplay-test-controller.cjs');
           const timeout = Math.max(60, Math.min(300, Number(process.env.STARTUP_TIMEOUT || 180))) * 1000;
           const boundedInt = (name, fallback, min, max) => {
@@ -297,6 +298,16 @@ jobs:
               encoding: 'utf8',
               env: { ...process.env, PATH: `${process.cwd()}/.venv/bin:${process.env.PATH}` }
             }));
+          }
+          async function saveSessionVideo(video) {
+            if (!video) return;
+            let temporaryPath = null;
+            try { temporaryPath = await video.path(); } catch {}
+            const targetPath = pathModule.resolve('artifacts/videos/render-session.webm');
+            await video.saveAs(targetPath);
+            if (temporaryPath && pathModule.resolve(temporaryPath) !== targetPath && fs.existsSync(temporaryPath)) {
+              fs.unlinkSync(temporaryPath);
+            }
           }
           function findLine(scan, pattern, label) {
             const line = scan.lines.find(item => pattern.test(item.text));
@@ -686,6 +697,24 @@ jobs:
                     }
                   });
                   fs.writeFileSync('artifacts/gameplay-timeline.json', JSON.stringify(result.gameplayTimeline, null, 2));
+                  const actionFrames = fs.readdirSync('artifacts')
+                    .filter(name => /^gameplay-frame-\\d+-after-action-\\d+\\.png$/.test(name))
+                    .sort();
+                  const finalActionFrame = actionFrames[actionFrames.length - 1];
+                  if (repo === 'gavilandavid89-pixel/Escondite' && finalActionFrame) {
+                    const cropPath = 'artifacts/gameplay-feedback-crop.png';
+                    execFileSync('python3', ['-c',
+                      "from PIL import Image; import sys; im=Image.open(sys.argv[1]); im.crop((500,670,950,750)).resize((1350,240)).save(sys.argv[2])",
+                      'artifacts/' + finalActionFrame, cropPath
+                    ], { env: { ...process.env, PATH: `${process.cwd()}/.venv/bin:${process.env.PATH}` } });
+                    const feedbackScan = inspectImage(cropPath);
+                    result.gameplayFeedback = {
+                      frame: finalActionFrame,
+                      ocr: feedbackScan.text,
+                      attackDamageDetected: /PUNO\\s+BASICO.*\\d+.*DA/i.test(feedbackScan.text.toUpperCase())
+                    };
+                    fs.writeFileSync('artifacts/gameplay-feedback-ocr.json', JSON.stringify(result.gameplayFeedback, null, 2));
+                  }
                 } else {
                   result.gamePreviewWarning = 'No se detectó la vista Game después de enviar F5. ' + (gameCapture.scan?.text || 'Sin OCR');
                 }
@@ -711,7 +740,7 @@ jobs:
               console.log(JSON.stringify(result, null, 2));
               await page.close();
               await context.close();
-              if (sessionVideo) await sessionVideo.saveAs('artifacts/videos/render-session.webm');
+              if (sessionVideo) await saveSessionVideo(sessionVideo);
               await browser.close();
             } catch (error) {
               result.status = 'failed';
@@ -728,7 +757,7 @@ jobs:
               try { await page.close(); } catch {}
               try { await context.close(); } catch {}
               if (sessionVideo) {
-                try { await sessionVideo.saveAs('artifacts/videos/render-session.webm'); } catch (videoError) { result.videoSaveError = String(videoError); }
+                try { await saveSessionVideo(sessionVideo); } catch (videoError) { result.videoSaveError = String(videoError); }
               }
               await browser.close();
               throw error;
