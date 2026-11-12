@@ -1,6 +1,9 @@
 name: Importar repositorio en Godot Web
 
 on:
+  push:
+    paths:
+      - ".github/workflows/godot-web-import.yml"
   workflow_dispatch:
     inputs:
       repository_url:
