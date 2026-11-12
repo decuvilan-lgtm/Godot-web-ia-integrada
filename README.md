@@ -123,7 +123,9 @@ Cada frame de una secuencia se valida antes de considerarlo capturado:
 - El manifiesto indica si la secuencia está completa.
 - Si falta un frame solicitado, la secuencia falla en lugar de presentarse como completa.
 
-La captura utiliza Chrome DevTools Protocol para reducir la dependencia de la ejecución de JavaScript dentro de Godot Web, cuyo hilo principal puede quedar ocupado durante la inicialización del editor.
+La verificación del editor usa capturas X11 del escritorio porque el hilo WASM de Godot puede bloquear las llamadas de Playwright/CDP durante la inicialización. Después de detectar el log `Editing project:`, el workflow espera y vuelve a capturar durante un máximo de 45 segundos; solo aprueba la interfaz cuando OCR encuentra elementos reales del editor y la ruta del proyecto ya fue confirmada por los logs. Esto evita confundir una captura prematura del Project Manager con una apertura fallida.
+
+Los errores de carga de recursos del proyecto (por ejemplo, `Parse Error` o `Failed loading resource`) se registran por separado como advertencias del proyecto. No invalidan por sí solos que el editor haya abierto y sea visible, pero sí impiden describir el proyecto como completamente limpio o listo para ejecutar. La prueba del editor y la salud interna del proyecto son resultados distintos.
 
 ### Artefactos de Actions
 
@@ -184,9 +186,10 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Inicio del Project Manager en navegador | Implementado; revisar en ejecución real |
 | Importación inicial desde repositorio público `main` | Implementada |
 | URL de repositorio configurable en Actions | Implementada |
-| Apertura de proyecto en Godot Web | Prueba anterior aprobada; las ejecuciones genéricas recientes confirman la ruta en logs, pero fallan la verificación visual del editor |
-| Captura individual del editor mediante CDP | Probada con el proyecto de referencia |
-| Secuencias configurables de capturas | Implementadas en el workflow; falta validar el último cambio con una ejecución completa |
+| Apertura de proyecto en Godot Web | La ruta queda confirmada por logs; verificación visual en corrección por capturas X11 con espera/reintentos |
+| Captura individual del editor mediante CDP | No fiable cuando el hilo WASM está bloqueado; X11 es el método de verificación principal |
+| Secuencias configurables de capturas | Implementadas; el último ajuste espera a que la interfaz sea visible antes de capturar |
+| Advertencias de carga del proyecto | Se separan de la verificación de apertura; requieren revisar los recursos del proyecto objetivo |
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
 | Captura del preview F5 | Probada con el proyecto de referencia; opcional y sujeta a que el proyecto pueda ejecutarse |
@@ -196,7 +199,7 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
 | Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
 
-**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional.
+**No confundir estados:** “Implementado” significa que existe código; “Probado” significa que se ejecutó una prueba concreta; “Pendiente” significa que no hay evidencia suficiente para darlo por funcional. La última ejecución analizada (run 43155551700) confirmó que el proyecto llegó a abrirse en Godot y que la captura de diagnóstico posterior mostraba el editor, pero el chequeo X11 inicial ocurrió demasiado pronto. También registró errores `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`. El run no se considera exitoso: se corrigió la espera/verificación visual en el commit siguiente y falta validar esa corrección con una nueva ejecución.
 
 ## Documentación técnica
 
