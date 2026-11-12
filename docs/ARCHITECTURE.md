@@ -50,7 +50,7 @@ El mecanismo inicial de conexión está descrito en [Conectar repositorios públ
 8. Probar cambios locales no publicados y fallos de descarga sin perder la copia anterior.
 9. Auditar el importador del editor Android para identificar lógica reutilizable.
 
-**Estado:** Project Manager nativo confirmado en el código oficial 4.7.2. El parche de autoarranque está implementado en `scripts/patch-web-shell.py` y protegido por verificaciones del contrato HTML upstream; faltan el deploy y la prueba en navegador real. La sincronización de repositorios sigue pendiente.
+**Estado:** Project Manager nativo confirmado en el código oficial 4.7.2. El autoarranque y el preloader de repositorios públicos están publicados en Render; el build web pasó las pruebas del parche. Falta probar la interacción real en navegador. La actualización incremental de proyectos ya importados y la identificación del SHA siguen pendientes.
 
 ### Artefactos de ejecución visual: Output y Debugger
 
