@@ -64,7 +64,7 @@ def archive_url(owner: str, repository: str, branch: str = "main") -> str:
 
 
 async def resolve_default_branch(client: httpx.AsyncClient, owner: str, repository: str) -> str:
-    response = await client.get(f"https://api.github.com/repos/{owner}/{repository}")
+    response = await client.get(f"https://api.github.com/repos/{owner}/{repository}", headers={"Accept": "application/vnd.github+json"})
     if response.status_code == 404:
         raise HTTPException(status_code=404, detail="Public GitHub repository not found")
     if response.status_code == 403:
