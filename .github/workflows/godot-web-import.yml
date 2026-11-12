@@ -7,9 +7,19 @@ on:
   workflow_dispatch:
     inputs:
       repository_url:
-        description: "URL de cualquier repositorio público de GitHub con proyecto Godot en la raíz (rama main)"
+        description: "URL de un repositorio público de GitHub con un proyecto Godot"
         required: true
         default: "https://github.com/gavilandavid89-pixel/Escondite"
+        type: string
+      branch:
+        description: "Rama de GitHub (vacío = rama predeterminada)"
+        required: false
+        default: ""
+        type: string
+      project_path:
+        description: "Subcarpeta que contiene project.godot (vacío = raíz)"
+        required: false
+        default: ""
         type: string
       startup_timeout:
         description: "Tiempo máximo de espera del arranque de Godot (segundos)"
@@ -58,16 +68,18 @@ jobs:
             scripts/godot_web_ocr.py
           sparse-checkout-cone-mode: false
 
-      - name: Validar URL y repositorio público
+      - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
         env:
           REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
+          REQUESTED_BRANCH: ${{ inputs.branch || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || '' }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, re, urllib.request, urllib.error
+          import base64, json, os, re, urllib.parse, urllib.request, urllib.error
           raw = os.environ["REPOSITORY_URL"].strip()
-          match = re.fullmatch(r"https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
+          match = re.fullmatch(r"https://github\\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?)/?", raw)
           if not match:
               raise SystemExit("Usa una URL https://github.com/owner/repository (sin rutas adicionales).")
           owner, repo = match.groups()
@@ -78,26 +90,37 @@ jobs:
           data = get_json(f"https://api.github.com/repos/{owner}/{repo}")
           if data.get("private") is not False:
               raise SystemExit("El repositorio no es público.")
-          branch = "main"
+          branch = os.environ.get("REQUESTED_BRANCH", "").strip() or str(data.get("default_branch") or "")
+          if (not re.fullmatch(r"[A-Za-z0-9._/-]{1,128}", branch)
+              or branch.startswith("/") or branch.endswith("/") or "//" in branch or ".." in branch
+              or branch.endswith(".") or "@{" in branch or re.search(r"[~^:?*\\\\\\[\\] ]", branch)
+              or any(part in {"", ".", ".."} for part in branch.split("/"))):
+              raise SystemExit("Nombre de rama no válido.")
+          project_path = os.environ.get("PROJECT_PATH", "").strip()
+          if (len(project_path) > 240 or project_path.startswith("/") or project_path.endswith("/")
+              or "\\\\" in project_path or any(part in {"", ".", ".."} for part in project_path.split("/")) if project_path else False):
+              raise SystemExit("Ruta de proyecto no válida.")
+          branch_ref = urllib.parse.quote(branch, safe="")
           try:
-              get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch}")
+              get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_ref}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
-                  raise SystemExit("El repositorio no tiene una rama main. El importador actual descarga main.")
+                  raise SystemExit(f"No existe la rama {branch}.")
               raise
+          project_file_path = (project_path + "/" if project_path else "") + "project.godot"
+          encoded_path = urllib.parse.quote(project_file_path, safe="/")
           try:
-              project_file = get_json(f"https://api.github.com/repos/{owner}/{repo}/contents/project.godot?ref={branch}")
+              project_file = get_json(f"https://api.github.com/repos/{owner}/{repo}/contents/{encoded_path}?ref={branch_ref}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
-                  raise SystemExit("No se encontró project.godot en la raíz de main. El workflow requiere un proyecto Godot en la raíz del repositorio.")
+                  raise SystemExit(f"No se encontró {project_file_path} en la rama {branch}.")
               raise
-          import base64
           project_text = base64.b64decode(project_file.get("content", "")).decode("utf-8", errors="replace")
-          name_match = re.search(r'^\s*config/name\s*=\s*"([^"\r\n]+)"', project_text, re.MULTILINE)
-          project_name = re.sub(r'[\r\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
+          name_match = re.search(r'^\\s*config/name\\s*=\\s*"([^"\\r\\n]+)"', project_text, re.MULTILINE)
+          project_name = re.sub(r'[\\r\\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nproject_name={project_name}\n")
-          print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, nombre: {project_name})")
+              out.write(f"owner={owner}\\nrepo={repo}\\nfull_name={owner}/{repo}\\nbranch={branch}\\nproject_path={project_path}\\nproject_name={project_name}\\n")
+          print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, ruta {project_file_path}, nombre: {project_name})")
           PY
 
       - name: Preparar navegador Chromium
@@ -121,6 +144,8 @@ jobs:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
           PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
+          BRANCH: ${{ steps.repo.outputs.branch }}
+          PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
           EDITOR_FRAMES: ${{ inputs.editor_frames || '5' }}
           EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
@@ -148,7 +173,10 @@ jobs:
           const normalizedProjectLabel = normalizeLabel(projectLabel);
           if (normalizedProjectLabel.length < 2) throw new Error('El nombre del repositorio no permite una identificación visual segura.');
           const repo = `${process.env.OWNER}/${repoName}`;
-          const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${encodeURIComponent(repo)}`;
+          const importParams = new URLSearchParams({ repo });
+          if (process.env.BRANCH) importParams.set('branch', process.env.BRANCH);
+          if (process.env.PROJECT_PATH) importParams.set('path', process.env.PROJECT_PATH);
+          const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?${importParams.toString()}`;
           function inspectImage(path) {
             return JSON.parse(execFileSync('python3', ['scripts/godot_web_ocr.py', path], {
               encoding: 'utf8',
@@ -354,10 +382,13 @@ jobs:
                 origin: window.location.origin
               }));
               result.preloadedFilename = await page.locator('#zip-file').evaluate(el => el.files[0]?.name || null);
+              result.repositoryBranch = process.env.BRANCH;
+              result.projectSubdirectory = process.env.PROJECT_PATH || '';
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
               result.archiveStatus = archiveStatus;
               if (archiveStatus !== 200) throw new Error('El Relay no entregó el ZIP con HTTP 200.');
-              if (!result.preloadedFilename?.endsWith('-main.zip')) throw new Error('El ZIP no quedó asignado al input oficial de Godot.');
+              const branchFilename = process.env.BRANCH.replace(/[^A-Za-z0-9._-]+/g, '-');
+              if (!result.preloadedFilename?.endsWith(`-${branchFilename}.zip`)) throw new Error('El ZIP no quedó asignado al input oficial de Godot para la rama seleccionada.');
               await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(c => {
                 const r = c.getBoundingClientRect();
                 return c.width > 500 && c.height > 300 && r.width > 500 && r.height > 300;
