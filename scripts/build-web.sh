@@ -41,6 +41,7 @@ if [[ ! -f "${PUBLIC_DIR}/index.html" ]]; then
   cp "${PUBLIC_DIR}/${ENTRY_NAME}" "${PUBLIC_DIR}/index.html"
 fi
 
+python3 "${ROOT_DIR}/scripts/test_patch_web_shell.py"
 python3 "${ROOT_DIR}/scripts/patch-web-shell.py"
 python3 "${ROOT_DIR}/scripts/package-bridge-sandbox.py"
 
