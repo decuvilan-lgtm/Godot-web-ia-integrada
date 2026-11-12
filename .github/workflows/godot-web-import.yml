@@ -1,10 +1,6 @@
 name: Importar repositorio en Godot Web
 
 on:
-  push:
-    paths:
-      - '.github/workflows/godot-web-import.yml'
-      - 'scripts/godot_web_ocr.py'
   workflow_dispatch:
     inputs:
       repository_url:
@@ -121,7 +117,7 @@ jobs:
               args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-gl=angle',
                 '--use-angle=swiftshader', '--disable-dev-shm-usage', '--no-sandbox']
             });
-            const page = await browser.newPage({ viewport: { width: 1920, height: 1200 }, deviceScaleFactor: 1 });
+            const page = await browser.newPage({ viewport: { width: 1920, height: 1200 }, deviceScaleFactor: 2 });
             page.setDefaultTimeout(15000);
             const events = [];
             page.on('console', msg => events.push({ type: 'console:' + msg.type(), text: msg.text() }));
@@ -155,7 +151,7 @@ jobs:
                 return c.width > 500 && c.height > 300 && r.width > 500 && r.height > 300;
               }), null, { timeout });
               await page.waitForTimeout(10000);
-              await page.screenshot({ path: 'artifacts/godot-project-manager.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
+              await page.screenshot({ path: 'artifacts/godot-project-manager.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'css', timeout: 20000 });
               let scan = inspectImage('artifacts/godot-project-manager.png');
               result.projectManagerOcr = scan.text;
               fs.writeFileSync('artifacts/project-manager-ocr.json', JSON.stringify(scan, null, 2));
@@ -181,10 +177,10 @@ jobs:
                 result.installDialogOcr = scan.text;
                 if (!/Dragon Realm/i.test(scan.text)) throw new Error('No se pudo establecer el nombre Dragon Realm en el diálogo de instalación. OCR: ' + scan.text);
                 result.projectNameSet = 'Dragon Realm';
-                await clickLine(page, scan, /^Install$/i, 'Install');
+                await clickLine(page, scan, /^Instal+l?\b/i, 'Install');
                 result.installButtonClicked = true;
               } else if (/Install\s*&\s*Edit|Install\s+and\s+Edit/i.test(scan.text)) {
-                await clickLine(page, scan, /Install\s*&\s*Edit|Install\s+and\s+Edit/i, 'Install & Edit');
+                await clickLine(page, scan, /Instal+l?\s*(?:&|and)\s*Edit/i, 'Install & Edit');
                 result.installAndEditClicked = true;
               } else {
                 throw new Error('No se reconoció el diálogo de instalación del Project Manager. OCR: ' + scan.text);
@@ -218,7 +214,7 @@ jobs:
               console.log('Comprobación funcional superada; comienza captura visual opcional.');
               // Captura PNG de 1920x1200. Un fallo solo genera advertencia y no revoca la prueba funcional.
               try {
-                await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 10000 });
+                await page.screenshot({ path: 'artifacts/godot-editor-open.png', type: 'png', fullPage: false, animations: 'disabled', scale: 'device', timeout: 10000 });
                 const editorScan = inspectImage('artifacts/godot-editor-open.png');
                 result.editorScreenshot = 'captured';
                 result.editorOcr = editorScan.text;
