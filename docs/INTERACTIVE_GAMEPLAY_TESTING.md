@@ -11,10 +11,9 @@ Los proyectos usados como referencias durante el desarrollo (incluidos Dragon Re
 1. Abrir cualquier proyecto Godot compatible mediante el flujo de importación existente.
 2. Ejecutar el juego y manejarlo mediante entradas reales del navegador: teclado, ratón y eventos táctiles.
 3. Observar su comportamiento durante una ventana de prueba configurable; el valor inicial recomendado es 10 segundos.
-4. Crear escenarios temporales de prueba dentro del proyecto Godot seleccionado. Los escenarios pueden cubrir cualquier mecánica, interacción, interfaz, sistema o estado.
-5. Publicar temporalmente los archivos del escenario en la rama principal del repositorio seleccionado, esperar la actualización del sitio y sincronizar esa revisión exacta con Godot Web.
-6. Comparar el comportamiento observado con instrucciones y resultados esperados.
-7. Eliminar la escena, scripts, recursos y rama temporales al finalizar, sin dejar cambios en el proyecto original.
+4. Comparar el comportamiento observado con instrucciones y resultados esperados.
+5. Solo después de demostrar que el control del juego en ejecución funciona de forma fiable, habilitar escenarios temporales dentro del proyecto seleccionado. Estos escenarios podrán cubrir cualquier mecánica, interacción, interfaz, sistema o estado.
+6. Publicar temporalmente los archivos del escenario en la rama principal del repositorio seleccionado, sincronizar la revisión exacta y limpiar los cambios temporales al finalizar.
 
 ## Principios no negociables
 
@@ -67,7 +66,9 @@ La capa de automatización no debe depender de un mapeo universal de teclas. Los
 
 Es un formato ilustrativo: los controles simbólicos se resuelven mediante la configuración específica del proyecto. No deben enviarse literalmente como teclas si el adaptador no los ha traducido.
 
-## Flujo B: crear una escena temporal dentro del repositorio
+## Flujo B (fase posterior): crear un escenario temporal dentro del repositorio
+
+**Este bloque queda expresamente pospuesto.** No se debe comenzar a crear, publicar ni limpiar escenarios temporales hasta que el sistema pueda controlar de forma demostrable el juego ya ejecutándose, con entradas reales, foco correcto y reacción observable. La prioridad inmediata es completar y validar el Flujo A. Una vez superada esa etapa, se habilitará este flujo.
 
 Esta es la vía preferida cuando la mecánica está demasiado avanzada para alcanzarla desde el inicio normal del juego.
 
@@ -197,16 +198,25 @@ Si el editor ya contiene una copia importada, el sistema debe detectar si corres
 
 La prueba E2E actual ya demuestra: importación del ZIP, selección explícita de rama, apertura del proyecto en Godot Web, detección del editor, ejecución F5 y captura de secuencias del editor y del juego. También comprueba el Relay con un fixture en subcarpeta.
 
-El controlador base de teclado, ratón y toque táctil, la validación del timeline y la liberación segura de teclas están implementados. Las pruebas unitarias del controlador pasaron en Actions (ejecución 43278159189). La integración con el workflow de navegador se está verificando en la ejecución 43278226182.
+El controlador base de teclado, ratón y toque táctil, la validación del timeline y la liberación segura de teclas están implementados. Sus pruebas unitarias pasaron en Actions (ejecución 43278159189). La integración del workflow terminó correctamente en Actions (ejecución 43278226182), incluyendo el test unitario del controlador y el timeline de observación. Sin embargo, esa ejecución usó una lista de acciones vacía (`[]`): **no demuestra que el juego haya recibido controles ni que haya reaccionado**.
 
-Todavía falta implementar y verificar:
+### Prioridad inmediata: conseguir control real del juego en ejecución
 
-1. Ampliar el controlador con gestos táctiles continuos, arrastre y doble click.
-2. Validar el controlador dentro del navegador Godot Web con proyectos reales y entradas configuradas.
-3. Confirmar en E2E el timeline de duración configurable (10 segundos por defecto), las capturas sincronizadas y la liberación garantizada de controles.
-4. Creación/publicación/sincronización de escenarios temporales en `main`, seguida de limpieza auditable.
-5. Contrato/adapter por proyecto para controles, escenarios y aserciones funcionales.
-6. Limpieza verificable de archivos temporales en `main` y comprobación del redeploy limpio.
-7. Informe combinado visual + funcional.
+1. Detectar con fiabilidad el viewport/iframe/canvas del juego y darle foco.
+2. Determinar cómo se enrutan las entradas en la versión de Godot Web utilizada (teclado, ratón y táctil).
+3. Enviar acciones conocidas y registrar confirmación de envío, foco y eventos observables.
+4. Verificar reacción real en pantalla; distinguir entrada enviada de acción procesada por el juego.
+5. Probar secuencias de movimiento y acciones sostenidas, liberación de controles y recuperación ante errores.
+6. Ejecutar una sesión de 10 segundos con acciones reales y guardar capturas/timeline reproducibles.
+7. Ampliar a gestos táctiles continuos, arrastre y doble click.
+
+### Fase posterior (bloqueada hasta superar la prioridad inmediata)
+
+- Adaptadores por proyecto para mapear controles y aserciones funcionales.
+- Creación de escenarios temporales de cualquier mecánica/interacción.
+- Publicación temporal en `main`, importación de commit exacto y limpieza auditable.
+- Informe combinado visual + funcional.
+
+No iniciar el bloque de escenarios temporales antes de validar el control interactivo real.
 
 No describir estas capacidades pendientes como ya disponibles hasta que existan pruebas automatizadas y artefactos que lo demuestren.
