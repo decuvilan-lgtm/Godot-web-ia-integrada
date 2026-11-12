@@ -197,10 +197,10 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Advertencias de carga del proyecto | Se separan de la verificación de apertura; requieren revisar los recursos del proyecto objetivo |
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
-| Captura del preview F5 | Probada: se abrió el menú inicial y se capturaron 8/8 frames |
+| Captura del preview F5 | Probada: menú inicial visible y 8/8 frames en ejecución 43274843026 |
 | Detección dinámica de nombre/ruta del proyecto en repositorios compatibles | Implementada; validación visual del proyecto de referencia pendiente de corregir |
-| Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Código y pruebas unitarias correctos; Render desplegó `3277ced4`; verificación E2E posterior al despliegue pendiente |
-| Actualización incremental del proyecto ya importado | Pendiente |
+| Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Verificada en producción: ejecución 43274843026, Relay 200 y fixture anidado reempaquetado |
+| Control interactivo de gameplay (teclado/ratón/táctil) | Pendiente; especificado en docs/INTERACTIVE_GAMEPLAY_TESTING.md |\n| Escenas temporales de prueba sincronizadas desde rama aislada | Pendiente; flujo documentado en docs/INTERACTIVE_GAMEPLAY_TESTING.md |\n| Actualización incremental del proyecto ya importado | Pendiente |
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
 | Prueba integral de todas las capacidades del sandbox en la instancia publicada | Pendiente |
 
@@ -212,7 +212,7 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 - [Flujo de desarrollo Headless + GitHub](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md)
 - [Importación GitHub → Godot Web](docs/GITHUB_TO_GODOT_WEB.md)
 - [Capacidades de inspección verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
-- [Observación visual](docs/VISUAL_OBSERVATION.md)
+- [Observación visual](docs/VISUAL_OBSERVATION.md)\n- [Pruebas interactivas de gameplay y escenas temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md)
 - [Contrato de comandos visuales](docs/VISUAL_COMMANDS.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
 - [Relay y variables de entorno](relay/README.md)
