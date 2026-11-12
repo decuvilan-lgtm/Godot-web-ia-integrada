@@ -101,6 +101,10 @@ async function focusGameViewport(page) {
 
 async function runGameplayTimeline(page, input, options = {}) {
   const config = validateTimeline(input);
+  const viewportFocus = await focusGameViewport(page);
+  if (config.actions.length > 0 && !viewportFocus.focused) {
+    throw new Error('No se enviarán controles: el viewport del juego no pudo recibir el foco.');
+  }
   const started = Date.now();
   const events = [];
   const heldKeys = new Set();
