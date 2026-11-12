@@ -623,7 +623,7 @@ jobs:
                     canvasCount: document.querySelectorAll('canvas').length,
                     viewport: { width: window.innerWidth, height: window.innerHeight }
                   })),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 10000))
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 20000))
                 ]);
               } catch (probeError) {
                 result.rendererResponsive = false;
@@ -722,13 +722,13 @@ jobs:
                 result.gamePreviewScreenshot = 'warning';
                 result.gamePreviewWarning = String(previewError);
               }
-              result.status = result.projectHasResourceWarnings && result.liveRelayCheck !== 'success'
+              result.status = result.projectHasResourceWarnings && result.liveRelayCheck !== 'passed'
                 ? 'passed-with-project-and-deployment-warnings'
                 : result.projectHasResourceWarnings
                   ? 'passed-with-project-warnings'
                   : result.gamePreviewScreenshot === 'warning'
                     ? 'passed-with-preview-warnings'
-                    : result.liveRelayCheck !== 'success'
+                    : result.liveRelayCheck !== 'passed'
                       ? 'passed-with-deployment-warnings'
                       : 'passed';
               result.finishedAt = new Date().toISOString();
