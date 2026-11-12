@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { parseInputMap } = require('./godot-input-map.cjs');
 
-const source = String.raw`config/name="Generic Sample"
+const source = `config/name="Generic Sample"
 
 [input]
 "move_right"={
