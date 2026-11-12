@@ -1,5 +1,73 @@
 # Arquitectura técnica
 
+## Decisiones acordadas: GitHub como origen y Godot Web como inspector visual
+
+Esta sección registra la dirección acordada para el flujo de desarrollo asistido. Es una decisión de arquitectura; no implica que todo esté implementado o probado.
+
+- **GitHub, rama `main`:** única fuente oficial y única rama de trabajo para este flujo.
+- **ChatGPT + Godot Headless:** obtienen el repositorio completo, lo inspeccionan, desarrollan, ejecutan pruebas y publican commits directamente en `main`. Headless no necesita Project Manager: trabaja sobre el repositorio clonado y su `project.godot`.
+- **Godot Web:** recibe/actualiza únicamente la copia asociada al repositorio seleccionado y sirve para abrir, ejecutar e inspeccionar visualmente el proyecto.
+- **Project Manager:** se conserva el Project Manager nativo de Godot Web. No se construye un administrador paralelo.
+- **Android:** su importador desde repositorios públicos se auditará como referencia antes de duplicar mecanismos.
+
+Flujo: Headless clona y registra el SHA base → desarrolla y prueba → verifica que `main` no haya avanzado externamente → publica en `main` → Godot Web actualiza el proyecto asociado → se verifica visualmente el mismo SHA. Si la inspección detecta defectos, se corrigen desde Headless y se publica otro commit en `main`.
+
+### Project Manager y entrada automática
+
+La distribución oficial 4.7.2 presenta una página inicial con el botón **Start Godot Editor**. Ese botón llama a `startEditor()`, que crea el motor web y lo inicia con los argumentos `--project-manager --single-window`. Por tanto, el Project Manager nativo ya está incluido: el paso extra es iniciar el motor.
+
+La experiencia deseada para nuestra web es iniciar Godot automáticamente al cargar la página y mostrar el Project Manager al terminar la carga, sin requerir que el usuario pulse manualmente Start Godot Editor. Se debe conservar el aviso de incompatibilidad cuando falten funciones requeridas (por ejemplo, aislamiento de origen/SharedArrayBuffer): en ese caso no se debe forzar el inicio. El estado de carga y los errores deben seguir visibles. El usuario debe poder volver al Project Manager y elegir entre los proyectos importados.
+
+Godot Web guarda proyectos en IndexedDB. La carpeta debe estar bajo `/home/web_user/` para conservarse según la documentación. El Project Manager no implementa por sí mismo la sincronización con GitHub; esa actualización es una función independiente.
+
+Referencias:
+- https://docs.godotengine.org/en/4.7/tutorials/editor/using_the_web_editor.html
+- https://github.com/godotengine/godot/blob/4.7.2-stable/misc/dist/html/editor.html
+
+### Aislamiento de proyectos
+
+- Cada proyecto conserva su identidad y directorio propio en el almacenamiento web.
+- Un commit solo puede actualizar el proyecto asociado a su URL de repositorio; nunca otro proyecto por coincidencia de nombre.
+- Registrar URL, rama `main`, SHA remoto y SHA actualmente cargado.
+- No sobrescribir silenciosamente modificaciones locales. Antes de actualizar, detectar cambios locales y preservar o respaldar la copia.
+- Si la descarga/importación falla, conservar la última copia válida.
+- No exponer credenciales privadas en el navegador. La primera prueba puede usar un repositorio público.
+- El editor Android y Godot Web no deben sincronizarse entre sí: ambos consumen la fuente GitHub según sus responsabilidades.
+
+### Pruebas de aceptación
+
+1. Entrar en la web limpia y comprobar que Godot inicia automáticamente y presenta el Project Manager.
+2. Confirmar que el aviso de incompatibilidad bloquea el inicio cuando faltan requisitos del navegador.
+3. Confirmar que el progreso/errores de carga siguen visibles y no hay doble inicialización.
+4. Importar un repositorio público y verificar que aparece en el Project Manager.
+5. Recargar la página y confirmar que la lista de proyectos persiste.
+6. Publicar un commit en `main` y comprobar que solo se actualiza el proyecto vinculado.
+7. Confirmar que el SHA cargado coincide con GitHub y que otros proyectos permanecen intactos.
+8. Probar cambios locales no publicados y fallos de descarga sin perder la copia anterior.
+9. Auditar el importador del editor Android para identificar lógica reutilizable.
+
+**Estado:** Project Manager nativo confirmado en el código oficial 4.7.2. El autoarranque y la sincronización de repositorios siguen pendientes de implementación y prueba real en la instancia desplegada.
+
+### Artefactos de ejecución visual: Output y Debugger
+
+Cada ejecución del juego dentro de Godot Web debe producir artefactos descargables asociados a esa ejecución concreta. La salida de Headless no sustituye los datos de la ejecución visual: esta puede revelar problemas de renderizado, interacción, escenas, recursos, audio, entradas y comportamiento del navegador.
+
+Recopilar, como mínimo:
+- **Output:** salida disponible de la consola de ejecución, con mensajes informativos, advertencias, errores y trazas.
+- **Debugger:** errores y datos de depuración que realmente estén disponibles en la build web.
+- **Metadatos:** URL del repositorio, rama `main`, SHA cargado, proyecto, escena inicial si se conoce, fecha/hora, ID de ejecución, duración y estado (finalizada, detenida, fallida o interrumpida).
+- **Capturas:** imágenes relevantes y marca temporal, si existen.
+
+Los artefactos deben poder descargarse individualmente y en un paquete ZIP con manifiesto. Cada paquete debe identificar el SHA y el ID de ejecución; nunca se deben mezclar logs de ejecuciones distintas. La captura debe ocurrir antes de cerrar o reiniciar el editor. Si una categoría no está disponible, el paquete debe marcarla como parcial/no disponible en vez de fingir que está completa. No incluir secretos ni credenciales.
+
+**Limitación confirmada:** la documentación oficial del Godot Web Editor 4.x declara que no ofrece depuración/profiling de GDScript ni funciones que dependen del protocolo del debugger. Por eso no se puede prometer la exportación del Debugger de escritorio desde la build web. Hay que investigar qué Output y errores de ejecución se pueden extraer mediante interfaces estables del editor y qué información adicional puede obtenerse desde la consola del navegador.
+
+Prueba de aceptación: ejecutar un proyecto de prueba que emita mensajes de salida y un error controlado; descargar los artefactos y comprobar Output disponible, datos de depuración disponibles/no disponibles, SHA, metadatos y aislamiento entre ejecuciones. Comparar con Headless y documentar qué información solo existe en el entorno visual.
+
+**Estado:** requisito acordado; extracción y empaquetado pendientes de investigación e implementación.
+
+---
+
 ## Regla de puestos separados
 
 Este proyecto tiene dos editores con propietarios distintos:
