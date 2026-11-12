@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - ".github/workflows/godot-web-import.yml"
+      - "scripts/gameplay-test-controller.cjs"
+      - "scripts/test-gameplay-test-controller.cjs"
   workflow_dispatch:
     inputs:
       repository_url:
