@@ -698,7 +698,7 @@ jobs:
                   });
                   fs.writeFileSync('artifacts/gameplay-timeline.json', JSON.stringify(result.gameplayTimeline, null, 2));
                   const actionFrames = fs.readdirSync('artifacts')
-                    .filter(name => /^gameplay-frame-\\d+-after-action-\\d+\\.png$/.test(name))
+                    .filter(name => /^gameplay-frame-\d+-after-action-\d+\.png$/.test(name))
                     .sort();
                   const finalActionFrame = actionFrames[actionFrames.length - 1];
                   if (repo === 'gavilandavid89-pixel/Escondite' && finalActionFrame) {
@@ -711,7 +711,7 @@ jobs:
                     result.gameplayFeedback = {
                       frame: finalActionFrame,
                       ocr: feedbackScan.text,
-                      attackDamageDetected: /PUNO\\s+BASICO.*\\d+.*DA/i.test(feedbackScan.text.toUpperCase())
+                      attackDamageDetected: /PUNO\s+BASICO.*\d+.*DA/i.test(feedbackScan.text.toUpperCase())
                     };
                     fs.writeFileSync('artifacts/gameplay-feedback-ocr.json', JSON.stringify(result.gameplayFeedback, null, 2));
                   }
