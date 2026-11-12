@@ -154,7 +154,7 @@ jobs:
             echo
             if [ -n "${OWNER:-}" ] && [ -n "${REPO:-}" ]; then
               echo "- Repositorio: https://github.com/${OWNER}/${REPO}"
-              echo "- Rama: `main`"
+              echo "- Rama: main"
               echo "- Abrir en Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/?repo=${OWNER}%2F${REPO}"
             fi
             echo "- Resultado del workflow: **${JOB_STATUS}**"
