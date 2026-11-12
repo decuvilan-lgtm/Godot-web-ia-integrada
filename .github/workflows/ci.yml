@@ -32,6 +32,8 @@ jobs:
           node scripts/test-gameplay-test-controller.cjs
           node --check scripts/godot-input-map.cjs
           node scripts/test-godot-input-map.cjs
+      - name: Install screenshot analysis dependency
+        run: python -m pip install --disable-pip-version-check pillow
       - name: Test gameplay screenshot difference analysis
         run: python -m unittest scripts/test_analyze_gameplay_captures.py -v
       - name: Package and validate bridge sandbox
