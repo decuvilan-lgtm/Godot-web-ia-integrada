@@ -234,6 +234,65 @@ jobs:
             }
             return manifest;
           }
+          async function captureEditorSnapshot(page) {
+            const cdp = await page.context().newCDPSession(page);
+            const deadline = Date.now() + 90000;
+            const attempts = [];
+            let lastScan = null;
+            let lastMethod = null;
+            const captureMethods = [
+              ['playwright', async path => page.screenshot({ path, fullPage: false, timeout: 8000 })],
+              ['cdp', async path => {
+                const shot = await Promise.race([
+                  cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false, optimizeForSpeed: true }),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timeout')), 8000))
+                ]);
+                fs.writeFileSync(path, Buffer.from(shot.data, 'base64'));
+              }],
+              ['x11', async path => execFileSync('import', ['-window', 'root', path], { timeout: 15000 })]
+            ];
+            try {
+              while (Date.now() < deadline) {
+                for (const [method, capture] of captureMethods) {
+                  const path = 'artifacts/godot-editor-open.png';
+                  try {
+                    await capture(path);
+                    const scan = inspectImage(path);
+                    lastScan = scan;
+                    lastMethod = method;
+                    attempts.push({ at: new Date().toISOString(), method, ocr: scan.text.slice(0, 500) });
+                    if (/2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(scan.text)) {
+                      return { ready: true, method, scan, attempts };
+                    }
+                  } catch (error) {
+                    attempts.push({ at: new Date().toISOString(), method, error: String(error).slice(0, 300) });
+                  }
+                }
+                await new Promise(resolve => setTimeout(resolve, 2500));
+              }
+              return { ready: false, method: lastMethod, scan: lastScan, attempts };
+            } finally {
+              try { await cdp.detach(); } catch {}
+              fs.writeFileSync('artifacts/editor-capture-attempts.json', JSON.stringify(attempts, null, 2));
+            }
+          }
+          async function captureSequencePlaywright(page, label, count, intervalMs) {
+            const frames = [];
+            const startedAt = Date.now();
+            for (let index = 0; index < count; index++) {
+              const filename = `artifacts/${label}-${String(index + 1).padStart(2, '0')}.png`;
+              await page.screenshot({ path: filename, fullPage: false, timeout: 20000 });
+              const dimensions = execFileSync('identify', ['-format', '%w %h', filename], { encoding: 'utf8' }).trim().split(/\\s+/).map(Number);
+              const stat = fs.statSync(filename);
+              if (stat.size < 1024 || dimensions[0] < 500 || dimensions[1] < 300) throw new Error(`Captura Playwright inválida: ${dimensions.join('x')} (${stat.size} bytes)`);
+              frames.push({ index: index + 1, file: filename, capturedAt: new Date().toISOString(), width: dimensions[0], height: dimensions[1], bytes: stat.size });
+              if (index + 1 < count) await new Promise(resolve => setTimeout(resolve, intervalMs));
+            }
+            const manifest = { label, requestedFrames: count, capturedFrames: frames.length, intervalMs, totalDurationMs: Date.now() - startedAt, complete: frames.length === count, frames, captureMethod: 'playwright' };
+            fs.writeFileSync(`artifacts/${label}-sequence.json`, JSON.stringify(manifest, null, 2));
+            if (!manifest.complete) throw new Error(`Secuencia Playwright incompleta ${label}: ${frames.length}/${count}`);
+            return manifest;
+          }
           async function captureSequenceX11(label, count, intervalMs) {
             const frames = [];
             const startedAt = Date.now();
@@ -391,30 +450,27 @@ jobs:
                 result.rendererWarning = String(probeError);
               }
 
-              // El editor WASM puede tardar varios segundos adicionales en pintar su UI
-              // aunque el log "Editing project" ya haya aparecido. Esperar y volver a
-              // inspeccionar X11 evita clasificar como fallo una captura tomada demasiado pronto.
-              const editorReadyDeadline = Date.now() + 45000;
-              let editorScan = null;
-              let editorReady = false;
-              while (Date.now() < editorReadyDeadline) {
-                execFileSync('import', ['-window', 'root', 'artifacts/godot-editor-open.png'], { timeout: 15000 });
-                editorScan = inspectImage('artifacts/godot-editor-open.png');
-                editorReady = /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(editorScan.text);
-                if (editorReady) break;
-                await new Promise(resolve => setTimeout(resolve, 2000));
-              }
-              result.editorScreenshot = editorReady ? 'captured-x11-after-readiness-wait' : 'failed';
+              // No se usa rendererResponsive como bloqueo: el probe JS puede agotar
+              // tiempo aunque Chromium todavía pueda entregar una captura del canvas.
+              const editorCapture = await captureEditorSnapshot(page);
+              const editorScan = editorCapture.scan;
+              result.editorScreenshot = editorCapture.ready ? 'captured-' + editorCapture.method : 'failed';
+              result.editorCaptureMethod = editorCapture.method || null;
+              result.editorCaptureAttempts = editorCapture.attempts.length;
               result.editorOcr = editorScan?.text || '';
-              result.editorUiDetected = editorReady;
+              result.editorUiDetected = Boolean(editorCapture.ready);
               result.projectNameVisible = normalizeLabel(editorScan?.text || '').includes(normalizedProjectLabel);
               result.projectIdentityConfirmed = Boolean(result.projectInstallConfirmed && result.openedProjectPath);
               fs.writeFileSync('artifacts/editor-ocr.json', JSON.stringify(editorScan || {}, null, 2));
               if (!result.editorUiDetected || !result.projectIdentityConfirmed) {
-                throw new Error('Godot registró la apertura, pero no se detectó una interfaz de editor visible tras 45 segundos de reintentos X11. OCR: ' + (editorScan?.text || 'sin OCR'));
+                throw new Error('Godot registró la apertura, pero no se detectó una interfaz visible tras 90 segundos y varios métodos de captura. OCR: ' + (editorScan?.text || 'sin OCR'));
               }
 
-              result.editorSequence = await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
+              result.editorSequence = editorCapture.method === 'playwright'
+                ? await captureSequencePlaywright(page, 'editor-sequence', editorFrames, editorIntervalMs)
+                : editorCapture.method === 'cdp'
+                  ? await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs)
+                  : await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
               const resourceErrors = events.filter(event =>
                 event.type === 'console:error' &&
                 /Parse Error:|Failed loading resource:/i.test(event.text || '')
