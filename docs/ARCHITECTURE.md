@@ -46,7 +46,7 @@ Referencias:
 8. Probar cambios locales no publicados y fallos de descarga sin perder la copia anterior.
 9. Auditar el importador del editor Android para identificar lógica reutilizable.
 
-**Estado:** Project Manager nativo confirmado en el código oficial 4.7.2. El autoarranque y la sincronización de repositorios siguen pendientes de implementación y prueba real en la instancia desplegada.
+**Estado:** Project Manager nativo confirmado en el código oficial 4.7.2. El parche de autoarranque está implementado en `scripts/patch-web-shell.py` y protegido por verificaciones del contrato HTML upstream; faltan el deploy y la prueba en navegador real. La sincronización de repositorios sigue pendiente.
 
 ### Artefactos de ejecución visual: Output y Debugger
 
