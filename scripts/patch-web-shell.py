@@ -55,14 +55,14 @@ def patch_html(html: str) -> str:
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
-  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+  const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
   const branchPattern = /^[A-Za-z0-9._/-]{1,128}$/;
 
   function validBranch(value) {
     return !value || (
       branchPattern.test(value) && !value.startsWith("/") && !value.endsWith("/") &&
       !value.includes("//") && !value.includes("..") && !value.endsWith(".") &&
-      !value.includes("@{") && !/[~^:?*\\[\\]\\\\ ]/.test(value) &&
+      !value.includes("@{") && !["~", "^", ":", "?", "*", "[", "]", "\\\\", " "].some(char => value.includes(char)) &&
       value.split("/").every(part => part && part !== "." && part !== "..")
     );
   }
@@ -70,7 +70,7 @@ def patch_html(html: str) -> str:
   function validProjectPath(value) {
     return !value || (
       value.length <= 240 && !value.startsWith("/") && !value.endsWith("/") &&
-      !value.includes("\\\\") && value.split("/").every(part => part && part !== "." && part !== "..")
+      !value.includes("\\") && value.split("/").every(part => part && part !== "." && part !== "..")
     );
   }
 
