@@ -184,13 +184,13 @@ Los servicios Render deben permanecer en el plan Free. El relay puede suspenders
 | Inicio del Project Manager en navegador | Implementado; revisar en ejecución real |
 | Importación inicial desde repositorio público `main` | Implementada |
 | URL de repositorio configurable en Actions | Implementada |
-| Apertura de proyecto en Godot Web | Probada con el proyecto de referencia |
+| Apertura de proyecto en Godot Web | Prueba anterior aprobada; las ejecuciones genéricas recientes confirman la ruta en logs, pero fallan la verificación visual del editor |
 | Captura individual del editor mediante CDP | Probada con el proyecto de referencia |
 | Secuencias configurables de capturas | Implementadas en el workflow; falta validar el último cambio con una ejecución completa |
 | Validación de PNG y manifiestos | Implementada en el workflow |
 | Hojas de contacto | Implementadas en el workflow; validar en la siguiente ejecución |
 | Captura del preview F5 | Probada con el proyecto de referencia; opcional y sujeta a que el proyecto pueda ejecutarse |
-| Detección dinámica de nombre/ruta del proyecto en repositorios compatibles | Implementada en el workflow; falta validar con varios repositorios reales |
+| Detección dinámica de nombre/ruta del proyecto en repositorios compatibles | Implementada; validación visual del proyecto de referencia pendiente de corregir |
 | Compatibilidad con ramas distintas de `main` o proyectos en subcarpetas | Pendiente |
 | Actualización incremental del proyecto ya importado | Pendiente |
 | Captura de interfaz completa, zoom arbitrario y vistas adicionales | Pendiente de backend/validación |
