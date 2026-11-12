@@ -23,6 +23,7 @@ No se guardan secretos en el repositorio. No registrar tokens, códigos temporal
 ## API principal
 
 - `GET /health`: liveness del relay y estado de inicialización de Neon.
+- `GET /v1/github/{owner}/{repository}/archive`: descarga acotada del ZIP público de main para precarga del Project Manager Godot Web.
 - `/v1/command-center/*`: emparejamiento, órdenes, leases, resultados y consulta.
 - `/v1/command-center/visual/*`: transferencias autenticadas de capturas.
 - `/v1/command-center/projects/*`: sincronización de proyectos compartidos.
