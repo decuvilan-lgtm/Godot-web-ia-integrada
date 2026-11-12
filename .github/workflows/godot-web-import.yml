@@ -6,6 +6,8 @@ on:
       - ".github/workflows/godot-web-import.yml"
       - "scripts/gameplay-test-controller.cjs"
       - "scripts/test-gameplay-test-controller.cjs"
+      - "scripts/godot-input-map.cjs"
+      - "scripts/test-godot-input-map.cjs"
   workflow_dispatch:
     inputs:
       repository_url:
@@ -80,10 +82,14 @@ jobs:
             scripts/godot_web_ocr.py
             scripts/gameplay-test-controller.cjs
             scripts/test-gameplay-test-controller.cjs
+            scripts/godot-input-map.cjs
+            scripts/test-godot-input-map.cjs
           sparse-checkout-cone-mode: false
 
       - name: Probar controlador de gameplay
-        run: node scripts/test-gameplay-test-controller.cjs
+        run: |
+          node scripts/test-gameplay-test-controller.cjs
+          node scripts/test-godot-input-map.cjs
 
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
@@ -147,12 +153,34 @@ jobs:
               raise
 
           project_text = base64.b64decode(project_file.get("content", "")).decode("utf-8", errors="replace")
+          with open("/tmp/godot-project.godot", "w", encoding="utf-8") as project_config:
+              project_config.write(project_text)
           name_match = re.search(r'^\s*config/name\s*=\s*"([^"\r\n]+)"', project_text, re.MULTILINE)
           project_name = re.sub(r'[\r\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nbranch_is_default={str(branch_is_default).lower()}\nproject_path={project_path}\nproject_name={project_name}\n")
           print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, ruta {project_file_path}, nombre: {project_name})")
           PY
+
+      - name: Descubrir mapa de entradas del proyecto
+        id: input_map
+        run: |
+          set -euo pipefail
+          node scripts/godot-input-map.cjs /tmp/godot-project.godot > artifacts-project-input-map.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts-project-input-map.json").read_text())
+          print("Acciones declaradas:", data["action_count"])
+          for action in data["actions"]:
+              controls = []
+              for event in action["events"]:
+                  props = event["properties"]
+                  code = props.get("physical_keycode", props.get("keycode", props.get("button_index", "?")))
+                  controls.append(event["type"] + ":" + str(code))
+              print("- " + action["name"] + ": " + (", ".join(controls) if controls else "sin eventos reconocidos"))
+          PY
+          echo "input_map=generated" >> "$GITHUB_OUTPUT"
 
       - name: Verificar Relay desplegado con rama y subcarpeta
         id: relay_live
