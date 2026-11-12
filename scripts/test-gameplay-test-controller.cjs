@@ -28,7 +28,7 @@ function fakePage(failAt = null) {
         : {
             focused: true, tagName: 'CANVAS', id: 'game-canvas',
             parentId: 'tab-game',
-            rect: { x: 0, y: 0, width: 800, height: 600 },
+            rect: { x: 50, y: 25, width: 800, height: 600 },
             activeElement: 'CANVAS', activeElementId: 'game-canvas'
           };
     },
