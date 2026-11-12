@@ -95,7 +95,9 @@ La limpieza no debe usar force-push, `reset --hard` ni operaciones que reescriba
 
 El editor web alojado en Render no necesita reconstruirse por cada cambio del proyecto externo: el escenario se refleja al importar/sincronizar la revisión nueva del repositorio objetivo. El auto-deploy de Render corresponde al repositorio del propio editor.
 
-**Importante:** el ciclo de escenarios en `main` es el flujo acordado, pero todavía no debe anunciarse como automatizado hasta que estén implementados y probados la publicación, sincronización, controlador y limpieza segura.
+**Estado del controlador:** la primera versión admite pulsaciones/soltados de teclado, movimiento/click/presión de ratón y toque táctil puntual. Incluye timeline con duración configurable (10 segundos por defecto), capturas periódicas y liberación de teclas/botones si ocurre un error. Las pruebas unitarias pasaron en [Actions 43278159189](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278159189); la integración E2E del navegador está en [ejecución 43278226182](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278226182). Los gestos táctiles continuos y el flujo completo de escenarios temporales aún no están terminados.
+
+**Importante:** el ciclo de escenarios en `main` es el flujo acordado, pero todavía no debe anunciarse como automatizado hasta que estén implementados y probados la publicación, sincronización y limpieza segura.
 
 Documentación detallada: [Pruebas interactivas y escenarios temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md).
 
@@ -125,8 +127,8 @@ Esta ejecución **no** envió controles de gameplay ni verificó movimiento, ata
 | Abrir el proyecto en Godot Web | Verificado en E2E |
 | Capturar editor y preview F5 | Verificado en E2E |
 | Secuencias y manifiestos de capturas | Verificados en E2E |
-| Controlar gameplay con teclado, ratón y táctil | Pendiente |
-| Timeline configurable de acciones (10 s por defecto) | Pendiente |
+| Controlador base de teclado, ratón y toque táctil | Implementado; pruebas unitarias pasaron |
+| Timeline configurable de acciones (10 s por defecto) | Implementado; E2E del navegador en verificación |
 | Descubrir controles y adaptar entradas por proyecto | Pendiente |
 | Crear escenarios temporales de cualquier mecánica/interacción | Especificado; implementación pendiente |
 | Publicar escenario temporal en `main` y sincronizar commit exacto | Especificado; implementación pendiente |
