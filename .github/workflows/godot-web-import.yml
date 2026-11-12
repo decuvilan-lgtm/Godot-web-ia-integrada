@@ -262,7 +262,7 @@ jobs:
           GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && contains(github.event.head_commit.message, '[gameplay-smoke]') && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"press"}]') || '[]' }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts
+          mkdir -p artifacts/videos
           cat > /tmp/run-godot-web-check.cjs <<'JS'
           const { chromium } = require('playwright');
           const { execFileSync } = require('child_process');
@@ -703,6 +703,9 @@ jobs:
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
               console.log(JSON.stringify(result, null, 2));
+              await page.close();
+              await context.close();
+              if (sessionVideo) await sessionVideo.saveAs('artifacts/render-session.webm');
               await browser.close();
             } catch (error) {
               result.status = 'failed';
@@ -716,6 +719,11 @@ jobs:
               } catch (captureError) { result.captureError = String(captureError); }
               fs.writeFileSync('artifacts/browser-events.json', JSON.stringify(events, null, 2));
               fs.writeFileSync('artifacts/result.json', JSON.stringify(result, null, 2));
+              try { await page.close(); } catch {}
+              try { await context.close(); } catch {}
+              if (sessionVideo) {
+                try { await sessionVideo.saveAs('artifacts/render-session.webm'); } catch (videoError) { result.videoSaveError = String(videoError); }
+              }
               await browser.close();
               throw error;
             }
