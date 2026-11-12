@@ -88,6 +88,7 @@ jobs:
             scripts/godot-input-map.cjs
             scripts/test-godot-input-map.cjs
             scripts/analyze_gameplay_captures.py
+            tests/control-profiles/escondite-smoke.json
           sparse-checkout-cone-mode: false
 
       - name: Probar controlador de gameplay
@@ -193,6 +194,23 @@ jobs:
           PY
           echo "input_map=generated" >> "$GITHUB_OUTPUT"
 
+      - name: Preparar perfil de controles de regresión
+        id: control_profile
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          profile = json.loads(Path("tests/control-profiles/escondite-smoke.json").read_text())
+          actions = profile.get("actions", [])
+          if not isinstance(actions, list) or len(actions) > 200:
+              raise SystemExit("El perfil de controles no contiene una lista válida de acciones.")
+          serialized = json.dumps(actions, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("actions=" + serialized + "\\n")
+          print(f"Perfil cargado: {profile.get('profile')} ({len(actions)} acciones)")
+          PY
+
       - name: Verificar Relay desplegado con rama y subcarpeta
         id: relay_live
         continue-on-error: true
@@ -264,7 +282,7 @@ jobs:
           GAME_FRAMES: ${{ inputs.game_frames || '8' }}
           GAME_INTERVAL_MS: ${{ inputs.game_interval_ms || '500' }}
           GAMEPLAY_DURATION_MS: ${{ inputs.gameplay_duration_ms || '16000' }}
-          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && '[{"at_ms":1000,"device":"mouse","state":"click","x":1025,"y":472},{"at_ms":2500,"device":"keyboard","control":"D","state":"down"},{"at_ms":4000,"device":"keyboard","control":"D","state":"up"},{"at_ms":4800,"device":"keyboard","control":"Space","state":"press"},{"at_ms":6000,"device":"keyboard","control":"J","state":"down"},{"at_ms":6800,"device":"keyboard","control":"J","state":"up"},{"at_ms":8500,"device":"mouse","state":"click","x":1200,"y":620},{"at_ms":10000,"device":"touch","control":"joystick","state":"down","x":203,"y":647},{"at_ms":10500,"device":"touch","control":"joystick","state":"move","x":150,"y":647},{"at_ms":11500,"device":"touch","control":"joystick","state":"move","x":150,"y":647},{"at_ms":12000,"device":"touch","control":"joystick","state":"up","x":150,"y":647}]') || '[]' }}
+          GAMEPLAY_ACTIONS_JSON: ${{ inputs.gameplay_actions_json || (github.event_name == 'push' && steps.control_profile.outputs.actions) || '[]' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/videos
