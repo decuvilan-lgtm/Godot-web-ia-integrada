@@ -66,21 +66,31 @@ Los artefactos se conservan durante 14 días. Las secuencias se validan por cant
 
 ## Pruebas interactivas y escenarios temporales
 
-La meta siguiente es que el sistema pueda manejar el juego durante una ventana configurable (10 segundos por defecto), mediante entradas reales de teclado, ratón y táctil. El controlador debe registrar cada entrada, duración, foco, reacción observable, capturas y errores, y liberar controles incluso cuando la prueba falle.
+El controlador ya supera una prueba de gameplay real en Godot Web. La sesión de regresión de Dragon Realm usa un perfil versionado y combina teclado, ratón y gestos táctiles continuos. El controlador genérico no depende de ese juego: los controles específicos viven en perfiles de prueba separados.
 
-**El siguiente objetivo es conseguir controlar el juego mientras está ejecutándose.** El controlador base y sus pruebas unitarias ya existen, pero todavía no hemos demostrado que una entrada enviada por Playwright sea recibida y procesada por el juego real. La ejecución [43278226182](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278226182) terminó correctamente, pero utilizó una lista de acciones vacía: verificó el workflow y el timeline de observación, no movimiento ni interacción.
+### Evidencia de control real
 
-El trabajo inmediato es detectar y enfocar correctamente el viewport del juego, enviar controles reales, comprobar sus reacciones y completar una sesión de 10 segundos con acciones verificables.
+Ejecución verificada: [GitHub Actions #43330622553](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43330622553).
 
-**Los escenarios temporales quedan para la fase siguiente**, después de conseguir control fiable del juego en ejecución. Cuando llegue esa etapa, no se limitarán a saltar progresión: podrán preparar y comprobar cualquier elemento del proyecto, por ejemplo:
+- 11 de 11 acciones enviadas en una misma sesión.
+- Teclado: movimiento, salto y ataque mantenido.
+- Ratón: inicio de partida y ejecución del botón de combate.
+- Ataque: OCR detectó el mensaje visible `PUÑO BÁSICO · 29 daño`.
+- Joystick táctil: el arrastre cambió la coordenada X del minimapa de `0266` a `0017`; al soltar, la palanca regresó al centro.
+- Grabación continua: un WebM de la sesión completa, 1440×900.
+- Relay: validación de repositorio, rama y ZIP aprobada.
 
-- Movimiento, salto, vuelo, navegación y cámara.
-- Combate, daño, habilidades, enemigos y estados.
-- Interacciones con NPC, objetos, puertas, interruptores y diálogos.
-- Inventario, equipamiento, economía, misiones y progreso.
-- Menús, HUD, formularios, navegación e interfaz táctil.
-- Animaciones, efectos, audio, eventos, transiciones y escenas.
-- Casos límite, errores reproducibles y combinaciones de sistemas.
+El controlador admite teclado `press/down/up`, ratón `move/click/down/up` y táctil `tap/down/move/up`. Los gestos táctiles continuos se envían mediante eventos CDP y se liberan automáticamente si una acción falla. Los perfiles de control se guardan en `tests/control-profiles/`; el workflow carga el perfil de Escondite desde un archivo versionado, en vez de duplicar las acciones en YAML.
+
+### Advertencias que siguen abiertas
+
+- Godot registró `Parse Error: Busy` y `Failed loading resource` para `res://scenes/ui/hud.tscn`. El HUD sí apareció y respondió durante la prueba, pero el proyecto conserva esa advertencia. El repositorio de referencia se mantiene de solo lectura.
+- El probe de responsividad del renderer agotó su tiempo. Las capturas, la entrada de controles y la grabación sí funcionaron mediante Playwright/CDP.
+- Una entrada enviada no se considera prueba de funcionamiento por sí sola: el informe separa acciones enviadas, reacción visual y aserciones OCR.
+
+### Siguiente etapa
+
+La prioridad es generalizar los perfiles y las comprobaciones semánticas para otros proyectos, añadir emulación de viewport móvil y reforzar la detección de escenas/controles sin depender de Escondite. Los escenarios temporales dentro del proyecto real siguen pospuestos hasta que el flujo genérico de control y verificación esté suficientemente validado.
 
 ### Ciclo temporal autorizado (fase posterior)
 
@@ -107,39 +117,17 @@ Documentación detallada: [Pruebas interactivas y escenarios temporales](docs/IN
 
 ## Evidencia de la última prueba E2E
 
-Ejecución: [43274843026](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43274843026).
+Ejecución: [43330622553](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43330622553).
 
-Resultado verificado:
+- Relay: aprobado.
+- Proyecto Dragon Realm: importado y abierto en Godot Web.
+- Gameplay: 11/11 acciones enviadas.
+- Ataque: mensaje de 29 de daño detectado por OCR.
+- Joystick táctil: coordenada X del minimapa cambió de 0266 a 0017.
+- Grabación: un WebM continuo de la sesión, conservado como artefacto.
+- Advertencias: `hud.tscn` informó `Parse Error: Busy`; el probe de responsividad agotó tiempo aunque la captura y los controles sí funcionaron.
 
-- Relay: HTTP 200; comprobación de rama y proyecto anidado correcta.
-- Proyecto: ZIP precargado, instalado y abierto en Godot Web.
-- Editor: interfaz detectada y secuencia completa de 5/5 capturas.
-- Juego: F5 abrió el preview; se detectó el menú inicial y se capturaron 8/8 frames.
-- Capturas: 1440×900.
-- Advertencias: Godot informó errores de carga de `res://scenes/ui/hud.tscn` (`Parse Error: Busy`). No impidieron mostrar el menú, pero el proyecto no puede considerarse libre de errores.
-- El probe de responsividad del renderer agotó tiempo; las capturas por Playwright/CDP sí funcionaron.
-
-Esta ejecución **no** envió controles de gameplay ni verificó movimiento, ataques, habilidades o estado interno. Abrir el menú no equivale a probar la jugabilidad.
-
-## Estado de implementación
-
-| Capacidad | Estado |
-|---|---|
-| Importar repositorios públicos de GitHub | Implementado |
-| Seleccionar rama predeterminada o explícita | Verificado |
-| Importar proyectos desde subcarpetas | Verificado con fixture y Relay |
-| Abrir el proyecto en Godot Web | Verificado en E2E |
-| Capturar editor y preview F5 | Verificado en E2E |
-| Secuencias y manifiestos de capturas | Verificados en E2E |
-| Controlador base de teclado, ratón y toque táctil | Implementado; pruebas unitarias pasaron |
-| Timeline configurable y observación de 10 s | Workflow aprobado; E2E con entradas reales pendiente |
-| Controlar el juego en ejecución y verificar su reacción | Prioridad inmediata; pendiente |
-| Descubrir controles y adaptar entradas por proyecto | Pendiente |
-| Crear escenarios temporales de cualquier mecánica/interacción | Fase posterior; bloqueado hasta validar control real |
-| Publicar escenario temporal en `main` y sincronizar commit exacto | Fase posterior; pendiente |
-| Limpieza segura y verificación del estado restaurado | Fase posterior; pendiente |
-| Aserciones funcionales mediante adaptadores de proyecto | Pendiente |
-| Actualización incremental de un proyecto ya importado | Pendiente |
+El proyecto de referencia Escondite no se modificó.
 
 ## Seguridad y protección de proyectos
 

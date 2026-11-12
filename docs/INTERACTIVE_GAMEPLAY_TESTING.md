@@ -196,27 +196,43 @@ Si el editor ya contiene una copia importada, el sistema debe detectar si corres
 
 ## Estado de implementación
 
-La prueba E2E actual ya demuestra: importación del ZIP, selección explícita de rama, apertura del proyecto en Godot Web, detección del editor, ejecución F5 y captura de secuencias del editor y del juego. También comprueba el Relay con un fixture en subcarpeta.
+La prueba E2E actual demuestra importación del ZIP, selección de rama, apertura del proyecto, detección visual, ejecución de F5 y control del juego en el navegador. La ejecución [43330622553](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43330622553) envió 11/11 acciones y produjo evidencia visual verificable.
 
-El controlador base de teclado, ratón y toque táctil, la validación del timeline y la liberación segura de teclas están implementados. Sus pruebas unitarias pasaron en Actions (ejecución 43278159189). La integración del workflow terminó correctamente en Actions (ejecución 43278226182), incluyendo el test unitario del controlador y el timeline de observación. Sin embargo, esa ejecución usó una lista de acciones vacía (`[]`): **no demuestra que el juego haya recibido controles ni que haya reaccionado**.
+### Controlador y timeline
 
-### Prioridad inmediata: conseguir control real del juego en ejecución
+- **Teclado:** `press`, `down` y `up`.
+- **Ratón:** `move`, `click`, `down` y `up`.
+- **Táctil:** `tap`, `down`, `move` y `up` mediante `Input.dispatchTouchEvent` de CDP.
+- **Liberación segura:** teclas, botones y dedos activos se liberan al terminar o si ocurre un error.
+- **Coordenadas:** página, canvas y normalizadas (0–1000).
+- **Capturas:** antes y después de cada acción, además de capturas periódicas.
+- **Límites:** hasta 60 segundos y 200 acciones por timeline.
 
-1. Detectar con fiabilidad el viewport/iframe/canvas del juego y darle foco.
-2. Determinar cómo se enrutan las entradas en la versión de Godot Web utilizada (teclado, ratón y táctil).
-3. Enviar acciones conocidas y registrar confirmación de envío, foco y eventos observables.
-4. Verificar reacción real en pantalla; distinguir entrada enviada de acción procesada por el juego.
-5. Probar secuencias de movimiento y acciones sostenidas, liberación de controles y recuperación ante errores.
-6. Ejecutar una sesión de 10 segundos con acciones reales y guardar capturas/timeline reproducibles.
-7. Ampliar a gestos táctiles continuos, arrastre y doble click.
+Las pruebas unitarias cubren gestos táctiles de inicio, arrastre, liberación y limpieza automática. El perfil `tests/control-profiles/escondite-smoke.json` es un ejemplo específico; el controlador no asume que otros proyectos usen las mismas teclas ni coordenadas.
 
-### Fase posterior (bloqueada hasta superar la prioridad inmediata)
+### Evidencia E2E comprobada
 
-- Adaptadores por proyecto para mapear controles y aserciones funcionales.
-- Creación de escenarios temporales de cualquier mecánica/interacción.
-- Publicación temporal en `main`, importación de commit exacto y limpieza auditable.
-- Informe combinado visual + funcional.
+- 11/11 acciones enviadas durante una sesión real.
+- El ataque mostró `PUÑO BÁSICO · 29 daño`; OCR confirmó el texto.
+- El arrastre táctil del joystick movió la coordenada X del minimapa de `0266` a `0017`.
+- Se guardó una grabación WebM continua de la sesión.
+- El Relay confirmó la entrega de la revisión solicitada.
 
-No iniciar el bloque de escenarios temporales antes de validar el control interactivo real.
+### Advertencias conocidas
 
-No describir estas capacidades pendientes como ya disponibles hasta que existan pruebas automatizadas y artefactos que lo demuestren.
+- Godot emitió `Parse Error: Busy` y `Failed loading resource` para `res://scenes/ui/hud.tscn`. La interfaz HUD sí apareció y respondió en la sesión; el warning no se oculta ni se declara corregido.
+- El probe de responsividad del renderer agotó tiempo, aunque Playwright/CDP pudo capturar la interfaz y enviar controles.
+- Escondite se mantiene como repositorio de referencia de solo lectura; no se cambiaron sus archivos.
+
+### Prioridad inmediata
+
+1. Generalizar perfiles y adaptadores para proyectos distintos al de referencia.
+2. Detectar controles y áreas interactivas sin asumir coordenadas fijas.
+3. Añadir emulación de dispositivos/viewport móvil y comprobar orientación y escalado.
+4. Reforzar aserciones funcionales cuando el proyecto ofrezca telemetría fiable.
+5. Mantener separados los resultados de importación, entradas enviadas, reacción visual y estado interno.
+
+## Fase posterior: escenarios temporales
+
+La creación y publicación de escenarios temporales dentro del proyecto real sigue pospuesta. No se debe modificar ni publicar archivos temporales hasta que los perfiles genéricos y la verificación de acciones estén suficientemente validados. Cuando se habilite, se conservará el flujo seguro ya definido: registrar SHA base, manifiesto de archivos, commits propios, importación de la revisión exacta y limpieza sin force-push ni eliminación de cambios ajenos.
+
