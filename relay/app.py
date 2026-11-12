@@ -17,6 +17,7 @@ from admin import router as command_center_admin_router
 from visual_storage import router as visual_storage_router
 from visual_proxy import router as visual_proxy_router
 from project_sync import router as project_sync_router
+from github_archives import router as github_archives_router
 
 APP_VERSION = "0.3.0"
 logger = logging.getLogger("godot_web_ia_relay")
@@ -56,6 +57,7 @@ app.include_router(command_center_admin_router)
 app.include_router(visual_storage_router)
 app.include_router(visual_proxy_router)
 app.include_router(project_sync_router)
+app.include_router(github_archives_router)
 
 @app.middleware("http")
 async def prevent_command_center_response_caching(request, call_next):
