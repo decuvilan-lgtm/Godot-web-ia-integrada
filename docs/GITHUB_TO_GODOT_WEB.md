@@ -2,60 +2,75 @@
 
 ## Objetivo
 
-Permitir que ChatGPT prepare la conexión de un repositorio de juego y que Godot Web lo reciba mediante su importador ZIP oficial. El Project Manager nativo sigue siendo la interfaz de gestión; no se crea otro administrador.
+Importar proyectos Godot públicos desde GitHub mediante el importador ZIP oficial de Godot Web. El Project Manager nativo sigue siendo la interfaz de gestión; no se sustituye por otro administrador.
 
-## Flujo actual implementado
+## Flujo
 
-1. El usuario abre Godot Web y el editor inicia el Project Manager automáticamente.
-2. El botón **Conectar GitHub** está en la barra superior del shell web.
-3. Al introducir owner/repository, el shell valida el formato y solicita confirmación antes de recargar la página.
-4. La URL se recarga con el parámetro ?repo=owner/repository.
-5. El shell solicita el ZIP al Relay, que lo obtiene de codeload.github.com desde la rama main.
-6. El navegador convierte la respuesta en un File, lo asigna al campo oficial Preload project ZIP y pulsa el botón oficial Start Godot Editor.
-7. Godot inicia su Project Manager y procesa el ZIP mediante su flujo de importación normal. El usuario termina la importación con los controles nativos de Godot (nombre/carpeta e Install & Edit, según el diálogo que presente esa versión).
+1. Godot Web inicia el Project Manager.
+2. El botón **Conectar GitHub** permite introducir `owner/repository`, una rama opcional y una carpeta opcional.
+3. Si la rama queda vacía, el Relay resuelve la rama predeterminada del repositorio mediante la API pública de GitHub.
+4. Si la ruta queda vacía, se espera `project.godot` en la raíz. Si se indica una ruta, el Relay valida esa carpeta y genera un ZIP cuyo `project.godot` queda en la raíz del archivo.
+5. El navegador solicita el ZIP al Relay, lo asigna al campo oficial `Preload project ZIP` y activa el inicio del editor.
+6. Godot procesa el archivo con su Project Manager. La instalación final usa el diálogo nativo de Godot.
 
-También se puede construir un enlace directo a la página con ?repo=owner/repository. Esto permite que el asistente prepare un enlace exacto para el repositorio solicitado sin que el usuario tenga que descargar ni seleccionar un ZIP.
+También se admiten enlaces directos:
+
+```text
+https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY
+https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY&branch=develop
+https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY&branch=master&path=2d/platformer
+```
+
+Los parámetros `branch` y `path` son opcionales. Los valores se codifican como parámetros URL normales.
 
 ## Relay
 
 Endpoint:
 
-GET /v1/github/{owner}/{repository}/archive
+```text
+GET /v1/github/{owner}/{repository}/archive?branch=BRANCH&path=PROJECT_PATH
+```
 
-Contrato:
-- Solo repositorios públicos.
-- Rama fija main; no se acepta una rama o URL arbitraria.
-- El host upstream está fijado a https://codeload.github.com.
-- Owner y nombre del repositorio se validan mediante expresiones permitidas.
-- El host final de cualquier redirección se comprueba.
-- Tamaño máximo del ZIP: 128 MiB.
-- Descarga con timeout y concurrencia limitada; se usa un archivo temporal con memoria acotada.
-- El navegador no recibe credenciales GitHub, Neon ni S3.
-- Respuestas sin caché, con tipo ZIP y cabeceras que identifican repositorio y rama.
+Contrato de seguridad y límites:
 
-Los repositorios privados no están habilitados. No se debe añadir un token GitHub al JavaScript del navegador. El soporte privado requeriría una autorización de servidor con alcance mínimo.
+- Solo repositorios públicos; no se envían tokens GitHub al navegador.
+- La rama se valida antes de construir la URL de codeload. Si no se especifica, se consulta `default_branch` en la API de GitHub.
+- El host upstream está fijado a `codeload.github.com`; se valida el host final de las redirecciones.
+- La ruta del proyecto no admite rutas absolutas, segmentos `.` o `..`, barras invertidas ni caracteres de control.
+- El ZIP comprimido está limitado a 128 MiB; el proyecto seleccionado se limita a 256 MiB descomprimidos.
+- Para proyectos en subcarpetas, el Relay extrae de forma segura solo esa carpeta y la vuelve a empaquetar con `project.godot` en la raíz.
+- La descarga tiene timeout y concurrencia limitada; se usa almacenamiento temporal con memoria acotada.
+- La respuesta identifica repositorio y rama mediante cabeceras; `X-GitHub-Ref` está expuesta a CORS para que el navegador pueda nombrar el ZIP correctamente.
+- Las respuestas no se almacenan en caché.
+
+Los repositorios privados no están habilitados. No se debe añadir un token GitHub al JavaScript del navegador.
+
+## Pruebas
+
+Las pruebas unitarias del Relay cubren:
+- Resolución de la rama predeterminada.
+- Ramas con subdirectorios, como `release/2.0`.
+- Validación de nombres de rama y rutas.
+- Selección y reempaquetado de proyectos en subcarpetas.
+- Rechazo cuando falta `project.godot`.
+- Límite de tamaño y cabeceras CORS.
+
+La importación visual del proyecto de referencia confirmó:
+- ZIP precargado y apertura de la ruta del proyecto.
+- Editor visible con 5/5 capturas consecutivas.
+- F5 abre el menú del juego y permite 8/8 capturas consecutivas.
+- Las imágenes PNG se validan y sus manifiestos registran dimensiones, tiempos y tamaños.
+
+La ejecución también registró una advertencia del proyecto de referencia: `Parse Error: Busy` al cargar `res://scenes/ui/hud.tscn`. No impidió abrir el editor ni mostrar el menú inicial, pero requiere revisar el proyecto por separado.
+
+## Límites y estado de despliegue
+
+- El flujo de importación inicial no hace `git pull` sobre un proyecto ya importado.
+- No reemplaza automáticamente archivos locales; una actualización futura debe preservar cambios del usuario y ofrecer comparación.
+- Todavía no registra el SHA del commit importado como metadato del proyecto.
+- La importación inicial termina en el diálogo nativo de Godot; no automatiza controles internos del canvas que no formen parte del shell web.
+- El código de rama predeterminada y subcarpetas está implementado y cubierto por pruebas del repositorio. Su disponibilidad en el sitio público depende de que Render despliegue los commits más recientes. La última consulta de despliegues aún mostraba una revisión anterior, por lo que no se debe dar esa parte por activa en producción hasta comprobar el nuevo deploy.
 
 ## Responsabilidad del asistente
 
-Cuando el usuario indique un repositorio público, ChatGPT puede preparar el enlace de conexión usando owner/repository y la rama main. La navegación real ocurre en el navegador del usuario: esta conversación no controla automáticamente una pestaña Godot Web que el usuario tenga abierta. El botón del shell también permite introducir el repositorio desde la propia página.
-
-## Límites actuales
-
-- La conexión precarga el ZIP oficial; no implementa todavía un git pull dentro del sistema de archivos IndexedDB.
-- La importación inicial utiliza el diálogo nativo de Godot. No se automatizan los botones internos dibujados en el canvas.
-- Una nueva versión de main no reemplaza todavía de forma automática un proyecto ya importado. Ese paso requiere una estrategia de actualización segura que preserve la última copia válida y los cambios locales.
-- El SHA del commit aún no se registra en metadatos del proyecto importado. La API actual descarga el snapshot de main, pero no resuelve ni presenta el SHA.
-- El importador requiere un navegador compatible con Godot Web y el mecanismo DataTransfer para precargar el ZIP.
-
-## Pruebas de aceptación
-
-1. Abrir Godot Web sin parámetros: debe iniciar el Project Manager nativo.
-2. Abrir con ?repo=owner/repository: el Relay debe descargar el ZIP de main, el shell debe precargarlo y el Project Manager debe presentar la importación.
-3. Confirmar que el navegador no envía tokens GitHub ni credenciales de almacenamiento.
-4. Probar repositorio inexistente/privado, nombre inválido, timeout y ZIP superior a 128 MiB.
-5. Verificar que un error de descarga no impide abrir el Project Manager sin ZIP.
-6. Importar dos repositorios distintos y comprobar que quedan como proyectos independientes en el Project Manager.
-7. Recargar la web y comprobar que los proyectos importados persisten en IndexedDB.
-8. Confirmar que no se sobrescribe ningún proyecto ya importado al conectar otro repositorio.
-
-**Estado:** el proxy Relay y el shell web están desplegados en Render; el build del shell pasó y el Relay compiló/desplegó correctamente. Falta probar el flujo completo en un navegador Godot Web real, incluida la respuesta ZIP y el diálogo de importación. La actualización automática de proyectos ya importados y la trazabilidad SHA siguen siendo trabajo futuro.
+ChatGPT puede preparar el enlace y revisar los resultados de una ejecución de GitHub Actions. La navegación y el trabajo en la pestaña Godot Web ocurren en el navegador; esta conversación no controla automáticamente una pestaña abierta por el usuario.
