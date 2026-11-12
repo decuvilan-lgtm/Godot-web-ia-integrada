@@ -53,6 +53,52 @@ function validateTimeline(config) {
   return { duration_ms: durationMs, capture_interval_ms: captureIntervalMs, actions: normalized };
 }
 
+async function focusGameViewport(page) {
+  const before = await page.evaluate(() => ({
+    activeElement: document.activeElement?.tagName || null,
+    activeElementId: document.activeElement?.id || null,
+    canvases: [...document.querySelectorAll('canvas')].map((canvas, index) => {
+      const rect = canvas.getBoundingClientRect();
+      const style = getComputedStyle(canvas);
+      return {
+        index, id: canvas.id || null, tabindex: canvas.getAttribute('tabindex'),
+        width: canvas.width, height: canvas.height,
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
+        parentId: canvas.parentElement?.id || null
+      };
+    })
+  }));
+  const chosen = await page.evaluate(() => {
+    const visible = canvas => {
+      const r = canvas.getBoundingClientRect();
+      const s = getComputedStyle(canvas);
+      return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+    };
+    const candidates = [
+      document.querySelector('#tab-game canvas'),
+      document.querySelector('#game-canvas'),
+      document.querySelector('#gameCanvas'),
+      ...document.querySelectorAll('canvas')
+    ].filter((canvas, index, all) => canvas && all.indexOf(canvas) === index && visible(canvas));
+    const canvas = candidates[0];
+    if (!canvas) return { focused: false, reason: 'No se encontró un canvas visible.' };
+    canvas.setAttribute('tabindex', canvas.getAttribute('tabindex') || '0');
+    canvas.focus({ preventScroll: true });
+    const r = canvas.getBoundingClientRect();
+    return {
+      focused: document.activeElement === canvas,
+      tagName: canvas.tagName,
+      id: canvas.id || null,
+      parentId: canvas.parentElement?.id || null,
+      rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+      activeElement: document.activeElement?.tagName || null,
+      activeElementId: document.activeElement?.id || null
+    };
+  });
+  return { before, target: chosen, focused: Boolean(chosen.focused) };
+}
+
 async function runGameplayTimeline(page, input, options = {}) {
   const config = validateTimeline(input);
   const started = Date.now();
@@ -127,7 +173,7 @@ async function runGameplayTimeline(page, input, options = {}) {
       try { await page.mouse.up({ button }); log('auto-release', { device: 'mouse', button }); } catch {}
     }
   }
-  return { requested_duration_ms: config.duration_ms, elapsed_ms: Date.now() - started, actions_requested: config.actions.length, actions_sent: actionIndex, events };
+  return { requested_duration_ms: config.duration_ms, elapsed_ms: Date.now() - started, actions_requested: config.actions.length, actions_sent: actionIndex, viewport_focus: viewportFocus, events };
 }
 
-module.exports = { validateTimeline, runGameplayTimeline, MAX_DURATION_MS, MAX_ACTIONS };
+module.exports = { validateTimeline, focusGameViewport, runGameplayTimeline, MAX_DURATION_MS, MAX_ACTIONS };
