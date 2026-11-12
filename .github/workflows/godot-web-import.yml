@@ -408,6 +408,23 @@ jobs:
                 }
                 await new Promise(resolve => setTimeout(resolve, 2500));
               }
+              // Final fallback: after Godot has finished switching projects, a normal
+              // Playwright page screenshot can succeed even when repeated compositor
+              // and X11 captures returned only the loading surface.
+              try {
+                const fallbackPath = options.path || 'artifacts/godot-editor-open.png';
+                await page.screenshot({ path: fallbackPath, fullPage: true, timeout: 20000 });
+                const fallbackScan = inspectImage(fallbackPath);
+                attempts.push({ at: new Date().toISOString(), method: 'playwright-final-fallback', ocr: fallbackScan.text.slice(0, 1000) });
+                lastScan = fallbackScan;
+                lastMethod = 'playwright';
+                const predicate = options.readyPredicate || (value => /2D|3D|Script|AssetLib|Scene|Inspector|FileSystem|Import|Project|Debug/i.test(value));
+                if (predicate(fallbackScan.text)) {
+                  return { ready: true, method: 'playwright', scan: fallbackScan, attempts };
+                }
+              } catch (error) {
+                attempts.push({ at: new Date().toISOString(), method: 'playwright-final-fallback', error: String(error).slice(0, 500) });
+              }
               return { ready: false, method: lastMethod, scan: lastScan, attempts };
             } finally {
               try { await cdp.detach(); } catch {}
