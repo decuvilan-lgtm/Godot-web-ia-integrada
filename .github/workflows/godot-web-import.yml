@@ -740,7 +740,7 @@ jobs:
               'videos': [{'file': str(p), 'bytes': p.stat().st_size} for p in videos],
               'status': 'recorded' if videos and all(p.stat().st_size > 1024 for p in videos) else 'missing-or-empty'
           }
-          Path('artifacts/render-session-video.json').write_text(json.dumps(manifest, indent=2) + '\\n')
+          Path('artifacts/render-session-video.json').write_text(json.dumps(manifest, indent=2) + '\n')
           print(json.dumps(manifest, indent=2))
           if not videos or any(p.stat().st_size <= 1024 for p in videos):
               raise SystemExit('No se generó una grabación WebM válida de la sesión Render.')
