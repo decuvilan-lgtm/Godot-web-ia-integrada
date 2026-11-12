@@ -145,7 +145,7 @@ jobs:
           mkdir -p artifacts
           python - <<'PY'
           import io, json, os, urllib.request, zipfile
-          url = "https://godot-web-ia-relay.onrender.com/v1/github/godotengine/godot-demo-projects/archive?branch=master&path=2d%2Fplatformer"
+          url = "https://godot-web-ia-relay.onrender.com/v1/github/decuvilan-lgtm/Godot-web-ia-integrada/archive?branch=main&path=tests%2Ffixtures%2Fnested-godot-project"
           result = {"url": url, "status": "failed"}
           try:
               request = urllib.request.Request(url, headers={"Origin": "https://godot-web-ia-integrada-rt2l.onrender.com", "User-Agent": "Godot-Web-Live-Relay-Check"})
@@ -153,13 +153,14 @@ jobs:
                   body = response.read()
                   result["httpStatus"] = response.status
                   result["selectedBranch"] = response.headers.get("X-GitHub-Ref")
+                  result["selectedRepository"] = response.headers.get("X-GitHub-Repository")
                   result["corsExposeHeaders"] = response.headers.get("Access-Control-Expose-Headers", "")
                   result["bytes"] = len(body)
                   with zipfile.ZipFile(io.BytesIO(body)) as archive:
                       names = set(archive.namelist())
                   result["projectAtZipRoot"] = "project.godot" in names
-                  result["nestedProjectRepacked"] = result["projectAtZipRoot"] and "game.gd" in names and "game_singleplayer.tscn" in names
-                  if response.status != 200 or result["selectedBranch"] != "master" or not result["projectAtZipRoot"] or not result["nestedProjectRepacked"]:
+                  result["nestedProjectRepacked"] = result["projectAtZipRoot"] and "main.gd" in names and "main.tscn" in names
+                  if response.status != 200 or result["selectedBranch"] != "main" or result["selectedRepository"] != "decuvilan-lgtm/Godot-web-ia-integrada" or not result["projectAtZipRoot"] or not result["nestedProjectRepacked"]:
                       raise RuntimeError("El Relay público no cumple el contrato de rama/subcarpeta.")
                   if "x-github-ref" not in result["corsExposeHeaders"].lower():
                       raise RuntimeError("X-GitHub-Ref no está expuesta a CORS.")
@@ -200,7 +201,7 @@ jobs:
           BRANCH: ${{ steps.repo.outputs.branch }}
           BRANCH_IS_DEFAULT: ${{ steps.repo.outputs.branch_is_default }}
           PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
-          LIVE_RELAY_CHECK: ${{ steps.relay_live.outcome }}
+          LIVE_RELAY_CHECK: ${{ steps.relay_live.outputs.result || 'failed' }}
           STARTUP_TIMEOUT: ${{ inputs.startup_timeout || '180' }}
           EDITOR_FRAMES: ${{ inputs.editor_frames || '5' }}
           EDITOR_INTERVAL_MS: ${{ inputs.editor_interval_ms || '900' }}
@@ -229,7 +230,7 @@ jobs:
           if (normalizedProjectLabel.length < 2) throw new Error('El nombre del repositorio no permite una identificación visual segura.');
           const repo = `${process.env.OWNER}/${repoName}`;
           const importParams = new URLSearchParams({ repo });
-          if (process.env.BRANCH && process.env.BRANCH_IS_DEFAULT !== 'true') importParams.set('branch', process.env.BRANCH);
+          if (process.env.BRANCH) importParams.set('branch', process.env.BRANCH);
           if (process.env.PROJECT_PATH) importParams.set('path', process.env.PROJECT_PATH);
           const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?${importParams.toString()}`;
           function inspectImage(path) {
