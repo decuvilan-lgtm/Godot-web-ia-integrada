@@ -69,7 +69,7 @@ La ejecución 43160054574 confirmó la importación del repositorio raíz `Escon
 - No reemplaza automáticamente archivos locales; una actualización futura debe preservar cambios del usuario y ofrecer comparación.
 - Todavía no registra el SHA del commit importado como metadato del proyecto.
 - La importación inicial termina en el diálogo nativo de Godot; no automatiza controles internos del canvas que no formen parte del shell web.
-- El código de rama predeterminada y subcarpetas está implementado y cubierto por pruebas unitarias. Sin embargo, la comprobación directa del Relay público devolvió HTTP 404 para `godotengine/godot-demo-projects`, rama `master`, ruta `2d/platformer` (run 43160054574). La importación E2E de ese proyecto terminó con el Project Manager vacío (run 43160118114). Por tanto, la compatibilidad de rama/subcarpeta aún no está activa en el servicio público. Render continúa mostrando como último despliegue una revisión anterior (`9b7ca3f`), aunque el servicio informa auto-deploy habilitado.
+- El código de rama predeterminada y subcarpetas está implementado y cubierto por pruebas unitarias. La importación E2E de `godotengine/godot-demo-projects`, rama `master`, ruta `2d/platformer`, devolvió HTTP 404 antes de la actualización de Render (run 43160118114). Render confirmó después el despliegue exitoso del commit `3277ced4b58c37aea2b657792b16ce4760b1db20`, con estado `live`. La ejecución `43160639045` había realizado su comprobación live antes de que comenzara ese despliegue, por lo que su resultado fallido no evalúa la versión nueva. Falta repetir la comprobación de rama/subcarpeta después del despliegue para confirmar su funcionamiento público.
 
 ## Responsabilidad del asistente
 
