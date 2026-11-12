@@ -189,7 +189,7 @@ jobs:
                   clickPoint = await clickLine(page, scan, /^Install$/i, 'botón Install');
                 } else {
                   const viewport = page.viewportSize();
-                  clickPoint = { x: viewport.width * 0.552, y: viewport.height * 0.61, source: 'fallback: Install button in centered Godot dialog' };
+                  clickPoint = { x: viewport.width * 0.569, y: viewport.height * 0.649, source: 'fallback: Install button in centered Godot dialog' };
                   await page.mouse.click(clickPoint.x, clickPoint.y);
                 }
                 result.installActionClicked = 'Install';
