@@ -60,6 +60,7 @@ function fakePage(failAt = null) {
   }), /coordenadas/);
 
   const page = fakePage();
+  const checkpoints = [];
   const result = await runGameplayTimeline(page, {
     duration_ms: 150,
     capture_interval_ms: 50,
@@ -70,7 +71,7 @@ function fakePage(failAt = null) {
       { at_ms: 100, device: 'touch', control: 'tap', state: 'tap', x: 130, y: 100 },
       { at_ms: 110, device: 'mouse', control: 'primary', state: 'click', x: 500, y: 500, coordinate_space: 'normalized' }
     ]
-  }, { capture: async () => {} });
+  }, { capture: async detail => { checkpoints.push(detail); } });
   assert.equal(result.actions_sent, 5);
   assert.equal(result.viewport_focus.focused, true);
   assert.equal(result.viewport_focus.target.id, 'game-canvas');
@@ -80,6 +81,9 @@ function fakePage(failAt = null) {
   assert.ok(page.calls.includes('click:120:90'));
   assert.ok(page.calls.includes('tap:130:100'));
   assert.ok(page.calls.includes('click:450:325'), 'normalized canvas coordinates must map to the visible canvas rectangle');
+  assert.equal(checkpoints.filter(item => item.phase === 'before-action').length, 5);
+  assert.equal(checkpoints.filter(item => item.phase === 'after-action').length, 5);
+  assert.ok(checkpoints.some(item => item.phase === 'after-action' && item.action.control === 'ArrowRight'));
 
   const failingPage = fakePage('press:Space');
   await assert.rejects(() => runGameplayTimeline(failingPage, {
