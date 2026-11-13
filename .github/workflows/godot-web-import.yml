@@ -576,6 +576,19 @@ jobs:
                   result.projectManagerOcr = scan.text;
                 }
               }
+              // El ZIP queda precargado en #zip-file, pero Godot no abre por sí solo
+              // el diálogo de instalación. Entrar explícitamente por Import Existing Project.
+              if (!/Install Project|Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i.test(scan.text)) {
+                const importButton = page.getByRole('button', { name: /Import Existing Project/i });
+                if (await importButton.count()) {
+                  await importButton.click({ timeout: 10000 });
+                  await page.waitForTimeout(2500);
+                  await page.screenshot({ path: 'artifacts/godot-import-dialog.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
+                  scan = inspectImage('artifacts/godot-import-dialog.png');
+                  result.importExistingProjectClicked = true;
+                  result.importDialogOcr = scan.text;
+                }
+              }
               if (/Install Project/i.test(scan.text)) {                const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
                 await page.mouse.click(nameLine.x, nameLine.y);
                 await page.keyboard.press('Control+A');
