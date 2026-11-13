@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "smoke-test",
+  "steps": [
+    {
+      "op": "wait",
+      "ms": 500
+    },
+    {
+      "op": "inspect"
+    },
+    {
+      "op": "assert_canvas"
+    },
+    {
+      "op": "screenshot"
+    }
+  ]
+}
