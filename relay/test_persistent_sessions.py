@@ -171,6 +171,32 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["sessions"][0]["session_id"], "test-session")
         self.assertEqual(result["sessions"][0]["commit_sha"], None)
 
+    async def test_project_profile_route_returns_not_found_without_global_fallback(self):
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "load_project_profile", return_value=None):
+            result = await sessions.get_project_lab_profile("test-session", "Bearer test-secret")
+        self.assertFalse(result["available"])
+        self.assertEqual(result["profile_status"], "not_found")
+        self.assertEqual(result["manifest_path"], "godot-lab/lab-manifest.json")
+
+    async def test_project_profile_command_executes_repo_owned_steps(self):
+        profile = {
+            "manifest": {"commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json"}]},
+            "control_profile": {"controls": {}},
+            "commands": {"smoke-test": {"name": "smoke-test", "steps": [{"op": "inspect"}]}},
+        }
+        async def fake_execute(page, loaded_profile, command_name, artifacts):
+            return [{"step": 0, "op": "inspect", "result": {"canvas_count": 1}}]
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "load_project_profile", return_value=profile), patch.object(sessions, "execute_profile_command", side_effect=fake_execute):
+            result = await sessions.run_project_lab_command("test-session", "smoke-test", "Bearer test-secret")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["command"], "smoke-test")
+        self.assertTrue(result["session_kept_open"])
+
+    def test_project_profile_routes_are_registered(self):
+        paths = {getattr(route, "path", None) for route in app.routes}
+        self.assertIn("/v1/persistent-sessions/{session_id}/profile", paths)
+        self.assertIn("/v1/persistent-sessions/{session_id}/profiles/{command_name}/run", paths)
+
     def test_session_list_route_is_registered(self):
         self.assertTrue(any(
             getattr(route, "path", None) == "/v1/persistent-sessions"
