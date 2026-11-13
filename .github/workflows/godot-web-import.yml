@@ -789,6 +789,26 @@ jobs:
                 : editorCapture.method === 'cdp'
                   ? await captureSequence(page, 'editor-sequence', editorFrames, editorIntervalMs)
                   : await captureSequenceX11('editor-sequence', editorFrames, editorIntervalMs);
+              // Inspect the actual editor FileSystem dock. This separates a
+              // ZIP-presence issue from a Project Manager extraction issue.
+              await page.mouse.click(132, 571);
+              await page.keyboard.press('Control+A');
+              await page.keyboard.type('Inter-Medium.otf');
+              await page.waitForTimeout(1500);
+              await page.screenshot({
+                path: 'artifacts/godot-font-search.png',
+                fullPage: false,
+                animations: 'disabled',
+                timeout: 15000
+              });
+              const fontSearchScan = inspectImage('artifacts/godot-font-search.png');
+              result.fontSearchOcr = fontSearchScan.text || '';
+              result.fontFileVisibleInEditorFilesystem = normalizeLabel(result.fontSearchOcr).includes('intermediumotf');
+              fs.writeFileSync('artifacts/font-search-ocr.json', JSON.stringify(fontSearchScan, null, 2));
+              await page.keyboard.press('Control+A');
+              await page.keyboard.press('Backspace');
+              await page.waitForTimeout(500);
+
               const resourceErrors = events.filter(event =>
                 event.type === 'console:error' &&
                 /Parse Error:|Failed loading resource:/i.test(event.text || '')
