@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - relay/persistent_sessions.py
+      - relay/project_profiles.py
       - relay/github_archives.py
       - scripts/patch-web-shell.py
       - render-relay.yaml
