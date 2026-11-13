@@ -112,13 +112,18 @@ jobs:
             exit 2
           fi
           COMMIT_SHA="${COMMIT_SHA,,}"
-          token_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=godot-web-ia-relay"
-          oidc_token="$(curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$token_url" | jq -er '.value')"
+          get_oidc_token() {
+            local token_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=godot-web-ia-relay"
+            curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$token_url" | jq -er '.value'
+          }
+          oidc_token="$(get_oidc_token)"
           echo "::add-mask::$oidc_token"
           payload="$(jq -n --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg path "$PROJECT_PATH" --arg sha "$COMMIT_SHA" --argjson reimport "$REIMPORT_EXISTING" '{repository:$repository,branch:$branch,project_path:$path,commit_sha:$sha,reimport_existing:$reimport}')"
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$payload" -o artifacts/session-open.json
           session_id="$(jq -er '.session_id' artifacts/session-open.json)"
           sleep "$wait_seconds"
+          oidc_token="$(get_oidc_token)"
+          echo "::add-mask::$oidc_token"
           if ! [[ "$PROFILE_COMMAND" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
             echo "profile_command must be a safe command slug" >&2
             exit 2
@@ -143,6 +148,8 @@ jobs:
             cat artifacts/editor-inspection.json
             exit 1
           fi
+          oidc_token="$(get_oidc_token)"
+          echo "::add-mask::$oidc_token"
           task_id="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inspection_result="$(jq -c '.result' artifacts/editor-inspection.json)"
           profile_result="$(jq -c '.' artifacts/profile-execution.json)"
