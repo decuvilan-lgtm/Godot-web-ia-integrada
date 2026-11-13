@@ -72,6 +72,7 @@ class OpenSessionRequest(BaseModel):
     project_path: str = Field(default="", max_length=240)
     commit_sha: str | None = Field(default=None, min_length=40, max_length=64)
     reuse_existing: bool = True
+    reimport_existing: bool = False
 
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=32)
@@ -244,6 +245,15 @@ async def list_persistent_sessions(authorization: str | None = Header(default=No
 
 
 @router.post("")
+def _editor_url_for(repository: str, branch: str, project_path: str, commit_sha: str | None) -> str:
+    query = f"?repo={quote(repository, safe='/')}&branch={quote(branch, safe='')}"
+    if project_path:
+        query += f"&path={quote(project_path, safe='/')}"
+    if commit_sha:
+        query += f"&sha={quote(commit_sha, safe='')}"
+    return EDITOR_URL + query
+
+
 async def open_persistent_session(body: OpenSessionRequest, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
     if not REPO_RE.fullmatch(body.repository):
@@ -281,8 +291,51 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "commit_sha": existing.commit_sha,
                 "idle_ttl_seconds": IDLE_TTL,
                 "reused": True,
+                "reimported": False,
                 "reused_for_follow_up_tasks": True,
                 "note": "The existing browser and editor page were reused; the session remains open.",
+            }
+        if body.reuse_existing and body.reimport_existing and existing.repository == body.repository:
+            previous = {
+                "branch": existing.branch,
+                "project_path": existing.project_path,
+                "commit_sha": existing.commit_sha,
+            }
+            try:
+                await existing.page.goto(
+                    _editor_url_for(body.repository, body.branch, body.project_path, body.commit_sha),
+                    wait_until="domcontentloaded",
+                    timeout=90000,
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"Could not re-import project into the existing browser: {type(exc).__name__}") from exc
+            existing.branch = body.branch
+            existing.project_path = body.project_path
+            existing.commit_sha = body.commit_sha
+            existing.artifacts.clear()
+            existing.events.append({
+                "type": "session.reimported",
+                "at": time.time(),
+                "previous": previous,
+                "repository": body.repository,
+                "branch": body.branch,
+                "project_path": body.project_path,
+                "commit_sha": body.commit_sha,
+            })
+            _touch(existing)
+            return {
+                "session_id": existing.session_id,
+                "state": "open",
+                "editor_url": EDITOR_URL,
+                "repository": existing.repository,
+                "branch": existing.branch,
+                "project_path": existing.project_path,
+                "commit_sha": existing.commit_sha,
+                "idle_ttl_seconds": IDLE_TTL,
+                "reused": True,
+                "reimported": True,
+                "reused_for_follow_up_tasks": True,
+                "note": "The same browser context was kept open and the selected project revision was re-imported.",
             }
         raise HTTPException(
             status_code=409,
@@ -305,12 +358,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             accept_downloads=True,
         )
         session.page = await session.context.new_page()
-        query = f"?repo={quote(body.repository, safe='/')}&branch={quote(body.branch, safe='')}"
-        if body.project_path:
-            query += f"&path={quote(body.project_path, safe='/')}"
-        if body.commit_sha:
-            query += f"&sha={quote(body.commit_sha, safe='')}"
-        await session.page.goto(EDITOR_URL + query, wait_until="domcontentloaded", timeout=90000)
+        await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, body.commit_sha), wait_until="domcontentloaded", timeout=90000)
         session.events.append({
             "type": "session.opened",
             "at": time.time(),
