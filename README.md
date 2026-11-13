@@ -171,6 +171,19 @@ El manifiesto registra repositorio, rama, SHA, carpeta del proyecto, versión de
 
 No se declara que un comando de control funciona solo porque exista en un JSON. Debe ejecutarse en el proyecto y producir la respuesta esperada.
 
+### Auditoría de implementación (13-11-2026)
+
+La distinción entre código existente y funcionamiento real es obligatoria:
+
+- **Importación de una sola ejecución:** el workflow `.github/workflows/godot-web-import.yml` controla el Godot Web real con Chromium en GitHub Actions, realiza el flujo del Project Manager y publica el directorio `artifacts/` como artefacto de Actions con retención configurada de 14 días. Actualmente cierra la página, el contexto y el navegador al finalizar; no es una sesión persistente.
+- **SHA inmutable:** pendiente. El flujo resuelve y descarga una rama; el endpoint de archivos informa `X-GitHub-Ref`, pero todavía no fija ni verifica un SHA de commit inmutable de extremo a extremo.
+- **Sesiones persistentes en Relay:** código presente en `main`, pero no verificado en el servicio desplegado. El último despliegue que incorporaba PR #25 falló al iniciar; la corrección de arranque está en `main`, pendiente de despliegue y prueba real.
+- **Artefactos de la API persistente:** todavía se almacenan en memoria del proceso Relay. El ZIP devuelto por `tasks/complete` no sobrevive a un reinicio y el endpoint no está integrado con el almacenamiento duradero de Neon Object Storage.
+- **Integración entre workflow y sesión persistente:** pendiente. El workflow de importación y la API de sesiones persistentes son actualmente dos rutas separadas.
+- **Pruebas de sesión:** las pruebas existentes usan una página simulada; no demuestran todavía una sesión real de Chromium en Render ni la supervivencia de artefactos después de reiniciar el servicio.
+
+Por tanto, no se debe afirmar que las sesiones persistentes, la recuperación tras suspensión, el SHA exacto o el almacenamiento duradero estén verificados hasta completar sus pruebas de aceptación.
+
 ## 11. Documentación técnica relacionada
 
 - [Funcionamiento completo del sistema](docs/SYSTEM_OPERATION.md)
