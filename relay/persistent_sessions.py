@@ -8,6 +8,8 @@ import logging
 import os
 import re
 import secrets
+import subprocess
+import sys
 import time
 import zipfile
 from dataclasses import dataclass, field
@@ -95,14 +97,33 @@ async def _get_browser():
                 raise HTTPException(status_code=503, detail="Playwright is not installed on this relay") from exc
             if not hasattr(_get_browser, "_playwright"):
                 _get_browser._playwright = await async_playwright().start()
+            launch_args = {
+                "headless": True,
+                "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            }
             try:
-                _browser = await _get_browser._playwright.chromium.launch(
-                    headless=True,
-                    args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-                )
-            except Exception as exc:
-                logger.exception("Could not start persistent Chromium")
-                raise HTTPException(status_code=503, detail=f"Persistent browser unavailable: {type(exc).__name__}") from exc
+                _browser = await _get_browser._playwright.chromium.launch(**launch_args)
+            except Exception as first_error:
+                # Render's existing service build command may not yet include the
+                # browser-install step from render-relay.yaml. Install the pinned
+                # Playwright Chromium on first use, then retry once.
+                logger.warning("Chromium binary missing; installing Playwright Chromium on first use")
+                try:
+                    process = await asyncio.create_subprocess_exec(
+                        sys.executable, "-m", "playwright", "install", "chromium",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                    )
+                    output, _ = await asyncio.wait_for(process.communicate(), timeout=180)
+                    if process.returncode != 0:
+                        raise RuntimeError(output.decode("utf-8", "replace")[-3000:])
+                    _browser = await _get_browser._playwright.chromium.launch(**launch_args)
+                except Exception as exc:
+                    logger.exception("Could not install or start persistent Chromium")
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"Persistent browser unavailable: {type(exc).__name__}; check Render memory and system libraries",
+                    ) from first_error
         return _browser
 
 async def _close_session(session: PersistentSession) -> None:
