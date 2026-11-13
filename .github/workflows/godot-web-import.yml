@@ -658,7 +658,7 @@ jobs:
               result.httpStatus = response?.status() ?? null;
               result.connectorVersion = await page.locator('#godot-github-connector').getAttribute('data-version').catch(() => null);
               if (result.connectorVersion !== 'commit-pinned-v3') {
-                throw new Error('El editor publicado usa el conector ' + (result.connectorVersion || 'sin versión') + '; esta prueba requiere branch-path-v2. Despliega primero el parche del integrador antes de ejecutar la importación E2E.');
+                throw new Error('El editor publicado usa el conector ' + (result.connectorVersion || 'sin versión') + '; esta prueba requiere commit-pinned-v3. Despliega primero el parche del integrador antes de ejecutar la importación E2E.');
               }
               await page.waitForSelector('#startButton', { state: 'attached', timeout });
               await page.waitForSelector('#zip-file', { state: 'attached', timeout });
