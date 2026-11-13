@@ -104,21 +104,41 @@ def main():
                     inspection["post_install_title"]=page.title()
                     if "Project Manager" in page.title():
                         failure="Godot remained in Project Manager after the project Install action"
-                inspection["visual_surface"]=page.evaluate("""() => ({
-                    canvases:[...document.querySelectorAll('canvas')].map((c,i)=> {
-                        const r=c.getBoundingClientRect(), s=getComputedStyle(c);
-                        return {index:i,width:c.width,height:c.height,css_width:Math.round(r.width),css_height:Math.round(r.height),visible:r.width>100&&r.height>100&&s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0};
-                    }),
-                    iframes:[...document.querySelectorAll('iframe')].map((f,i)=> {
-                        const r=f.getBoundingClientRect(),s=getComputedStyle(f);
-                        return {index:i,src:f.src,width:Math.round(r.width),height:Math.round(r.height),visible:r.width>100&&r.height>100&&s.display!=='none'&&s.visibility!=='hidden'};
-                    }),
-                    body_text:document.body.innerText.slice(0,12000)
-                })""")
+                inspection["visual_surface"]=page.evaluate("""() => {
+                    const visible = el => {
+                        const r=el.getBoundingClientRect(), s=getComputedStyle(el);
+                        return r.width>100&&r.height>100&&s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0;
+                    };
+                    const canvases=[...document.querySelectorAll('canvas')].map((c,i)=> {
+                        const r=c.getBoundingClientRect();
+                        return {index:i,width:c.width,height:c.height,css_width:Math.round(r.width),css_height:Math.round(r.height),visible:visible(c)};
+                    });
+                    const iframes=[...document.querySelectorAll('iframe')].map((f,i)=> {
+                        const r=f.getBoundingClientRect();
+                        return {index:i,src:f.src,width:Math.round(r.width),height:Math.round(r.height),visible:visible(f)};
+                    });
+                    return {canvases,iframes,body_text:document.body.innerText.slice(0,12000),title:document.title};
+                }""")
+                surface=inspection["visual_surface"]
+                visible_surface=any(c["visible"] for c in surface["canvases"]) or any(f["visible"] for f in surface["iframes"])
+                title=surface.get("title","")
+                # Godot draws its native dock labels inside the WebGL canvas, so
+                # DOM text alone cannot prove the editor opened. A scene filename
+                # in the document title plus a visible render surface is stronger
+                # evidence; it still does not prove that the game runs.
+                scene_title=bool(re.search(r"[^/\\\\]+\\.tscn\\s+-",title,re.I))
+                editor_visible=visible_surface and scene_title
+                resource_errors=[e for e in errors if "Cannot open file" in e or "Failed loading resource" in e or "Parse Error" in e]
                 inspection["visual_validation"]={
-                    "status":"surface_detected" if any(c["visible"] for c in inspection["visual_surface"]["canvases"]) or any(f["visible"] for f in inspection["visual_surface"]["iframes"]) else "no_visible_godot_surface",
+                    "status":"editor_scene_open" if editor_visible else ("surface_detected" if visible_surface else "no_visible_godot_surface"),
+                    "editor_surface_visible":visible_surface,
+                    "scene_filename_in_title":scene_title,
+                    "scene_title":title if scene_title else None,
+                    "project_resource_errors_detected":bool(resource_errors),
+                    "project_resource_errors":resource_errors[-30:],
                     "manual_review_required":True,
-                    "note":"Import SHA confirmation is not proof that the project scene is rendered or playable."
+                    "gameplay_verified":False,
+                    "note":"A visible Godot scene editor is not proof that the game runs; project resource errors are reported separately."
                 }
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
         except Exception as exc:
