@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Bounded, allowlisted command loop for an already-open Godot Web page."""
 from __future__ import annotations
-import json, os, re, time, urllib.request
+import json, math, os, re, time, urllib.request
 from pathlib import Path
 
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm"}
 MAX_TEXT=500
 POLL_SECONDS=5
+ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
     data=None if payload is None else json.dumps(payload).encode()
@@ -28,8 +29,12 @@ def _post_result(repo, issue, token, command_id, result):
     },ensure_ascii=False)
     _api(f"{API}/repos/{repo}/issues/{issue}/comments",token,"POST",{"body":body})
 
+def _valid_unit(value):
+    return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and 0<=value<=1
+
 def _validate(command, session_id, last_seq):
-    if not isinstance(command,dict) or set(command)-{"protocol","session_id","seq","action","text","placeholder","seconds"}:
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key"}
+    if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
         raise ValueError("Protocol or session mismatch")
@@ -37,7 +42,7 @@ def _validate(command, session_id, last_seq):
     if not isinstance(seq,int) or isinstance(seq,bool) or seq<=last_seq:
         raise ValueError("Sequence must be a new increasing integer")
     action=command.get("action")
-    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","stop"}:
+    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","press_key","stop"}:
         raise ValueError("Action is not allowlisted")
     text=command.get("text")
     placeholder=command.get("placeholder")
@@ -48,7 +53,38 @@ def _validate(command, session_id, last_seq):
     seconds=command.get("seconds",1)
     if action=="wait" and (not isinstance(seconds,int) or isinstance(seconds,bool) or not 0<=seconds<=20):
         raise ValueError("wait seconds must be 0-20")
+    if action=="canvas_click" and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
+        raise ValueError("canvas_click x and y must be normalized numbers from 0 to 1")
+    if action=="canvas_drag":
+        points=command.get("points")
+        if not isinstance(points,list) or not 2<=len(points)<=64:
+            raise ValueError("canvas_drag needs 2-64 normalized [x,y] points")
+        if any(not isinstance(point,(list,tuple)) or len(point)!=2 or not _valid_unit(point[0]) or not _valid_unit(point[1]) for point in points):
+            raise ValueError("every canvas_drag point must contain normalized x and y values from 0 to 1")
+        duration=command.get("duration_ms",250)
+        if not isinstance(duration,int) or isinstance(duration,bool) or not 50<=duration<=5000:
+            raise ValueError("canvas_drag duration_ms must be 50-5000")
+    if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
+        raise ValueError("Key is not in the browser editing allowlist")
     return seq,action
+
+def _visible_canvases(page):
+    result=[]
+    canvases=page.locator("canvas")
+    for index in range(min(canvases.count(),8)):
+        box=canvases.nth(index).bounding_box()
+        if box and box["width"]>=100 and box["height"]>=100:
+            result.append({"index":index,"x":round(box["x"],1),"y":round(box["y"],1),"width":round(box["width"],1),"height":round(box["height"],1)})
+    return result
+
+def _largest_visible_canvas(page):
+    candidates=_visible_canvases(page)
+    if not candidates:
+        raise ValueError("No visible editor canvas was found")
+    return max(candidates,key=lambda item:item["width"]*item["height"])
+
+def _canvas_coordinates(canvas,x,y):
+    return canvas["x"]+x*canvas["width"],canvas["y"]+y*canvas["height"]
 
 def run_command_loop(page, repo, issue_number, token, session_id, out_dir, duration_seconds=180):
     if not token or not issue_number:
@@ -79,7 +115,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                     seq,action=_validate(command,session_id,last_seq)
                     last_seq=seq
                     if action=="status":
-                        result={"title":page.title(),"url":page.url,"visible_text":page.locator("body").inner_text(timeout=5000)[:3000]}
+                        result={"title":page.title(),"url":page.url,"visible_text":page.locator("body").inner_text(timeout=5000)[:3000],"viewport_size":page.viewport_size,"visible_canvases":_visible_canvases(page)}
                     elif action=="screenshot":
                         path=Path(out_dir)/f"command-{seq:03d}.png"
                         page.screenshot(path=str(path),full_page=False,timeout=15000)
@@ -95,6 +131,27 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         if locator.count()<1: raise ValueError("Exact placeholder was not found")
                         locator.first.fill(command["text"],timeout=10000)
                         result={"filled":command["placeholder"]}
+                    elif action=="canvas_click":
+                        canvas=_largest_visible_canvas(page)
+                        point=_canvas_coordinates(canvas,command["x"],command["y"])
+                        page.mouse.click(*point)
+                        result={"canvas_index":canvas["index"],"normalized_point":{"x":command["x"],"y":command["y"]}}
+                    elif action=="canvas_drag":
+                        canvas=_largest_visible_canvas(page)
+                        points=[_canvas_coordinates(canvas,x,y) for x,y in command["points"]]
+                        page.mouse.move(*points[0])
+                        page.mouse.down()
+                        try:
+                            delay=max(0,command.get("duration_ms",250)//(len(points)-1))
+                            for point in points[1:]:
+                                page.mouse.move(*point,steps=4)
+                                if delay: page.wait_for_timeout(delay)
+                        finally:
+                            page.mouse.up()
+                        result={"canvas_index":canvas["index"],"point_count":len(points),"duration_ms":command.get("duration_ms",250)}
+                    elif action=="press_key":
+                        page.keyboard.press(command["key"])
+                        result={"pressed":command["key"]}
                     elif action=="wait":
                         page.wait_for_timeout(command.get("seconds",1)*1000)
                         result={"waited_seconds":command.get("seconds",1)}
