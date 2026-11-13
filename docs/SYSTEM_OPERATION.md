@@ -1,0 +1,297 @@
+# Funcionamiento completo del sistema
+
+## 1. Objetivo general
+
+Este sistema conecta repositorios de proyectos Godot con el Godot Web real desplegado en Render para realizar inspección visual y pruebas interactivas reproducibles. Su finalidad es observar el resultado de una versión concreta del proyecto, enviar interacciones y devolver evidencia útil para diagnosticar problemas.
+
+El laboratorio no es el lugar donde se desarrolla, conserva o entrega el proyecto completo. El proyecto vive en su repositorio GitHub. Godot Web es una superficie temporal de observación y prueba.
+
+## 2. Separación de componentes
+
+### 2.1 Repositorio del proyecto
+
+Es la fuente de verdad. Conserva todos los scripts, escenas, recursos, configuraciones, ramas y commits. Las modificaciones permanentes del juego se realizan en este repositorio mediante el flujo autorizado.
+
+### 2.2 Repositorio Godot Web IA Integrada
+
+Contiene la infraestructura del laboratorio: Relay, workflows, perfiles de prueba, automatización y documentación. No debe confundirse con el repositorio del juego seleccionado.
+
+### 2.3 GitHub Actions
+
+Orquesta la ejecución bajo demanda. Obtiene la revisión seleccionada, prepara el paquete para la web, activa el servicio cuando haga falta, realiza la importación, ejecuta las pruebas y publica los resultados.
+
+### 2.4 Relay en Render
+
+Actúa como puente de transferencia y coordinación. Valida los parámetros, entrega los archivos necesarios y expone las funciones de coordinación disponibles. No es la fuente de verdad del código del juego.
+
+### 2.5 Godot Web en Render
+
+Es el editor web real desplegado. Se utiliza para ver el proyecto, inspeccionar su presentación y probar su ejecución. No es un mock, pero el navegador que lo controla puede funcionar headless. Su contenido importado es una copia de prueba de una revisión de GitHub.
+
+### 2.6 Automatización del navegador
+
+Playwright y Chromium interactúan con la interfaz web real. Pueden capturar pantallas, enviar teclado/ratón/táctil y registrar secuencias. El modo headless de Chromium no significa que se esté usando un motor Godot simulado.
+
+### 2.7 Godot Headless
+
+Cuando la compatibilidad lo permite, realiza validaciones de importación, parseo o ejecución sin interfaz. Sus resultados complementan la inspección visual; no la sustituyen.
+
+## 3. Regla fundamental: GitHub manda, Godot Web observa
+
+El proyecto completo y actualizado siempre se obtiene del repositorio fuente. Godot Web no devuelve un ZIP completo del juego ni se utiliza para guardar cambios definitivos.
+
+Los artefactos de Godot Web son exclusivamente evidencia: capturas, vídeos, frames, logs, diagnósticos, eventos, OCR y reportes. El resultado identifica el SHA exacto que se probó para que pueda recuperarse el proyecto desde GitHub.
+
+## 4. Identidad de una versión cargada
+
+Cada importación debe quedar asociada a:
+
+- Repositorio.
+- Rama o referencia.
+- SHA de commit.
+- Ruta del proyecto que contiene `project.godot`.
+- Identificador del workflow y de la ejecución.
+- Estado de importación y verificación.
+
+La identidad no se deduce del nombre del proyecto ni de que la pestaña siga abierta. Antes de probar, el sistema confirma qué revisión está cargada.
+
+## 5. Flujo de carga e importación
+
+### 5.1 Seleccionar proyecto
+
+La solicitud aporta repositorio, rama/ref y ruta relativa. El Relay/workflow valida el acceso, la ruta y la presencia de `project.godot`.
+
+### 5.2 Activar el laboratorio
+
+Si Render está suspendido, una solicitud explícita inicia una petición de activación y una espera acotada de salud. No hay cron, sondeos de fondo ni tráfico periódico para mantenerlo despierto.
+
+### 5.3 Preparar el paquete
+
+El workflow descarga el commit exacto. Si el proyecto está dentro de una subcarpeta, prepara un ZIP temporal cuya raíz contiene `project.godot`. Cualquier exclusión necesaria para la variante web se registra y afecta solo al paquete temporal, nunca al repositorio fuente.
+
+### 5.4 Abrir Godot Web
+
+Playwright abre el editor web desplegado en Render y completa el flujo de importación. Se valida la apertura por señales observables, registros y capturas. No se considera importación exitosa únicamente porque la URL haya cargado.
+
+### 5.5 Verificar revisión
+
+Se conserva el SHA de origen y el manifiesto del paquete. Si no puede demostrarse qué revisión está abierta, la ejecución debe marcarse como no verificada o fallida antes de atribuir resultados al commit.
+
+## 6. Ciclo de pruebas
+
+Una vez importada una revisión, se pueden realizar varias pruebas en la misma sesión activa, siempre que el código y los recursos no hayan cambiado.
+
+### 6.1 Inspección visual
+
+Capturar editor, escenas visibles, interfaz del juego, estados, animaciones y errores visuales. Se pueden usar OCR y comparaciones de capturas si están configurados.
+
+### 6.2 Pruebas interactivas
+
+Enviar acciones de teclado, ratón y táctil. Las acciones pueden ser puntuales o mantenidas durante un intervalo. Los controles deben soltarse de forma segura incluso si una acción falla.
+
+### 6.3 Diagnósticos
+
+Recopilar la salida y el debugger disponibles, advertencias, errores, eventos, logs del navegador y observaciones del controlador. La cobertura real depende de qué información exponga el editor web y el proyecto.
+
+### 6.4 Evidencia
+
+Generar capturas PNG, vídeos WebM, secuencias de frames, eventos temporizados, resultados OCR y reportes JSON. Cada archivo se asocia a una ejecución y a la revisión probada.
+
+### 6.5 Interpretación
+
+El informe separa:
+- Acción enviada.
+- Reacción visual observada.
+- Aserción comprobada.
+- Diagnóstico del motor disponible.
+- Incertidumbre o prueba no ejecutada.
+
+No se infiere que una mecánica funciona solo porque se haya enviado una tecla o porque haya aparecido una captura.
+
+## 7. Qué ocurre cuando cambia el código
+
+Este punto es obligatorio y no depende de que Render siga activo.
+
+1. Se modifica el proyecto en el repositorio fuente.
+2. Se registra el cambio mediante el flujo Git autorizado.
+3. Se obtiene el nuevo SHA.
+4. Se vuelve a ejecutar el workflow de importación/sincronización.
+5. Se prepara un paquete nuevo desde ese SHA.
+6. Se importa o carga la nueva revisión en Godot Web.
+7. Se verifica la identidad de la revisión.
+8. Se repiten las pruebas sobre la versión actualizada.
+
+No se asume que Godot Web observe los cambios de GitHub en tiempo real. No se parchea una copia interna del editor como sustituto de volver a subir el proyecto. Una sesión abierta puede seguir mostrando la versión anterior; por eso cada conjunto de pruebas debe declarar su SHA.
+
+Si el código no cambió, se puede continuar enviando nuevas interacciones a la misma revisión y sesión activa.
+
+## 8. Sesión de navegador y Render Free
+
+La sesión permite mantener el navegador abierto y realizar múltiples pruebas mientras el servicio está disponible. Al completar una tarea, el sistema no debe cerrar deliberadamente la pestaña o el contexto.
+
+Render Free puede suspender el servicio por inactividad. No se intenta evitar esa suspensión mediante heartbeats artificiales, cron o sondeos. El tiempo de vida real depende de Render; cualquier TTL interno es un límite propio de la aplicación, no una garantía sobre la plataforma.
+
+Cuando Render suspende o reinicia el servicio, la memoria del proceso y el navegador pueden desaparecer. No se promete conservar literalmente la pestaña. En la siguiente solicitud explícita:
+
+1. GitHub Actions activa el servicio.
+2. Espera la disponibilidad mediante reintentos limitados.
+3. Recupera repositorio, rama, ruta y SHA requeridos desde la solicitud/manifiesto.
+4. Reconstruye el paquete e importa de nuevo el proyecto.
+5. Reanuda las pruebas desde el estado lógico documentado.
+
+La recuperación es reconstrucción bajo demanda, no resurrección de una pestaña que ya no existe.
+
+## 9. Entrega de resultados
+
+Cada tarea publica un paquete de evidencia. Según lo que se haya generado, puede contener:
+
+- `result.json`: estado general y resumen.
+- `manifest.json`: identidad del proyecto, SHA, configuración y archivos de evidencia.
+- Logs de salida, debugger y navegador disponibles.
+- Capturas del editor y del juego.
+- Vídeo o secuencia de frames.
+- Eventos y timeline de interacciones.
+- OCR y observaciones.
+- Diagnósticos, errores, advertencias y aserciones.
+
+El paquete de evidencia **no incluye el proyecto completo**. El juego se recupera desde el repositorio fuente, usando el SHA del manifiesto. La retención debe corresponder a la configuración real del proveedor; no se debe prometer persistencia de artefactos que solo estén en memoria local del Relay.
+
+Los resultados deben publicarse fuera de la memoria efímera antes de dar una tarea por completada. Si un proceso cae antes de subir una evidencia que solo existía en memoria local, esa evidencia puede perderse; el sistema debe minimizar esa ventana y declarar cualquier pérdida.
+
+## 10. Seguridad y aislamiento
+
+- Mantener separados repositorio de infraestructura y repositorio de juego.
+- No escribir en el repositorio fuente durante una importación o prueba, salvo que la tarea de desarrollo lo autorice expresamente.
+- No incluir secretos en ZIP, navegador, capturas o logs.
+- Validar repositorio, rama, ruta y tamaño.
+- Mantener aislados los artefactos por proyecto y ejecución.
+- Tratar código de terceros como no confiable.
+- Evitar acciones destructivas y limpieza que pueda eliminar cambios ajenos.
+- No utilizar force-push ni resets destructivos.
+- Limitar concurrencia y consumo de recursos del navegador.
+
+## 11. Condiciones para declarar una prueba válida
+
+Una prueba visual/interactiva válida debe identificar el proyecto y SHA, confirmar la importación de la revisión, registrar las acciones, capturar la evidencia disponible y describir con honestidad las aserciones logradas y las pendientes.
+
+Una prueba no es válida como verificación del último cambio si el editor estaba mostrando un commit anterior o no se pudo identificar la revisión cargada.
+
+## 12. Recorrido resumido
+
+1. Seleccionar repositorio, rama, carpeta y commit.
+2. Despertar Render solo por una solicitud explícita si está suspendido.
+3. Preparar y cargar el proyecto en el Godot Web real de Render.
+4. Confirmar el SHA importado.
+5. Inspeccionar visualmente y ejecutar pruebas interactivas.
+6. Recopilar diagnósticos, logs/debugger, capturas, vídeos y eventos.
+7. Si cambia el código, volver a ejecutar el workflow y reimportar la nueva versión.
+8. Si no cambia, seguir probando en la misma sesión activa.
+9. Publicar solo la evidencia y los diagnósticos; nunca el proyecto completo desde Godot Web.
+10. Si Render suspende, reconstruir el laboratorio en la siguiente solicitud y volver a cargar el commit necesario.
+
+
+## 13. Comandos y controles propiedad de cada proyecto
+
+La definición de cómo se controla un juego pertenece al repositorio de ese juego. El repositorio del laboratorio no debe convertirse en una memoria central de combinaciones de teclas, coordenadas, botones o secuencias particulares.
+
+### 13.1 Estructura recomendada dentro del repositorio fuente
+
+```text
+godot-lab/
+  lab-manifest.json
+  control-profile.json
+  commands/
+    smoke-test.json
+    navigation.json
+    gameplay-basic.json
+  CONTROL_PROFILE.md
+  TEST_HISTORY.md
+```
+
+El proyecto puede adaptar los nombres o integrar estos archivos en una estructura de pruebas existente. El manifiesto indica dónde están las instrucciones y qué versión de perfil corresponde al proyecto.
+
+### 13.2 Responsabilidades
+
+- **Repositorio del juego:** declara sus controles, contexto, comandos, secuencias, precondiciones, resultados esperados y evidencias de verificación.
+- **Controlador genérico:** implementa operaciones comunes (entrada, espera, captura, inspección y aserciones) sin asumir controles concretos de ningún juego.
+- **GitHub Actions:** localiza el manifiesto del repositorio seleccionado, valida la revisión y coordina la ejecución. No contiene listas de comandos particulares por juego.
+- **Relay:** transporta solicitudes y resultados; no decide cómo se juega cada proyecto.
+
+### 13.3 Aprendizaje y verificación
+
+En el primer contacto con un proyecto, se inspecciona su interfaz y se experimenta con sus controles. Cada interacción debe confirmar una respuesta observable y repetirse para comprobar que es reproducible. Solo entonces se registra como **Verificado**. Las instrucciones no probadas quedan **Pendiente**; las afectadas por cambios de interfaz, escenas o entrada pasan a **Obsoleto** hasta revalidarse.
+
+El perfil debe documentar teclas y botones, pulsación/retención/arrastre/soltado, escena y estado requerido, viewport y escala de referencia, selectores semánticos preferidos, coordenadas relativas de respaldo, señales de éxito, limitaciones y evidencia. Cada perfil se vincula al repositorio, ruta del proyecto y SHA probado.
+
+### 13.4 Seguridad y aislamiento
+
+Los manifiestos y comandos del repositorio se tratan como datos no confiables. El ejecutor valida el esquema y solo permite operaciones genéricas autorizadas, con límites de tiempo, frecuencia, rutas y recursos. No ejecuta shell arbitrario ni scripts externos automáticamente por estar mencionados en un archivo. Los adaptadores ejecutables particulares requieren revisión, aislamiento y autorización explícita.
+
+Los perfiles nunca se reutilizan entre repositorios por similitud de controles. Para proyectos de solo lectura, cualquier perfil descubierto durante la sesión es temporal: no se guarda como memoria central ni se reutiliza automáticamente en otra sesión. Se puede preparar una propuesta de archivos para incorporarla al repositorio fuente cuando exista autorización. El destino definitivo de los comandos sigue siendo el propio repositorio del juego.
+
+### 13.5 Resultado de cada ejecución
+
+El manifiesto de evidencia registra el SHA del proyecto, la versión del perfil, los comandos ejecutados, el estado de cada paso y las pruebas que quedaron pendientes. Una acción enviada no se considera exitosa hasta observar y verificar su resultado.
+
+
+## 14. Estado real de implementación y límites verificados (13-11-2026)
+
+Esta sección evita confundir el diseño objetivo con el comportamiento que existe hoy.
+
+### 14.1 Workflow de importación actual
+
+`.github/workflows/godot-web-import.yml` ejecuta Chromium en el runner de GitHub Actions, abre la web Godot Web real de Render, espera el conector de GitHub, interactúa con el Project Manager nativo e instala el proyecto. Al finalizar, el workflow cierra la página, el contexto y el navegador. Después guarda `artifacts/` como artefacto de GitHub Actions con retención de 14 días.
+
+Este flujo sirve como prueba automatizada de una ejecución, pero **no conserva un navegador para la siguiente tarea**. No debe describirse como sesión persistente.
+
+### 14.2 API de sesiones persistentes
+
+`relay/persistent_sessions.py` implementa una API separada que mantiene Chromium dentro del proceso Relay. La API puede abrir el editor, inspeccionar texto, tomar capturas, pulsar texto/teclas y generar un ZIP de evidencia al completar una tarea.
+
+Límites observados en el código:
+
+- El estado de sesiones, tareas y bytes de artefactos vive en diccionarios de memoria del proceso.
+- El ZIP de `tasks/complete` se guarda en memoria; el endpoint de descarga depende de que siga existiendo la sesión en ese mismo proceso.
+- La API persistente no está conectada al workflow de importación actual.
+- Abrir una sesión espera `domcontentloaded`, pero no demuestra por sí solo que el proyecto haya terminado de importarse en Godot.
+- El conjunto de comandos de la API persistente es limitado y no equivale al controlador de pruebas de gameplay del workflow.
+
+Si Render reinicia el Relay, se pierde la sesión literal y también los artefactos que solo estaban en memoria. La reconstrucción de la sesión debe hacerse bajo demanda; los artefactos, en cambio, deben guardarse en almacenamiento duradero antes de declarar la tarea completada.
+
+### 14.3 Estado del despliegue del Relay
+
+En la inspección del 13-11-2026:
+
+- El despliegue que incorporaba el commit `0db1ac9` (PR #25) falló al iniciar porque el reaper intentaba usar `router.state`, atributo que no existe en `APIRouter`.
+- La corrección está en `main`, commit `8c86869`, y utiliza una variable de módulo para el proceso de limpieza.
+- Render todavía mostraba como último despliegue exitoso el commit anterior `3a26b87`; por tanto, la API persistente no se podía considerar desplegada ni probada en producción en esa inspección.
+
+La existencia del código corregido en GitHub no prueba que Render esté ejecutando esa revisión. Se debe confirmar un despliegue exitoso del SHA correcto y luego hacer una comprobación HTTP y de navegador.
+
+### 14.4 Identidad de la revisión
+
+El endpoint de archivo `relay/github_archives.py` acepta rama y subcarpeta, y expone `X-GitHub-Ref`. Todavía no resuelve y devuelve el SHA del commit descargado ni permite que todo el flujo quede fijado a un SHA inmutable. El workflow actual valida la rama y el archivo `project.godot`, pero no verifica de extremo a extremo que la copia importada corresponda a un SHA inmutable concreto.
+
+Hasta implementar esa trazabilidad, los informes deben indicar la rama solicitada y declarar el SHA como no verificado, en lugar de afirmar que la identidad exacta del commit está confirmada.
+
+### 14.5 Almacenamiento duradero disponible y aún no conectado a estas sesiones
+
+Neon Object Storage está habilitado en la rama de producción y existe el bucket privado `godot-visual-captures`. El flujo Command Center de capturas ya dispone de código para transferir imágenes a ese almacenamiento y registrar metadatos en `command_center.visual_assets`.
+
+La API `persistent_sessions.py` todavía no utiliza ese almacenamiento: su ZIP de tarea permanece en memoria. La integración debe reutilizar el almacenamiento privado con claves aisladas por sesión/tarea, validar tamaño y hash, y permitir recuperar la evidencia sin depender del proceso Chromium/Relay. No se debe introducir una migración de base de datos ni modificar tablas de producción sin una revisión y aprobación explícitas.
+
+### 14.6 Pruebas disponibles frente a pruebas pendientes
+
+Las pruebas unitarias de sesiones utilizan una página simulada. Comprueban empaquetado, idempotencia dentro del proceso y expiración interna; no comprueban que Chromium real abra Godot Web, que el proyecto termine de importarse, que Render pueda reiniciarse ni que los artefactos sobrevivan a ese reinicio.
+
+Pruebas pendientes antes de declarar el sistema completo:
+
+1. Desplegar el commit corregido del Relay y confirmar `/health`.
+2. Abrir una sesión real en Render y demostrar que el Project Manager y el proyecto seleccionado están listos.
+3. Vincular sesión, repositorio, ruta y SHA inmutable.
+4. Ejecutar más de una secuencia de pruebas en la misma sesión sin cerrar el navegador.
+5. Publicar artefactos en almacenamiento duradero y recuperarlos después de reiniciar el proceso Relay.
+6. Volver a importar una revisión nueva después de un cambio de código y demostrar que la revisión anterior no se confunde con la nueva.
+7. Confirmar que el workflow y la API persistente usan un contrato común, o documentar claramente por qué siguen siendo flujos separados.
+
+**Estado global:** importación visual de una sola ejecución verificada previamente con un proyecto de referencia; sesión persistente en Render, SHA inmutable, recuperación de artefactos y reimportación dentro de sesión siguen pendientes de verificación.
