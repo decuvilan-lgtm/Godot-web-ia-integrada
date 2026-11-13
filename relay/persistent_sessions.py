@@ -71,6 +71,7 @@ class OpenSessionRequest(BaseModel):
     branch: str = Field(default="main", min_length=1, max_length=128)
     project_path: str = Field(default="", max_length=240)
     commit_sha: str | None = Field(default=None, min_length=40, max_length=64)
+    reuse_existing: bool = True
 
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=32)
@@ -222,6 +223,26 @@ async def stop_session_reaper():
     if playwright is not None:
         await playwright.stop()
 
+@router.get("")
+async def list_persistent_sessions(authorization: str | None = Header(default=None)):
+    await _authorize(authorization)
+    return {
+        "sessions": [
+            {
+                "session_id": session.session_id,
+                "repository": session.repository,
+                "branch": session.branch,
+                "project_path": session.project_path,
+                "commit_sha": session.commit_sha,
+                "created_at": session.created_at,
+                "last_activity_at": session.last_activity,
+                "state": "open" if session.page is not None and not session.page.is_closed() else "disconnected",
+            }
+            for session in _sessions.values()
+        ]
+    }
+
+
 @router.post("")
 async def open_persistent_session(body: OpenSessionRequest, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
@@ -237,6 +258,36 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         raise HTTPException(status_code=400, detail="Invalid project_path")
     if body.commit_sha and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", body.commit_sha):
         raise HTTPException(status_code=400, detail="commit_sha must be a full 40- or 64-character hexadecimal Git object ID")
+    for existing in list(_sessions.values()):
+        if existing.page is None or existing.page.is_closed():
+            await _close_session(existing)
+            continue
+        same_project = (
+            existing.repository == body.repository
+            and existing.branch == body.branch
+            and existing.project_path == body.project_path
+            and existing.commit_sha == body.commit_sha
+        )
+        if body.reuse_existing and same_project:
+            _touch(existing)
+            existing.events.append({"type": "session.reused", "at": time.time(), "task_repository": body.repository})
+            return {
+                "session_id": existing.session_id,
+                "state": "open",
+                "editor_url": EDITOR_URL,
+                "repository": existing.repository,
+                "branch": existing.branch,
+                "project_path": existing.project_path,
+                "commit_sha": existing.commit_sha,
+                "idle_ttl_seconds": IDLE_TTL,
+                "reused": True,
+                "reused_for_follow_up_tasks": True,
+                "note": "The existing browser and editor page were reused; the session remains open.",
+            }
+        raise HTTPException(
+            status_code=409,
+            detail="An active persistent session already exists for a different project or revision. Reuse that project or close the session first.",
+        )
     if len(_sessions) >= MAX_SESSIONS:
         raise HTTPException(status_code=429, detail="Persistent session capacity reached")
     browser = await _get_browser()
@@ -283,6 +334,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "project_path": body.project_path,
         "commit_sha": body.commit_sha,
         "idle_ttl_seconds": IDLE_TTL,
+        "reused": False,
         "reused_for_follow_up_tasks": True,
         "note": "Completing a task does not close this browser session.",
     }
