@@ -25,6 +25,8 @@ services:
         value: "1"
       - key: GODOT_WEB_EDITOR_URL
         value: "https://godot-web-ia-integrada-rt2l.onrender.com/"
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"
       - key: COMMAND_CENTER_DATABASE_URL
         sync: false
       - key: COMMAND_CENTER_ADMIN_TOKEN
