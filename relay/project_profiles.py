@@ -17,7 +17,7 @@ from fastapi import HTTPException
 
 MANIFEST_PATH = "godot-lab/lab-manifest.json"
 MAX_JSON_BYTES = 128 * 1024
-MAX_COMMANDS = 100
+MAX_COMMANDS = 20
 MAX_STEPS = 40
 MAX_WAIT_MS = 5_000
 MAX_TOTAL_DELAY_MS = 20_000
@@ -64,7 +64,7 @@ def validate_manifest(data: Any) -> dict[str, Any]:
         raise ValueError("Manifest project metadata must be an object")
     project_name = project.get("name", "")
     project_path = project.get("project_path")
-    if project_name and (not isinstance(project_name, str) or len(project_name) > 120):
+    if not isinstance(project_name, str) or len(project_name) > 120:
         raise ValueError("Manifest project name is invalid")
     if project_path is not None and project_path != "" and (
         not isinstance(project_path, str)
@@ -189,7 +189,7 @@ async def _fetch_json(client: httpx.AsyncClient, url: str) -> Any | None:
         return json.loads(bytes(content))
 
 
-async def load_project_profile(repository: str, ref: str) -> dict[str, Any] | None:
+async def load_project_profile(repository: str, ref: str, command_name: str | None = None) -> dict[str, Any] | None:
     if not REPO_RE.fullmatch(repository):
         raise HTTPException(status_code=400, detail="Invalid repository for project profile")
     if not ref or len(ref) > 128 or ".." in ref:
@@ -207,7 +207,10 @@ async def load_project_profile(repository: str, ref: str) -> dict[str, Any] | No
                 raise ValueError("Manifest control profile file was not found")
             control_profile = validate_control_profile(raw_controls)
             commands: dict[str, dict[str, Any]] = {}
-            for entry in manifest["commands"]:
+            if command_name is not None:
+                entry = next((item for item in manifest["commands"] if item["name"] == command_name), None)
+                if entry is None:
+                    raise HTTPException(status_code=404, detail="Project-owned command was not found in the manifest")
                 raw_command = await _fetch_json(client, base + entry["file"])
                 if raw_command is None:
                     raise ValueError(f"Command file {entry['name']} was not found")
