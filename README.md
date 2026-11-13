@@ -64,6 +64,208 @@ Parámetros de ejecución manual: `repository_url`, `branch`, `project_path`, `s
 
 Los artefactos se conservan durante 14 días. Las secuencias se validan por cantidad de frames, dimensiones y existencia de PNG; una secuencia incompleta no debe presentarse como completa.
 
+## Sesiones persistentes: importación, perfiles y evidencias
+
+Esta ruta es distinta del workflow E2E de importación inicial. Mantiene una pestaña real de Chromium abierta en el Relay y permite continuar inspeccionando el mismo proyecto entre tareas mientras el proceso de Render permanezca activo.
+
+### Identidad obligatoria de cada ejecución
+
+Toda ejecución debe registrar y comprobar conjuntamente:
+
+- Repositorio GitHub en formato `OWNER/REPOSITORY`.
+- Rama solicitada.
+- Ruta relativa que contiene `project.godot` (vacía si está en la raíz).
+- SHA completo e inmutable del commit que se quiere importar.
+- ID de sesión persistente, ID de ejecución de GitHub Actions e intento del workflow.
+- Estado del conector Godot, número de canvas y evidencia generada.
+- Estado del perfil del juego y SHA exacto contra el que fue verificado.
+- ID, clave de objeto, tamaño y SHA-256 del paquete persistido.
+
+La rama identifica de dónde se resuelve el proyecto; el SHA identifica qué contenido exacto se probó. No se considera correcta una importación solo porque la página haya cargado o muestre canvas: el conector debe informar `phase: started` y el `commitSha` debe coincidir exactamente con el SHA solicitado.
+
+### Workflow de sesión persistente
+
+[**Godot Web persistent session smoke test**](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/workflows/persistent-session-smoke.yml)
+
+Se puede iniciar manualmente con estos parámetros:
+
+| Entrada | Obligatoria | Uso |
+|---|---:|---|
+| `repository` | Sí | Repositorio público `OWNER/REPOSITORY` |
+| `branch` | No | Rama; por defecto `main` |
+| `commit_sha` | No | SHA completo. Si se omite, se resuelve el HEAD de la rama al comenzar |
+| `project_path` | No | Carpeta de `project.godot`; por defecto la configurada en el workflow |
+| `profile_command` | No | Slug de un comando declarado por el propio juego; por defecto `smoke-test` |
+| `reimport_existing` | No | Reutilizar el mismo contexto de navegador para importar otra revisión del mismo repositorio |
+| `wait_seconds` | No | Espera inicial breve antes de consultar el estado real; entre 5 y 120 segundos |
+| `import_timeout_seconds` | No | Límite de espera de importación; entre 60 y 600 segundos, por defecto 480 |
+
+El proceso correcto es:
+
+1. Esperar a que el Relay publique la ruta de sesión persistente y que el editor esperado esté desplegado.
+2. Resolver y fijar el SHA completo; abrir o reutilizar la sesión asociada al proyecto.
+3. Esperar la demora inicial configurada y luego consultar periódicamente el estado real del conector, no asumir que una pausa fija equivale a importación terminada.
+4. En cada consulta, renovar el heartbeat de la tarea y registrar fase, SHA importado y cantidad de canvas.
+5. Continuar solo cuando el conector indique `started`, el SHA importado coincida exactamente y exista al menos un canvas.
+6. Leer el manifiesto de laboratorio desde el mismo SHA. Ejecutar un comando del juego solo si el perfil y ese comando están verificados contra ese SHA.
+7. Inspeccionar la interfaz, tomar una captura, completar la tarea y pedir al Relay que persista el ZIP privado.
+8. Descargar el ZIP desde el Relay, validar su estructura con `unzip -t` y conservar el índice de la ejecución como artefacto de Actions.
+9. No cerrar la pestaña al terminar. Render puede suspenderla naturalmente tras su TTL de inactividad; no usar tráfico artificial para mantenerla despierta.
+
+Si se alcanza el límite sin importar el proyecto, la ejecución debe fallar con el último estado observado. No debe crear un paquete de tarea que parezca una prueba completa. Una fase `downloading` significa que la importación sigue en curso; no es equivalente a `started`.
+
+### Manifiesto de laboratorio propiedad de cada juego
+
+Cada repositorio de juego puede incluir esta estructura, en la raíz del repositorio:
+
+```text
+godot-lab/
+├── lab-manifest.json
+├── control-profile.json
+└── commands/
+    └── smoke-test.json
+```
+
+El Relay siempre lee esos archivos desde el SHA exacto importado. No mantiene un catálogo global de controles, no copia perfiles de otro juego y no modifica el repositorio de origen.
+
+Ejemplo de `godot-lab/lab-manifest.json`:
+
+```json
+{
+  "schema_version": 1,
+  "project": {
+    "name": "Nombre del juego",
+    "project_path": "carpeta/del/proyecto"
+  },
+  "control_profile": "control-profile.json",
+  "commands": [
+    {
+      "name": "smoke-test",
+      "file": "commands/smoke-test.json",
+      "description": "Comprueba que el proyecto abre y responde",
+      "verification": {
+        "status": "pending",
+        "commit_sha": null
+      }
+    }
+  ]
+}
+```
+
+Ejemplo de `godot-lab/control-profile.json`:
+
+```json
+{
+  "schema_version": 1,
+  "verification": {
+    "status": "pending",
+    "commit_sha": null
+  },
+  "controls": {
+    "move_right": {
+      "type": "key",
+      "key": "D"
+    },
+    "jump": {
+      "type": "key",
+      "key": "Space"
+    },
+    "start_button": {
+      "type": "text",
+      "text": "Jugar"
+    },
+    "primary_action": {
+      "type": "point",
+      "x": 0.82,
+      "y": 0.88
+    }
+  }
+}
+```
+
+Ejemplo de `godot-lab/commands/smoke-test.json`:
+
+```json
+{
+  "schema_version": 1,
+  "name": "smoke-test",
+  "verification": {
+    "status": "pending",
+    "commit_sha": null
+  },
+  "steps": [
+    { "op": "inspect" },
+    { "op": "assert_canvas" },
+    { "op": "screenshot" },
+    { "op": "wait", "ms": 1000 },
+    { "op": "tap_control", "control": "start_button" },
+    { "op": "wait", "ms": 1000 },
+    { "op": "inspect" },
+    { "op": "screenshot" }
+  ]
+}
+```
+
+Estos ejemplos son plantillas: los nombres, textos, teclas, coordenadas y pasos deben descubrirse en el juego real. Un manifiesto nuevo empieza como `pending`; no debe marcarse como verificado por el mero hecho de que el JSON pase la validación.
+
+### Cómo se verifica un perfil
+
+Estados permitidos:
+
+- `pending`: descubierto o editado, pero todavía no reproducido y confirmado en el editor.
+- `verified`: reproducido correctamente y asociado a un SHA completo exacto.
+- `obsolete`: su SHA ya no coincide con la revisión que se está importando o el comportamiento cambió.
+
+La verificación se realiza en el navegador real: inspeccionar la pantalla, probar cada control, observar el efecto, repetir para comprobar consistencia y registrar evidencia. Si se modifica un control o un comando, se devuelve a `pending`. Una nueva revisión no hereda automáticamente la verificación de la anterior.
+
+Tipos de control permitidos:
+
+- `key`: una tecla incluida en la lista segura del Relay.
+- `text`: texto visible que se localiza de forma exacta.
+- `point`: coordenadas normalizadas entre 0 y 1 relativas al viewport. Son un fallback frágil y deben acompañarse de una comprobación visual.
+
+Operaciones permitidas en comandos declarativos:
+
+- `inspect`, `screenshot`, `assert_canvas`, `wait`.
+- `tap_control` y `hold_control` sobre controles declarados.
+- `click_text`, `press_key` y `assert_text`.
+
+Límites actuales del validador: hasta 20 comandos por manifiesto, 40 pasos por comando, 100 controles por perfil, 5 segundos por espera individual, 20 segundos acumulados de esperas/retenciones, 2 segundos por retención de tecla y 120 segundos de ejecución por comando. El Relay rechaza rutas absolutas, traversal, tipos de control desconocidos, teclas fuera de la lista permitida y operaciones no declaradas. No ejecuta shell, Python, JavaScript ni scripts arbitrarios que vengan del juego.
+
+Si el repositorio no contiene `godot-lab/lab-manifest.json`, la respuesta correcta es `profile_status: not_found`: el laboratorio todavía puede inspeccionar y capturar la interfaz, pero no inventa comandos ni importa instrucciones de otro repositorio.
+
+### Persistencia privada de evidencias
+
+El Relay utiliza el bucket privado Neon Object Storage `godot-visual-captures`. Las credenciales existen únicamente como variables de entorno del servicio Render; no deben copiarse a GitHub, README, repositorios de juegos, navegador, archivos de evidencia ni logs.
+
+Variables requeridas en Render:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_ENDPOINT_URL_S3`
+- `AWS_REGION`
+
+La credencial debe tener solo los permisos de almacenamiento que necesite el Relay. El endpoint y la región deben corresponder al branch de Neon que contiene el bucket.
+
+El endpoint `POST /v1/persistent-sessions/{id}/tasks/complete` crea un ZIP con `task-result.json`, eventos y capturas. El Relay lo sube al bucket privado, registra SHA-256 en los metadatos y devuelve un `artifact_id`, `object_key`, tamaño y URL de recuperación. El workflow descarga ese paquete por el Relay y valida el ZIP antes de declarar la tarea completa. La sesión de Chromium permanece abierta.
+
+La prueba integral solo se considera aprobada cuando se demuestran todos estos puntos: importación del SHA exacto, inspección y captura reales, respuesta de finalización, objeto visible en Neon, recuperación del ZIP y coincidencia de SHA-256. Que Render esté `live`, que exista una captura en memoria o que Actions haya subido un índice JSON no demuestra por sí solo que Neon haya guardado el paquete.
+
+### Diagnóstico rápido de fallos
+
+| Síntoma | Interpretación / siguiente comprobación |
+|---|---|
+| Relay no expone `/v1/persistent-sessions` | Revisar despliegue, OpenAPI y logs del Relay |
+| Editor no informa la versión esperada | Revisar despliegue del editor web |
+| Conector permanece en `downloading` | La descarga/importación no terminó; revisar red, tamaño del ZIP, ruta del proyecto y logs del navegador |
+| `started` con SHA distinto | No aceptar el proyecto; comprobar ref fijada y sincronización |
+| `profile_status: not_found` | Falta el manifiesto en el SHA del repositorio; no es un error del editor |
+| `VISUAL_STORAGE_NOT_CONFIGURED` | Falta una de las cuatro variables S3 en Render |
+| Error al subir a Neon | Revisar endpoint, región, permisos de la credencial, bucket y logs del Relay |
+| Tarea completada pero ZIP no se recupera | Revisar clave del objeto, permisos de lectura y verificación de integridad |
+
+El último intento histórico `43503528165` abrió el editor, pero el conector seguía en `downloading` tras la espera fija de 45 segundos. No llegó a la finalización de la tarea y no creó un objeto en Neon. El workflow se ha actualizado para esperar el estado real de importación y registrar el último estado observado; hasta que se repita y se verifique la ida y vuelta de Neon, la persistencia integral permanece **pendiente**.
+
 ## Pruebas interactivas y escenarios temporales
 
 El controlador ya supera una prueba de gameplay real en Godot Web. La sesión de regresión de Dragon Realm usa un perfil versionado y combina teclado, ratón y gestos táctiles continuos. El controlador genérico no depende de ese juego: los controles específicos viven en perfiles de prueba separados.
