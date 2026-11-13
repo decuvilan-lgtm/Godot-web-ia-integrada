@@ -52,6 +52,7 @@ class PersistentSession:
 _sessions: dict[str, PersistentSession] = {}
 _browser: Any = None
 _browser_lock = asyncio.Lock()
+_reaper_task: asyncio.Task | None = None
 
 class OpenSessionRequest(BaseModel):
     repository: str = Field(min_length=3, max_length=140)
@@ -144,11 +145,14 @@ async def _expire_loop() -> None:
 
 @router.on_event("startup")
 async def start_session_reaper():
-    router.state.reaper = asyncio.create_task(_expire_loop())
+    global _reaper_task
+    _reaper_task = asyncio.create_task(_expire_loop())
 
 @router.on_event("shutdown")
 async def stop_session_reaper():
-    task = getattr(router.state, "reaper", None)
+    global _reaper_task
+    task = _reaper_task
+    _reaper_task = None
     if task:
         task.cancel()
     for session in list(_sessions.values()):
