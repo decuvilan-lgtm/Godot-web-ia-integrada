@@ -1,5 +1,5 @@
 name: Godot Web browser worker
-run-name: Godot browser worker \${{ github.run_id }}
+run-name: Godot browser worker ${{ github.run_id }}
 
 on:
   push:
@@ -51,7 +51,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: godot-browser-worker-\${{ github.run_id }}
+  group: godot-browser-worker-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-1.52.0-\${{ runner.os }}
+          key: playwright-chromium-1.52.0-${{ runner.os }}
       - name: Install browser worker
         run: |
           python -m pip install --upgrade pip
@@ -77,12 +77,12 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Open Godot Web in runner-owned Chromium and persist evidence
         env:
-          REPOSITORY: \${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
-          BRANCH: \${{ inputs.branch || 'main' }}
-          COMMIT_SHA: \${{ inputs.commit_sha || '' }}
-          PROJECT_PATH: \${{ inputs.project_path || 'ajedrez_2c2_v161' }}
-          WAIT_SECONDS: \${{ inputs.wait_seconds || '10' }}
-          IMPORT_TIMEOUT_SECONDS: \${{ inputs.import_timeout_seconds || '480' }}
+          REPOSITORY: ${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
+          BRANCH: ${{ inputs.branch || 'main' }}
+          COMMIT_SHA: ${{ inputs.commit_sha || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
+          WAIT_SECONDS: ${{ inputs.wait_seconds || '10' }}
+          IMPORT_TIMEOUT_SECONDS: ${{ inputs.import_timeout_seconds || '480' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
         run: python scripts/godot-browser-worker.py
@@ -90,7 +90,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: godot-browser-worker-\${{ github.run_id }}
+          name: godot-browser-worker-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
