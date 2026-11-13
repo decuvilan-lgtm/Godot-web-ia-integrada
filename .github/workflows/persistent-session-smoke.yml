@@ -27,6 +27,11 @@ on:
         required: false
         default: ''
         type: string
+      reimport_existing:
+        description: Re-import a different revision of the same repository into the existing browser context
+        required: false
+        default: false
+        type: boolean
       project_path:
         description: Folder containing project.godot
         required: false
@@ -56,6 +61,7 @@ jobs:
           REPOSITORY: ${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
           BRANCH: ${{ inputs.branch || 'main' }}
           COMMIT_SHA: ${{ inputs.commit_sha || '' }}
+          REIMPORT_EXISTING: ${{ inputs.reimport_existing || false }}
           PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
           WAIT_SECONDS: ${{ inputs.wait_seconds || '45' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
@@ -102,7 +108,7 @@ jobs:
           token_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=godot-web-ia-relay"
           oidc_token="$(curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$token_url" | jq -er '.value')"
           echo "::add-mask::$oidc_token"
-          payload="$(jq -n --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg path "$PROJECT_PATH" --arg sha "$COMMIT_SHA" '{repository:$repository,branch:$branch,project_path:$path,commit_sha:$sha}')"
+          payload="$(jq -n --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg path "$PROJECT_PATH" --arg sha "$COMMIT_SHA" --argjson reimport "$REIMPORT_EXISTING" '{repository:$repository,branch:$branch,project_path:$path,commit_sha:$sha,reimport_existing:$reimport}')"
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$payload" -o artifacts/session-open.json
           session_id="$(jq -er '.session_id' artifacts/session-open.json)"
           sleep "$wait_seconds"
