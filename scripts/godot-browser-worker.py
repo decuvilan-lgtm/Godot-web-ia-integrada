@@ -34,7 +34,9 @@ def main():
     url=EDITOR_URL.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
     errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None
     shot=OUT/"editor-final.png"; started=time.time()
-    with sync_playwright() as p:
+    # Keep the browser process alive through evidence upload; the runner owns its lifetime.
+    p = sync_playwright().start()
+    if True:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage","--disable-gpu","--disable-extensions","--disable-background-networking","--disable-default-apps","--disable-sync","--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter"])
         context=browser.new_context(viewport={"width":1365,"height":768},device_scale_factor=1,accept_downloads=True)
         page=context.new_page()
@@ -60,7 +62,8 @@ def main():
             try: page.screenshot(path=str(shot),full_page=False,timeout=15000)
             except Exception: pass
         finally:
-            context.close(); browser.close()
+            # Do not close Chromium here: keep the editor alive through the evidence round-trip.
+            pass
     manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":["editor-final.png"] if shot.exists() else []}
     (OUT/"task-result.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     bundle=OUT/"godot-browser-worker-task.zip"
