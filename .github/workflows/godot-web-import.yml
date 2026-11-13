@@ -9,6 +9,8 @@ on:
       - "scripts/godot-input-map.cjs"
       - "scripts/test-godot-input-map.cjs"
       - "scripts/analyze_gameplay_captures.py"
+      - "scripts/patch-web-shell.py"
+      - "scripts/test_patch_web_shell.py"
       - "scripts/test_analyze_gameplay_captures.py"
       - "tests/control-profiles/escondite-smoke.json"
   workflow_dispatch:
@@ -88,6 +90,8 @@ jobs:
             scripts/godot-input-map.cjs
             scripts/test-godot-input-map.cjs
             scripts/analyze_gameplay_captures.py
+            scripts/patch-web-shell.py
+            scripts/test_patch_web_shell.py
             tests/control-profiles/escondite-smoke.json
           sparse-checkout-cone-mode: false
 
@@ -95,6 +99,7 @@ jobs:
         run: |
           node scripts/test-gameplay-test-controller.cjs
           node scripts/test-godot-input-map.cjs
+          python scripts/test_patch_web_shell.py
 
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
@@ -538,8 +543,13 @@ jobs:
               await page.waitForSelector('#zip-file', { state: 'attached', timeout });
               await page.waitForFunction(() => {
                 const input = document.querySelector('#zip-file');
-                return input?.files?.length === 1;
+                const connector = window.__godotGithubConnectorStatus;
+                return input?.files?.length === 1 || connector?.phase === 'failed';
               }, null, { timeout });
+              result.connectorStatus = await page.evaluate(() => window.__godotGithubConnectorStatus || null);
+              if (result.connectorStatus?.phase === 'failed') {
+                throw new Error('El conector falló antes de asignar el ZIP: ' + (result.connectorStatus.error || 'causa no informada'));
+              }
               result.preloadConfirmed = true;
               result.browserIsolation = await page.evaluate(() => ({
                 crossOriginIsolated: window.crossOriginIsolated,
