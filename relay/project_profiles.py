@@ -66,14 +66,15 @@ def validate_manifest(data: Any) -> dict[str, Any]:
     project_path = project.get("project_path")
     if not isinstance(project_name, str) or len(project_name) > 120:
         raise ValueError("Manifest project name is invalid")
-    if project_path is not None and project_path != "" and (
-        not isinstance(project_path, str)
-        or project_path.startswith("/")
-        or project_path.endswith("/")
-        or "\\" in project_path
-        or any(part in {"", ".", ".."} for part in project_path.split("/"))
+    if not isinstance(project_path, str) or (
+        project_path != "" and (
+            project_path.startswith("/")
+            or project_path.endswith("/")
+            or "\\" in project_path
+            or any(part in {"", ".", ".."} for part in project_path.split("/"))
+        )
     ):
-        raise ValueError("Manifest project_path is invalid")
+        raise ValueError("Manifest project_path is required and must be a safe relative path (or empty for repository root)")
     return {
         "schema_version": 1,
         "project": {"name": project_name, "project_path": project_path},
