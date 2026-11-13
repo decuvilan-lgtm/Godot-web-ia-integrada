@@ -2,6 +2,14 @@ name: Godot Web persistent session smoke test
 run-name: Persistent Godot session ${{ github.run_id }}
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - relay/persistent_sessions.py
+      - relay/github_archives.py
+      - scripts/patch-web-shell.py
+      - render-relay.yaml
+      - .github/workflows/persistent-session-smoke.yml
   workflow_dispatch:
     inputs:
       repository:
@@ -45,15 +53,25 @@ jobs:
     steps:
       - name: Open persistent editor, inspect, capture and persist evidence
         env:
-          REPOSITORY: ${{ inputs.repository }}
-          BRANCH: ${{ inputs.branch }}
-          COMMIT_SHA: ${{ inputs.commit_sha }}
-          PROJECT_PATH: ${{ inputs.project_path }}
-          WAIT_SECONDS: ${{ inputs.wait_seconds }}
+          REPOSITORY: ${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
+          BRANCH: ${{ inputs.branch || 'main' }}
+          COMMIT_SHA: ${{ inputs.commit_sha || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
+          WAIT_SECONDS: ${{ inputs.wait_seconds || '45' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "$RELAY_URL/openapi.json" -o /tmp/relay-openapi.json && jq -e '.paths["/v1/persistent-sessions"]' /tmp/relay-openapi.json >/dev/null; then
+              break
+            fi
+            if (( attempt == 30 )); then
+              echo "Relay did not publish the persistent-session API after deployment." >&2
+              exit 1
+            fi
+            sleep 10
+          done
           wait_seconds="${WAIT_SECONDS:-45}"
           if ! [[ "$wait_seconds" =~ ^[0-9]+$ ]] || (( wait_seconds < 5 || wait_seconds > 120 )); then
             echo "wait_seconds must be between 5 and 120" >&2
