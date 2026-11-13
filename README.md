@@ -353,6 +353,7 @@ El proyecto de referencia Escondite no se modificó.
 ## Documentación
 
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
+- [Plantilla detallada de README para cada repositorio de juego](docs/GAME_REPOSITORY_README_TEMPLATE.md)
 - [Flujo Headless + GitHub](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md)
 - [Importación GitHub → Godot Web](docs/GITHUB_TO_GODOT_WEB.md)
 - [Capacidades de inspección verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
