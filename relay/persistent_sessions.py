@@ -31,6 +31,10 @@ EDITOR_URL = os.environ.get(
     "https://godot-web-ia-integrada-rt2l.onrender.com/",
 ).rstrip("/") + "/"
 SESSION_TOKEN = os.environ.get("PERSISTENT_SESSION_TOKEN", "")
+OIDC_AUDIENCE = os.environ.get("PERSISTENT_SESSION_OIDC_AUDIENCE", "godot-web-ia-relay")
+OIDC_REPOSITORY = os.environ.get("PERSISTENT_SESSION_OIDC_REPOSITORY", "decuvilan-lgtm/Godot-web-ia-integrada")
+OIDC_WORKFLOW = os.environ.get("PERSISTENT_SESSION_OIDC_WORKFLOW", ".github/workflows/remote-godot-task.yml")
+OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
 IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
@@ -75,12 +79,52 @@ class CompleteTaskRequest(BaseModel):
     summary: str = Field(default="", max_length=4000)
     result: dict[str, Any] = Field(default_factory=dict)
 
-def _authorize(value: str | None) -> None:
-    if not SESSION_TOKEN or not value:
-        raise HTTPException(status_code=503, detail="Persistent session API is not configured")
+def _validate_github_oidc_claims(claims: dict[str, Any]) -> None:
+    expected_workflow_ref = f"{OIDC_REPOSITORY}/{OIDC_WORKFLOW}@{OIDC_REF}"
+    if (
+        claims.get("repository") != OIDC_REPOSITORY
+        or claims.get("ref") != OIDC_REF
+        or claims.get("workflow_ref") != expected_workflow_ref
+    ):
+        raise ValueError("GitHub Actions identity is not allowed for persistent sessions")
+
+
+def _verify_github_oidc_token(token: str) -> None:
+    try:
+        import jwt
+    except ImportError as exc:
+        raise RuntimeError("PyJWT is not installed") from exc
+    client = jwt.PyJWKClient(
+        "https://token.actions.githubusercontent.com/.well-known/jwks",
+        cache_keys=True,
+    )
+    signing_key = client.get_signing_key_from_jwt(token)
+    claims = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=OIDC_AUDIENCE,
+        issuer="https://token.actions.githubusercontent.com",
+        options={"require": ["exp", "iat", "nbf", "sub"]},
+    )
+    _validate_github_oidc_claims(claims)
+
+
+async def _authorize(value: str | None) -> None:
+    if not value:
+        raise HTTPException(status_code=401, detail="Authorization is required")
     supplied = value.removeprefix("Bearer ").strip()
-    if not hmac.compare_digest(supplied, SESSION_TOKEN):
-        raise HTTPException(status_code=401, detail="Invalid persistent-session token")
+    if len(supplied) > 16000:
+        raise HTTPException(status_code=401, detail="Invalid authorization token")
+    if SESSION_TOKEN and hmac.compare_digest(supplied, SESSION_TOKEN):
+        return
+    try:
+        await run_in_threadpool(_verify_github_oidc_token, supplied)
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="Persistent-session authentication is not configured") from exc
+    except Exception as exc:
+        logger.info("Rejected persistent-session identity: %s", type(exc).__name__)
+        raise HTTPException(status_code=401, detail="Invalid persistent-session identity") from exc
 
 def _touch(session: PersistentSession) -> None:
     session.last_activity = time.time()
@@ -172,7 +216,7 @@ async def stop_session_reaper():
 
 @router.post("")
 async def open_persistent_session(body: OpenSessionRequest, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     if not REPO_RE.fullmatch(body.repository):
         raise HTTPException(status_code=400, detail="repository must be OWNER/REPOSITORY")
     if not BRANCH_RE.fullmatch(body.branch) or body.branch.startswith("/") or body.branch.endswith("/") or ".." in body.branch:
@@ -237,7 +281,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
 
 @router.get("/{session_id}")
 async def persistent_session_status(session_id: str, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     session = _get_session(session_id)
     _touch(session)
     return {
@@ -255,14 +299,14 @@ async def persistent_session_status(session_id: str, authorization: str | None =
 
 @router.post("/{session_id}/heartbeat")
 async def persistent_session_heartbeat(session_id: str, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     session = _get_session(session_id)
     _touch(session)
     return {"ok": True, "session_id": session_id, "idle_ttl_seconds": IDLE_TTL}
 
 @router.post("/{session_id}/commands")
 async def persistent_session_command(session_id: str, body: CommandRequest, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     session = _get_session(session_id)
     if session.page is None or session.page.is_closed():
         raise HTTPException(status_code=409, detail="Editor page is disconnected")
@@ -289,6 +333,8 @@ async def persistent_session_command(session_id: str, body: CommandRequest, auth
                     "url": session.page.url,
                     "title": await session.page.title(),
                     "visible_text": (await session.page.locator("body").inner_text(timeout=body.timeout_ms))[:12000],
+                    "canvas_count": await session.page.locator("canvas").count(),
+                    "connector_status": await session.page.evaluate("() => window.__godotGithubConnectorStatus || null"),
                 }
             else:
                 raise HTTPException(status_code=400, detail="Unsupported command")
@@ -303,7 +349,7 @@ async def persistent_session_command(session_id: str, body: CommandRequest, auth
 
 @router.post("/{session_id}/tasks/complete")
 async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     session = _get_session(session_id)
     async with session.lock:
         if body.task_id in session.completed_tasks:
@@ -387,7 +433,7 @@ def _persistent_artifact_key(session_id: str, artifact_id: str) -> str:
 
 
 async def download_persistent_artifact(session_id: str, artifact_id: str, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     key = _persistent_artifact_key(session_id, artifact_id)
     session = _sessions.get(session_id)
     payload = session.artifacts.get(f"bundle-{artifact_id}.zip") if session else None
@@ -417,7 +463,7 @@ async def download_persistent_artifact(session_id: str, artifact_id: str, author
 
 @router.delete("/{session_id}")
 async def close_persistent_session(session_id: str, authorization: str | None = Header(default=None)):
-    _authorize(authorization)
+    await _authorize(authorization)
     session = _get_session(session_id)
     await _close_session(session)
     return {"ok": True, "closed": True, "session_id": session_id}
