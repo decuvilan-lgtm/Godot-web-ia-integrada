@@ -18,6 +18,10 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(self.command("canvas_click",x=1.01,y=0.5),SESSION,0)
 
+    def test_canvas_click_rejects_extremely_large_coordinates(self):
+        with self.assertRaises(ValueError):
+            _validate(self.command("canvas_click",x=10**1000,y=0.5),SESSION,0)
+
     def test_canvas_drag_rejects_unbounded_path(self):
         points=[[0.5,0.5] for _ in range(65)]
         with self.assertRaises(ValueError):
