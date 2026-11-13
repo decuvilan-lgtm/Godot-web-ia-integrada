@@ -296,15 +296,33 @@ jobs:
                   body = response.read()
                   result["httpStatus"] = response.status
                   result["archiveBytes"] = len(body)
+              with open("artifacts/selected-project-source.zip", "wb") as archive_file:
+                  archive_file.write(body)
               import io
               with zipfile.ZipFile(io.BytesIO(body)) as archive:
-                  names = set(archive.namelist())
+                  entries = archive.infolist()
+                  names = {item.filename for item in entries}
                   result["entryCount"] = len(names)
+                  result["directoryEntries"] = sorted(
+                      item.filename for item in entries if item.is_dir()
+                  )
+                  result["requiredParentDirectoriesPresent"] = {
+                      "assets/": "assets/" in names,
+                      "assets/fonts/": "assets/fonts/" in names,
+                  }
                   result["projectFilePresent"] = "project.godot" in names
                   result["themeFilePresent"] = "assets/ui_theme.tres" in names
                   result["fontFilePresent"] = "assets/fonts/Inter-Medium.otf" in names
                   result["crcError"] = archive.testzip()
                   if result["fontFilePresent"]:
+                      font_info = archive.getinfo("assets/fonts/Inter-Medium.otf")
+                      result["fontEntry"] = {
+                          "fileSize": font_info.file_size,
+                          "compressType": font_info.compress_type,
+                          "flagBits": font_info.flag_bits,
+                          "externalAttributes": font_info.external_attr,
+                          "headerOffset": font_info.header_offset,
+                      }
                       font = archive.read("assets/fonts/Inter-Medium.otf")
                       result["fontBytes"] = len(font)
                       result["fontSha256"] = hashlib.sha256(font).hexdigest()
@@ -315,7 +333,7 @@ jobs:
                           len(font) == 627988
                           and result["fontGitBlobSha1"] == "8108180e92360cad0c7792945fe072c69f2087b5"
                       )
-                  result["status"] = "passed" if (
+              result["status"] = "passed" if (
                       result["projectFilePresent"]
                       and result["themeFilePresent"]
                       and result["fontFilePresent"]
