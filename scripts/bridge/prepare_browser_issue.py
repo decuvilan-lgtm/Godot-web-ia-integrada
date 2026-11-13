@@ -6,7 +6,10 @@ from pathlib import Path
 
 TITLE_PREFIX = "[CHATGPT-BROWSER]"
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
-REPO_ALLOWLIST = {"gavilandavid89-pixel/Ajedrez-2c2"}
+REPO_PROJECT_ALLOWLIST = {
+    "gavilandavid89-pixel/Ajedrez-2c2": {"ajedrez_2c2_v161"},
+    "decuvilan-lgtm/Godot-web-ia-integrada": {"examples/bridge-sandbox"},
+}
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
 SHA_RE = re.compile(r"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
 PATH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,180}$")
@@ -29,7 +32,7 @@ def prepare(event_path: Path, output_path: Path, result_path: Path) -> dict:
     if not isinstance(task_id,str) or not TASK_ID_RE.fullmatch(task_id):
         raise ValueError("task_id must contain 8-64 safe characters.")
     repo=task.get("repository")
-    if repo not in REPO_ALLOWLIST:
+    if repo not in REPO_PROJECT_ALLOWLIST:
         raise ValueError("Repository is not in the browser-worker allowlist.")
     branch=task.get("branch","main")
     if not isinstance(branch,str) or not BRANCH_RE.fullmatch(branch) or ".." in branch or branch.startswith("/") or branch.endswith("/"):
@@ -40,6 +43,8 @@ def prepare(event_path: Path, output_path: Path, result_path: Path) -> dict:
     project=task.get("project_path","")
     if not isinstance(project,str) or not PATH_RE.fullmatch(project) or project.startswith("/") or ".." in project.split("/"):
         raise ValueError("Invalid project_path.")
+    if branch != "main" or project not in REPO_PROJECT_ALLOWLIST[repo]:
+        raise ValueError("Repository/project path is outside the browser-worker allowlist.")
     wait=task.get("wait_seconds",10)
     timeout=task.get("import_timeout_seconds",480)
     if type(wait) is not int or not 0<=wait<=120:
