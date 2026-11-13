@@ -42,6 +42,3 @@ async def upload_worker_artifact(session_id:str,request:Request,authorization:st
         raise HTTPException(status_code=503,detail="Worker evidence could not be persisted in Neon Object Storage") from exc
     return {"state":"completed","session_id":session_id,"artifact_id":artifact_id,"artifact_url":f"/v1/persistent-sessions/{session_id}/artifacts/{artifact_id}","artifact_bytes":len(payload),"artifact_sha256":digest,"storage":"neon-object-storage","repository":repository,"commit_sha":sha,"browser_backend":"github-actions-hosted-runner","browser_process_persisted":False}
 
-@router.get("/worker-health")
-async def worker_api_health():
-    return {"ok":True,"browser_backend":"external-github-actions-worker"}
