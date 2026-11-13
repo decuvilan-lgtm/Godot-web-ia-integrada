@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import hashlib
 import io
 import json
 import logging
@@ -397,8 +398,8 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
                 Body=payload,
                 ContentType="application/zip",
                 Metadata={
-                    "sha256": __import__("hashlib").sha256(payload).hexdigest(),
-                    "task-id-sha256": __import__("hashlib").sha256(body.task_id.encode("utf-8")).hexdigest(),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "task-id-sha256": hashlib.sha256(body.task_id.encode("utf-8")).hexdigest(),
                 },
             )
         except HTTPException:
@@ -423,7 +424,6 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
         _touch(session)
         return result
 
-@router.get("/{session_id}/artifacts/{artifact_id}")
 def _persistent_artifact_key(session_id: str, artifact_id: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", session_id):
         raise HTTPException(status_code=400, detail="Invalid session ID")
@@ -432,6 +432,7 @@ def _persistent_artifact_key(session_id: str, artifact_id: str) -> str:
     return f"persistent-sessions/{session_id}/{artifact_id}.zip"
 
 
+@router.get("/{session_id}/artifacts/{artifact_id}")
 async def download_persistent_artifact(session_id: str, artifact_id: str, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
     key = _persistent_artifact_key(session_id, artifact_id)
