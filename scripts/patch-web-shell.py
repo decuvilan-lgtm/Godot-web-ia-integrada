@@ -51,12 +51,13 @@ def patch_html(html: str) -> str:
         )
 
     connector = r"""
-<script id="godot-github-connector" data-version="branch-path-v2">
+<script id="godot-github-connector" data-version="commit-pinned-v3">
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
   const repoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
   const branchPattern = /^[A-Za-z0-9._/-]{1,128}$/;
+  const commitShaPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 
   function validBranch(value) {
     return !value || (
@@ -65,6 +66,10 @@ def patch_html(html: str) -> str:
       !value.includes("@{") && !["~", "^", ":", "?", "*", "[", "]", "\\", " "].some(char => value.includes(char)) &&
       value.split("/").every(part => part && part !== "." && part !== "..")
     );
+  }
+
+  function validCommitSha(value) {
+    return !value || commitShaPattern.test(value);
   }
 
   function validProjectPath(value) {
@@ -87,17 +92,24 @@ def patch_html(html: str) -> str:
       window.alert("Nombre de rama no válido.");
       return;
     }
+    const commitSha = (window.prompt("Commit SHA exacto (vacío = último commit de la rama):", "") || "").trim().toLowerCase();
+    if (!validCommitSha(commitSha)) {
+      window.alert("El SHA debe tener 40 o 64 caracteres hexadecimales.");
+      return;
+    }
     const projectPath = (window.prompt("Carpeta que contiene project.godot (vacío = raíz):", "") || "").trim();
     if (!validProjectPath(projectPath)) {
       window.alert("Ruta de proyecto no válida. Usa carpetas separadas por /.");
       return;
     }
-    const description = repo + (branch ? " · " + branch : " · rama predeterminada") + (projectPath ? " · " + projectPath : " · raíz");
+    const description = repo + (branch ? " · " + branch : " · rama predeterminada") + (commitSha ? " · SHA " + commitSha : " · último commit") + (projectPath ? " · " + projectPath : " · raíz");
     if (!window.confirm("Se recargará Godot Web para precargar " + description + ". Guarda antes cualquier cambio local no publicado. ¿Continuar?")) return;
     const target = new URL(window.location.href);
     target.searchParams.set("repo", repo);
     if (branch) target.searchParams.set("branch", branch);
     else target.searchParams.delete("branch");
+    if (commitSha) target.searchParams.set("sha", commitSha);
+    else target.searchParams.delete("sha");
     if (projectPath) target.searchParams.set("path", projectPath);
     else target.searchParams.delete("path");
     window.location.assign(target.toString());
@@ -137,7 +149,8 @@ def patch_html(html: str) -> str:
     if (repo) {
       const branch = (params.get("branch") || "").trim();
       const projectPath = (params.get("path") || "").trim();
-      if (!repoPattern.test(repo) || !validBranch(branch) || !validProjectPath(projectPath)) {
+      const commitSha = (params.get("sha") || "").trim().toLowerCase();
+      if (!repoPattern.test(repo) || !validBranch(branch) || !validCommitSha(commitSha) || !validProjectPath(projectPath)) {
         window.__godotGithubConnectorStatus = { phase: "invalid-parameters", repo };
         throw new Error("Revisa owner/repository, rama y carpeta del proyecto.");
       }
@@ -149,6 +162,7 @@ def patch_html(html: str) -> str:
           relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive"
         );
         if (branch) archiveUrl.searchParams.set("branch", branch);
+        if (commitSha) archiveUrl.searchParams.set("sha", commitSha);
         if (projectPath) archiveUrl.searchParams.set("path", projectPath);
 
         const response = await fetch(archiveUrl.toString(), {
@@ -175,9 +189,11 @@ def patch_html(html: str) -> str:
           throw new Error("Este navegador no permite precargar el ZIP automáticamente.");
         }
 
-        const selectedBranch = response.headers.get("X-GitHub-Ref") || branch || "default";
-        const branchFile = selectedBranch.replace(/[^A-Za-z0-9._-]+/g, "-");
-        const filename = owner + "-" + repository + "-" + branchFile + ".zip";
+        const selectedRef = response.headers.get("X-GitHub-Ref") || commitSha || branch || "default";
+        const selectedCommitSha = response.headers.get("X-GitHub-Commit-SHA") || (commitSha || null);
+        if (commitSha && selectedCommitSha !== commitSha) throw new Error("El Relay no confirmó el SHA solicitado.");
+        const refFile = selectedRef.replace(/[^A-Za-z0-9._-]+/g, "-");
+        const filename = owner + "-" + repository + "-" + refFile + ".zip";
         const transfer = new DataTransfer();
         transfer.items.add(new File([blob], filename, { type: "application/zip" }));
         input.files = transfer.files;
@@ -191,13 +207,16 @@ def patch_html(html: str) -> str:
           repo,
           filename,
           bytes: blob.size,
-          branch: selectedBranch
+          branch,
+          commitSha: selectedCommitSha,
+          selectedRef
         };
 
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete("repo");
         cleanUrl.searchParams.delete("branch");
         cleanUrl.searchParams.delete("path");
+        cleanUrl.searchParams.delete("sha");
         window.history.replaceState(null, "", cleanUrl.toString());
       } catch (error) {
         window.__godotGithubConnectorStatus = {
