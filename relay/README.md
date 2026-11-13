@@ -57,29 +57,47 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 
 ## Sesiones persistentes de Godot Web
 
-La API `/v1/persistent-sessions` mantiene una pestaña real de Chromium abierta contra el editor Godot Web desplegado. Cada sesión tiene un contexto de navegador aislado y asociado a un repositorio, rama y subcarpeta. Las sesiones no se cierran al terminar una tarea.
+El Relay puede abrir una pestaña real de Chromium contra el editor Godot Web publicado y mantenerla reutilizable entre tareas mientras el proceso de Render siga activo. Cada sesión queda asociada a un repositorio, una rama, una ruta de proyecto y un SHA completo e inmutable.
 
-- `POST /v1/persistent-sessions`: abre el editor publicado una sola vez para el proyecto elegido.
+### Autenticación
+
+Todas las rutas de `/v1/persistent-sessions` requieren un bearer token. Se aceptan:
+
+- El secreto `PERSISTENT_SESSION_TOKEN` configurado en Render, para operaciones administrativas autorizadas.
+- Un token OIDC emitido por GitHub Actions, validado contra la firma, emisor, audiencia, repositorio, workflow y rama permitidos.
+
+Los valores predeterminados de OIDC corresponden a este repositorio, al workflow `.github/workflows/persistent-session-smoke.yml` y a `refs/heads/main`. No se deben copiar tokens OIDC ni secretos de Render a los proyectos de juego.
+
+### API
+
+- `GET /v1/persistent-sessions`: lista las sesiones activas del proceso.
+- `POST /v1/persistent-sessions`: abre o reutiliza una sesión; resuelve la rama a un SHA si no se proporciona uno.
 - `GET /v1/persistent-sessions/{id}`: consulta el estado y las tareas completadas.
-- `POST /v1/persistent-sessions/{id}/heartbeat`: renueva los 15 minutos mínimos de inactividad.
-- `POST /v1/persistent-sessions/{id}/commands`: `inspect`, `screenshot`, `click_text` y teclas permitidas.
-- `POST /v1/persistent-sessions/{id}/tasks/complete`: empaqueta manifiesto, resultado, eventos y capturas sin cerrar la pestaña.
-- `GET /v1/persistent-sessions/{id}/artifacts/{artifact_id}`: descarga el ZIP de resultados.
-- `DELETE /v1/persistent-sessions/{id}`: cierre explícito.
+- `POST /v1/persistent-sessions/{id}/heartbeat`: renueva el plazo de inactividad mientras una tarea autorizada está en curso.
+- `GET /v1/persistent-sessions/{id}/profile`: obtiene el perfil de laboratorio del repositorio en el SHA importado.
+- `POST /v1/persistent-sessions/{id}/profiles/{command}/run`: ejecuta una secuencia JSON validada y limitada, propiedad del repositorio del juego.
+- `POST /v1/persistent-sessions/{id}/commands`: permite `inspect`, `screenshot`, `click_text` y teclas de una lista permitida.
+- `POST /v1/persistent-sessions/{id}/tasks/complete`: crea el paquete de evidencias sin cerrar la pestaña.
+- `GET /v1/persistent-sessions/{id}/artifacts/{artifact_id}`: recupera el paquete persistido.
+- `DELETE /v1/persistent-sessions/{id}`: cierra explícitamente la sesión.
 
-Todas las rutas requieren `Authorization: Bearer $PERSISTENT_SESSION_TOKEN`. El token se configura como secreto en Render; nunca se incluye en el proyecto importado ni en el navegador.
+### Evidencias y persistencia
 
-### Contrato de sesión y entrega
+Los paquetes ZIP de tareas se guardan en el bucket privado Neon Object Storage `godot-visual-captures`. Incluyen `task-result.json`, eventos y capturas. El Relay guarda un SHA-256 en los metadatos del objeto y lo comprueba al descargarlo. Los paquetes no se duplican en la memoria de la sesión y pueden recuperarse después de un reinicio del proceso.
 
-Completar una tarea es una operación distinta de cerrar una sesión. La respuesta de `tasks/complete` incluye `artifact_url`, `artifact_id` y `session_kept_open: true`. Las tareas siguientes deben reutilizar el mismo `session_id`, sin volver a importar el proyecto. Solo `DELETE` o la expiración por inactividad cierran el contexto.
+Las capturas intermedias se mantienen temporalmente en memoria hasta completar la tarea. Al guardar correctamente el paquete, esa memoria temporal se libera.
 
-El ZIP incluye `task-result.json`, eventos y capturas producidas durante la sesión. Los artefactos se conservan en memoria mientras vive el proceso; deben descargarse al terminar cada tarea. Un reinicio o suspensión del servicio elimina el estado en memoria.
+### Perfiles propios de cada juego
 
-### Límites operativos actuales
+Cada repositorio puede definir `godot-lab/lab-manifest.json`, su perfil de controles y comandos JSON. El Relay obtiene estos archivos desde el SHA importado, valida el esquema, las rutas y cada operación, y solo ejecuta interacciones de navegador incluidas en la lista permitida. No ejecuta shell, Python, JavaScript ni scripts externos suministrados por el proyecto.
 
-- Mínimo de inactividad configurado: 900 segundos (15 minutos); un heartbeat renueva el plazo.
-- Capacidad inicial: una sesión Chromium simultánea para limitar memoria.
-- Chromium se instala durante el build de Render.
-- La implementación actual usa un único proceso/instancia y memoria local; no promete restaurar una pestaña después de un reinicio o deploy.
-- El plan Free de Render puede suspender el servicio por inactividad. Para garantizar una sesión ininterrumpida en producción, el servicio debe permanecer despierto y recibir heartbeats periódicos; un plan sin suspensión puede requerir coste adicional y no se activa automáticamente.
-- El API solo permite acciones acotadas; no acepta JavaScript arbitrario ni URLs de navegación suministradas por el usuario.
+Si el repositorio no tiene un perfil válido, el laboratorio puede inspeccionar y capturar el editor, pero no inventa controles ni copia perfiles de otros juegos. Los repositorios de juegos siguen siendo la fuente de verdad; el Relay no modifica sus archivos.
+
+### Límites operativos
+
+- La pestaña de Chromium y el estado de sesión son efímeros: Render Free puede suspender o reiniciar el proceso. Una sesión no se restaura automáticamente después de ese evento.
+- Los paquetes de evidencias sí son duraderos porque se guardan en Neon Object Storage.
+- El servicio está limitado inicialmente a una instancia y a una sesión simultánea para contener el consumo de memoria.
+- El navegador corre en modo headless dentro del Relay; esto no es una simulación de Godot. La interfaz abierta es el editor Godot Web publicado.
+- No se deben usar heartbeats, cron ni tráfico sintético para impedir la suspensión del plan Free. Una tarea explícita puede despertar el servicio; después se reconstruye una sesión nueva si la anterior ya no existe.
+- El workflow de GitHub Actions espera a que el Relay y el editor estén disponibles, abre/importa el proyecto, confirma el SHA informado por el conector, recoge evidencias y verifica que el ZIP se pueda recuperar.
