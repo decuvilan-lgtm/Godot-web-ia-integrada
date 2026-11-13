@@ -232,3 +232,66 @@ Los perfiles nunca se reutilizan entre repositorios por similitud de controles. 
 ### 13.5 Resultado de cada ejecución
 
 El manifiesto de evidencia registra el SHA del proyecto, la versión del perfil, los comandos ejecutados, el estado de cada paso y las pruebas que quedaron pendientes. Una acción enviada no se considera exitosa hasta observar y verificar su resultado.
+
+
+## 14. Estado real de implementación y límites verificados (13-11-2026)
+
+Esta sección evita confundir el diseño objetivo con el comportamiento que existe hoy.
+
+### 14.1 Workflow de importación actual
+
+`.github/workflows/godot-web-import.yml` ejecuta Chromium en el runner de GitHub Actions, abre la web Godot Web real de Render, espera el conector de GitHub, interactúa con el Project Manager nativo e instala el proyecto. Al finalizar, el workflow cierra la página, el contexto y el navegador. Después guarda `artifacts/` como artefacto de GitHub Actions con retención de 14 días.
+
+Este flujo sirve como prueba automatizada de una ejecución, pero **no conserva un navegador para la siguiente tarea**. No debe describirse como sesión persistente.
+
+### 14.2 API de sesiones persistentes
+
+`relay/persistent_sessions.py` implementa una API separada que mantiene Chromium dentro del proceso Relay. La API puede abrir el editor, inspeccionar texto, tomar capturas, pulsar texto/teclas y generar un ZIP de evidencia al completar una tarea.
+
+Límites observados en el código:
+
+- El estado de sesiones, tareas y bytes de artefactos vive en diccionarios de memoria del proceso.
+- El ZIP de `tasks/complete` se guarda en memoria; el endpoint de descarga depende de que siga existiendo la sesión en ese mismo proceso.
+- La API persistente no está conectada al workflow de importación actual.
+- Abrir una sesión espera `domcontentloaded`, pero no demuestra por sí solo que el proyecto haya terminado de importarse en Godot.
+- El conjunto de comandos de la API persistente es limitado y no equivale al controlador de pruebas de gameplay del workflow.
+
+Si Render reinicia el Relay, se pierde la sesión literal y también los artefactos que solo estaban en memoria. La reconstrucción de la sesión debe hacerse bajo demanda; los artefactos, en cambio, deben guardarse en almacenamiento duradero antes de declarar la tarea completada.
+
+### 14.3 Estado del despliegue del Relay
+
+En la inspección del 13-11-2026:
+
+- El despliegue que incorporaba el commit `0db1ac9` (PR #25) falló al iniciar porque el reaper intentaba usar `router.state`, atributo que no existe en `APIRouter`.
+- La corrección está en `main`, commit `8c86869`, y utiliza una variable de módulo para el proceso de limpieza.
+- Render todavía mostraba como último despliegue exitoso el commit anterior `3a26b87`; por tanto, la API persistente no se podía considerar desplegada ni probada en producción en esa inspección.
+
+La existencia del código corregido en GitHub no prueba que Render esté ejecutando esa revisión. Se debe confirmar un despliegue exitoso del SHA correcto y luego hacer una comprobación HTTP y de navegador.
+
+### 14.4 Identidad de la revisión
+
+El endpoint de archivo `relay/github_archives.py` acepta rama y subcarpeta, y expone `X-GitHub-Ref`. Todavía no resuelve y devuelve el SHA del commit descargado ni permite que todo el flujo quede fijado a un SHA inmutable. El workflow actual valida la rama y el archivo `project.godot`, pero no verifica de extremo a extremo que la copia importada corresponda a un SHA inmutable concreto.
+
+Hasta implementar esa trazabilidad, los informes deben indicar la rama solicitada y declarar el SHA como no verificado, en lugar de afirmar que la identidad exacta del commit está confirmada.
+
+### 14.5 Almacenamiento duradero disponible y aún no conectado a estas sesiones
+
+Neon Object Storage está habilitado en la rama de producción y existe el bucket privado `godot-visual-captures`. El flujo Command Center de capturas ya dispone de código para transferir imágenes a ese almacenamiento y registrar metadatos en `command_center.visual_assets`.
+
+La API `persistent_sessions.py` todavía no utiliza ese almacenamiento: su ZIP de tarea permanece en memoria. La integración debe reutilizar el almacenamiento privado con claves aisladas por sesión/tarea, validar tamaño y hash, y permitir recuperar la evidencia sin depender del proceso Chromium/Relay. No se debe introducir una migración de base de datos ni modificar tablas de producción sin una revisión y aprobación explícitas.
+
+### 14.6 Pruebas disponibles frente a pruebas pendientes
+
+Las pruebas unitarias de sesiones utilizan una página simulada. Comprueban empaquetado, idempotencia dentro del proceso y expiración interna; no comprueban que Chromium real abra Godot Web, que el proyecto termine de importarse, que Render pueda reiniciarse ni que los artefactos sobrevivan a ese reinicio.
+
+Pruebas pendientes antes de declarar el sistema completo:
+
+1. Desplegar el commit corregido del Relay y confirmar `/health`.
+2. Abrir una sesión real en Render y demostrar que el Project Manager y el proyecto seleccionado están listos.
+3. Vincular sesión, repositorio, ruta y SHA inmutable.
+4. Ejecutar más de una secuencia de pruebas en la misma sesión sin cerrar el navegador.
+5. Publicar artefactos en almacenamiento duradero y recuperarlos después de reiniciar el proceso Relay.
+6. Volver a importar una revisión nueva después de un cambio de código y demostrar que la revisión anterior no se confunde con la nueva.
+7. Confirmar que el workflow y la API persistente usan un contrato común, o documentar claramente por qué siguen siendo flujos separados.
+
+**Estado global:** importación visual de una sola ejecución verificada previamente con un proyecto de referencia; sesión persistente en Render, SHA inmutable, recuperación de artefactos y reimportación dentro de sesión siguen pendientes de verificación.
