@@ -121,3 +121,16 @@ Después de una suspensión/reinicio, no se promete conservar la pestaña ni el 
 - No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
 - La importación Web acepta archivos fuente de repositorio de hasta 256 MiB y entrega ZIPs de hasta 128 MiB; los ejecutables ELF nativos se omiten solo del paquete temporal Web, nunca del repositorio original. La respuesta informa las exclusiones en `X-Godot-Web-Excluded-*`.
 - Mantener Render en el plan Free.
+
+
+## Estado de despliegue y persistencia (13-11-2026)
+
+La API `/v1/persistent-sessions` está en el código de `main`, pero no debe asumirse desplegada por existir en el repositorio. El despliegue que incorporó PR #25 falló durante el arranque por el uso de `router.state`; la corrección quedó en el commit `8c86869`. En la última inspección, Render seguía mostrando como último despliegue exitoso el commit anterior, por lo que falta desplegar y verificar la corrección.
+
+La implementación actual de sesiones persistentes mantiene sesiones, tareas y ZIPs de evidencia en memoria del proceso. **No es persistencia duradera** y los artefactos se pierden si Render reinicia el servicio. Aunque Neon Object Storage y el bucket privado `godot-visual-captures` están disponibles para el Command Center, la API persistente todavía no los utiliza.
+
+El workflow `.github/workflows/godot-web-import.yml` es independiente: inicia su propio Chromium en GitHub Actions, importa y prueba el proyecto, cierra navegador/contexto y publica los artefactos del workflow. No reutiliza todavía el Chromium del Relay. Los artefactos del workflow tienen la retención configurada en Actions; no equivalen a la persistencia de la API del Relay.
+
+El endpoint de archivo resuelve una rama y expone `X-GitHub-Ref`, pero todavía no devuelve ni verifica el SHA inmutable del commit importado. La sesión persistente tampoco espera a que la importación del proyecto haya terminado: su apertura confirma la navegación inicial, no la disponibilidad del editor con el proyecto listo.
+
+Por tanto, quedan pendientes: despliegue exitoso del código corregido, sesión real en Render, integración del workflow con la sesión persistente, SHA inmutable, almacenamiento duradero de paquetes de evidencia y prueba de recuperación después de un reinicio.
