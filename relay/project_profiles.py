@@ -190,6 +190,28 @@ async def _fetch_json(client: httpx.AsyncClient, url: str) -> Any | None:
         return json.loads(bytes(content))
 
 
+async def resolve_repository_commit_sha(repository: str, branch: str) -> str:
+    if not REPO_RE.fullmatch(repository) or not branch or len(branch) > 128 or ".." in branch:
+        raise HTTPException(status_code=400, detail="Invalid repository or branch for SHA resolution")
+    owner, repo = repository.split("/", 1)
+    url = f"https://api.github.com/repos/{owner}/{repo}/branches/{quote(branch, safe='')}"
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            response = await client.get(url)
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="GitHub branch was not found")
+            response.raise_for_status()
+            data = response.json()
+        sha = str(data.get("commit", {}).get("sha") or "").lower()
+        if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", sha):
+            raise ValueError("GitHub branch response did not contain a full commit SHA")
+        return sha
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Could not resolve immutable Git commit SHA: {type(exc).__name__}") from exc
+
+
 async def load_project_profile(repository: str, ref: str, command_name: str | None = None) -> dict[str, Any] | None:
     if not REPO_RE.fullmatch(repository):
         raise HTTPException(status_code=400, detail="Invalid repository for project profile")
