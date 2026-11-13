@@ -59,6 +59,7 @@ jobs:
           RELAY_URL: https://godot-web-ia-relay.onrender.com
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
           SESSION_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          BRIDGE_REPOSITORY: ${{ github.repository }}
           BROWSER_SESSION_ID: issue-${{ github.event.issue.number }}
           BROWSER_COMMAND_WINDOW_SECONDS: '600'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
