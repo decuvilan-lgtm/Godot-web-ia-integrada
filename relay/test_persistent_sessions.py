@@ -82,7 +82,7 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["storage"], "neon-object-storage")
             self.assertEqual(len(fake_s3.objects), 1)
             self.assertEqual(len(result["artifact_sha256"]), 64)
-            self.assertNotIn(f"bundle-{result['artifact_id']}.zip", sessions._sessions["test-session"].artifacts)
+            self.assertEqual(sessions._sessions["test-session"].artifacts, {})
             payload = fake_s3.objects[(sessions.BUCKET, result["object_key"])]
             with zipfile.ZipFile(io.BytesIO(payload)) as archive:
                 manifest = json.loads(archive.read("task-result.json"))
