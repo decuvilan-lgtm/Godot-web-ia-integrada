@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Godot Web browser worker running only inside a GitHub Actions job."""
 from __future__ import annotations
-import hashlib, io, json, os, re, time, urllib.parse, urllib.request, zipfile
+import base64, hashlib, io, json, os, re, time, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
@@ -40,6 +40,36 @@ def oidc_token():
     req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
     with urllib.request.urlopen(req,timeout=30) as res: return json.loads(res.read())["value"]
 
+def oidc_claim_summary(token):
+    """Return only non-secret identity claims for safe diagnostics."""
+    try:
+        payload=token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims=json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+        return {key:claims.get(key) for key in ("repository","ref","workflow_ref","aud","iss","sub")}
+    except Exception:
+        return {"claims":"unavailable"}
+
+def relay_oidc_preflight():
+    # Wake a suspended Free relay before minting the short-lived OIDC token.
+    relay_request(RELAY_URL+"/health",timeout=30,retry_seconds=360)
+    token=oidc_token()
+    claims=oidc_claim_summary(token)
+    try:
+        raw=relay_request(
+            RELAY_URL+"/v1/persistent-sessions",
+            headers={"Authorization":"Bearer "+token},
+            timeout=30,
+            retry_seconds=15,
+        )
+        sessions=json.loads(raw).get("sessions",[])
+        return {"ok":True,"active_sessions":len(sessions),"claims":claims}
+    except urllib.error.HTTPError as exc:
+        detail=exc.read().decode("utf-8","replace")[:400]
+        raise RuntimeError(
+            f"Relay OIDC preflight rejected identity: HTTP {exc.code}: {detail}; claims={json.dumps(claims,ensure_ascii=False)}"
+        ) from exc
+
 def resolve_sha():
     if REQUESTED_SHA: sha=REQUESTED_SHA
     else:
@@ -53,6 +83,8 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}",REPOSITORY): raise ValueError("Invalid repository")
     if not 60<=IMPORT_TIMEOUT<=600: raise ValueError("IMPORT_TIMEOUT_SECONDS must be 60-600")
     sha=resolve_sha(); session_id=os.environ.get("BROWSER_SESSION_ID", f"gha-{RUN_ID}-{ATTEMPT}"); task_id=f"github-actions-{RUN_ID}-{ATTEMPT}"
+    bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
+    oidc_preflight=relay_oidc_preflight()
     url=EDITOR_URL.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
     errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None
     shot=OUT/"editor-final.png"; started=time.time()
@@ -144,7 +176,7 @@ def main():
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
             command_session=run_command_loop(
-                page, REPOSITORY, os.environ.get("SESSION_ISSUE_NUMBER"),
+                page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
                 os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
                 duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
             )
@@ -156,7 +188,7 @@ def main():
         finally:
             # Do not close Chromium here: keep the editor alive through the evidence round-trip.
             pass
-    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":[name for name in ("editor-install-dialog.png","editor-final.png") if (OUT/name).exists()]}
+    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"bridge_repository":bridge_repository,"oidc_preflight":oidc_preflight,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":[name for name in ("editor-install-dialog.png","editor-final.png","browser-command-log.json") if (OUT/name).exists()]+sorted(p.name for p in OUT.glob("command-*.png") if p.is_file())}
     (OUT/"task-result.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     bundle=OUT/"godot-browser-worker-task.zip"
     with zipfile.ZipFile(bundle,"w",zipfile.ZIP_DEFLATED) as z:
@@ -168,7 +200,12 @@ def main():
     digest=hashlib.sha256(payload).hexdigest()
     upload_url=f"{RELAY_URL}/v1/persistent-sessions/worker-artifacts/{session_id}"
     upload_headers={"Authorization":"Bearer "+oidc_token(),"Content-Type":"application/zip","X-Artifact-SHA256":digest}
-    uploaded=json.loads(relay_request(upload_url,method="POST",headers=upload_headers,data=payload,timeout=90,retry_seconds=360))
+    try:
+        uploaded=json.loads(relay_request(upload_url,method="POST",headers=upload_headers,data=payload,timeout=90,retry_seconds=360))
+    except urllib.error.HTTPError as exc:
+        detail=exc.read().decode("utf-8","replace")[:500]
+        (OUT/"relay-upload-error.json").write_text(json.dumps({"stage":"artifact_upload","http_status":exc.code,"detail":detail,"oidc_claims":oidc_claim_summary(upload_headers["Authorization"].removeprefix("Bearer "))},indent=2),encoding="utf-8")
+        raise RuntimeError(f"Relay artifact upload rejected: HTTP {exc.code}: {detail}") from exc
     (OUT/"worker-upload.json").write_text(json.dumps(uploaded,indent=2),encoding="utf-8")
     download_headers={"Authorization":"Bearer "+oidc_token()}
     recovered=relay_request(RELAY_URL+uploaded["artifact_url"],headers=download_headers,timeout=90,retry_seconds=180)
