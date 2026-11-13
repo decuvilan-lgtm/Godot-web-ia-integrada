@@ -21,7 +21,7 @@ class WebShellPatchTests(unittest.TestCase):
     def test_installs_project_manager_and_github_connector(self):
         result = patch_html(FIXTURE)
         self.assertIn("viewport-fit=cover", result)
-        self.assertIn('id="godot-github-connector" data-version="branch-path-v1"', result)
+        self.assertIn('id="godot-github-connector" data-version="branch-path-v2"', result)
         self.assertIn('button.id = "godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
         self.assertIn("credentials:", result)
@@ -32,6 +32,11 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn('archiveUrl.searchParams.set("path", projectPath)', result)
         self.assertIn("validProjectPath", result)
         self.assertIn("startButton.click()", result)
+        self.assertIn("async function waitForElement(selector, predicate, timeoutMs)", result)
+        self.assertIn('await waitForElement("#startButton", element => !element.disabled, 90000)', result)
+        self.assertIn('document.readyState === "loading"', result)
+        self.assertIn('window.__godotGithubConnectorStatus', result)
+        self.assertNotIn('if (!startButton || startButton.disabled) return;', result)
         self.assertNotIn("Compartir proyectos", result)
 
     def test_patch_is_idempotent(self):
