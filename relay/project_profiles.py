@@ -39,7 +39,7 @@ def _relative_profile_path(value: Any, *, prefix: str) -> str:
     return prefix + value
 
 
-def validate_manifest(data: Any) -> dict[str, Any]:
+def validate_manifest(data: Any, *, expected_commit_sha: str | None = None) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ValueError("Unsupported lab manifest schema_version")
     control_profile = _relative_profile_path(data.get("control_profile", "control-profile.json"), prefix="godot-lab/")
@@ -55,10 +55,11 @@ def validate_manifest(data: Any) -> dict[str, Any]:
         if not isinstance(name, str) or not SLUG_RE.fullmatch(name) or name in seen:
             raise ValueError("Command names must be unique safe slugs")
         file_path = _relative_profile_path(entry.get("file"), prefix="godot-lab/")
+        verification = validate_verification(entry.get("verification"), expected_commit_sha=expected_commit_sha)
         if not file_path.startswith("godot-lab/commands/"):
             raise ValueError("Command files must live under godot-lab/commands/")
         seen.add(name)
-        commands.append({"name": name, "file": file_path, "description": str(entry.get("description", ""))[:240]})
+        commands.append({"name": name, "file": file_path, "description": str(entry.get("description", ""))[:240], "verification": verification})
     project = data.get("project", {})
     if not isinstance(project, dict):
         raise ValueError("Manifest project metadata must be an object")
@@ -245,7 +246,7 @@ async def load_project_profile(repository: str, ref: str, command_name: str | No
             raw_manifest = await _fetch_json(client, base + MANIFEST_PATH)
             if raw_manifest is None:
                 return None
-            manifest = validate_manifest(raw_manifest)
+            manifest = validate_manifest(raw_manifest, expected_commit_sha=ref)
             raw_controls = await _fetch_json(client, base + manifest["control_profile"])
             if raw_controls is None:
                 raise ValueError("Manifest control profile file was not found")
@@ -258,12 +259,15 @@ async def load_project_profile(repository: str, ref: str, command_name: str | No
                 raw_command = await _fetch_json(client, base + entry["file"])
                 if raw_command is None:
                     raise ValueError(f"Command file {entry['name']} was not found")
-                commands[entry["name"]] = validate_command(
+                command_profile = validate_command(
                     raw_command,
                     expected_name=entry["name"],
                     controls=control_profile["controls"],
                     expected_commit_sha=ref,
                 )
+                if command_profile["verification"] != entry["verification"]:
+                    raise ValueError("Command verification metadata must match its manifest entry")
+                commands[entry["name"]] = command_profile
     except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=f"Project-owned lab profile is invalid or unavailable: {type(exc).__name__}") from exc
     return {
