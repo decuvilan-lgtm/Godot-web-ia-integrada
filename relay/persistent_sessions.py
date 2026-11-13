@@ -19,6 +19,9 @@ from urllib.parse import quote
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
+from visual_storage import BUCKET, storage_client
 
 logger = logging.getLogger("godot_web_ia_persistent_sessions")
 router = APIRouter(prefix="/v1/persistent-sessions", tags=["persistent-sessions"])
@@ -40,6 +43,7 @@ class PersistentSession:
     repository: str
     branch: str
     project_path: str
+    commit_sha: str | None = None
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     context: Any = None
@@ -58,6 +62,7 @@ class OpenSessionRequest(BaseModel):
     repository: str = Field(min_length=3, max_length=140)
     branch: str = Field(default="main", min_length=1, max_length=128)
     project_path: str = Field(default="", max_length=240)
+    commit_sha: str | None = Field(default=None, min_length=40, max_length=64)
 
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=32)
@@ -178,6 +183,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         or any(part in {"", ".", ".."} for part in body.project_path.split("/"))
     ):
         raise HTTPException(status_code=400, detail="Invalid project_path")
+    if body.commit_sha and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", body.commit_sha):
+        raise HTTPException(status_code=400, detail="commit_sha must be a full 40- or 64-character hexadecimal Git object ID")
     if len(_sessions) >= MAX_SESSIONS:
         raise HTTPException(status_code=429, detail="Persistent session capacity reached")
     browser = await _get_browser()
@@ -187,6 +194,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         repository=body.repository,
         branch=body.branch,
         project_path=body.project_path,
+        commit_sha=body.commit_sha,
     )
     try:
         session.context = await browser.new_context(
@@ -197,6 +205,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         query = f"?repo={quote(body.repository, safe='/')}&branch={quote(body.branch, safe='')}"
         if body.project_path:
             query += f"&path={quote(body.project_path, safe='/')}"
+        if body.commit_sha:
+            query += f"&sha={quote(body.commit_sha, safe='')}"
         await session.page.goto(EDITOR_URL + query, wait_until="domcontentloaded", timeout=90000)
         session.events.append({
             "type": "session.opened",
@@ -205,6 +215,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "repository": body.repository,
             "branch": body.branch,
             "project_path": body.project_path,
+            "commit_sha": body.commit_sha,
         })
         _sessions[session_id] = session
     except Exception as exc:
@@ -218,6 +229,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "repository": body.repository,
         "branch": body.branch,
         "project_path": body.project_path,
+        "commit_sha": body.commit_sha,
         "idle_ttl_seconds": IDLE_TTL,
         "reused_for_follow_up_tasks": True,
         "note": "Completing a task does not close this browser session.",
@@ -234,6 +246,7 @@ async def persistent_session_status(session_id: str, authorization: str | None =
         "repository": session.repository,
         "branch": session.branch,
         "project_path": session.project_path,
+        "commit_sha": session.commit_sha,
         "last_activity_at": session.last_activity,
         "idle_ttl_seconds": IDLE_TTL,
         "completed_tasks": list(session.completed_tasks.values()),
@@ -309,6 +322,7 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
             "repository": session.repository,
             "branch": session.branch,
             "project_path": session.project_path,
+            "commit_sha": session.commit_sha,
             "summary": body.summary,
             "result": body.result,
             "editor_url": EDITOR_URL,
@@ -327,6 +341,25 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
         if len(payload) > MAX_ARTIFACT_BYTES:
             raise HTTPException(status_code=413, detail="Task artifact bundle exceeds 32 MiB")
         artifact_id = secrets.token_urlsafe(18)
+        object_key = _persistent_artifact_key(session.session_id, artifact_id)
+        try:
+            client = storage_client()
+            await run_in_threadpool(
+                client.put_object,
+                Bucket=BUCKET,
+                Key=object_key,
+                Body=payload,
+                ContentType="application/zip",
+                Metadata={
+                    "sha256": __import__("hashlib").sha256(payload).hexdigest(),
+                    "task-id-sha256": __import__("hashlib").sha256(body.task_id.encode("utf-8")).hexdigest(),
+                },
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Could not persist completed task bundle in Neon Object Storage")
+            raise HTTPException(status_code=503, detail="Task bundle could not be persisted in Neon Object Storage") from exc
         session.artifacts[f"bundle-{artifact_id}.zip"] = payload
         result = {
             "task_id": body.task_id,
@@ -336,6 +369,8 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
             "artifact_bytes": len(payload),
             "session_kept_open": True,
             "session_id": session.session_id,
+            "storage": "neon-object-storage",
+            "object_key": object_key,
         }
         session.completed_tasks[body.task_id] = result
         session.events.append({"type": "task.completed", "task_id": body.task_id, "artifact_id": artifact_id, "at": time.time()})
@@ -343,14 +378,37 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
         return result
 
 @router.get("/{session_id}/artifacts/{artifact_id}")
+def _persistent_artifact_key(session_id: str, artifact_id: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,100}", artifact_id):
+        raise HTTPException(status_code=400, detail="Invalid artifact ID")
+    return f"persistent-sessions/{session_id}/{artifact_id}.zip"
+
+
 async def download_persistent_artifact(session_id: str, artifact_id: str, authorization: str | None = Header(default=None)):
     _authorize(authorization)
-    session = _get_session(session_id)
-    name = f"bundle-{artifact_id}.zip"
-    payload = session.artifacts.get(name)
+    key = _persistent_artifact_key(session_id, artifact_id)
+    session = _sessions.get(session_id)
+    payload = session.artifacts.get(f"bundle-{artifact_id}.zip") if session else None
     if payload is None:
-        raise HTTPException(status_code=404, detail="Artifact not found")
-    _touch(session)
+        try:
+            client = storage_client()
+            response = await run_in_threadpool(client.get_object, Bucket=BUCKET, Key=key)
+            body = response["Body"]
+            try:
+                payload = await run_in_threadpool(body.read, MAX_ARTIFACT_BYTES + 1)
+            finally:
+                await run_in_threadpool(body.close)
+            if not payload or len(payload) > MAX_ARTIFACT_BYTES:
+                raise HTTPException(status_code=404, detail="Artifact not found")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.info("Persistent artifact unavailable for %s/%s: %s", session_id, artifact_id, type(exc).__name__)
+            raise HTTPException(status_code=404, detail="Artifact not found") from exc
+    if session is not None:
+        _touch(session)
     return StreamingResponse(
         io.BytesIO(payload),
         media_type="application/zip",
