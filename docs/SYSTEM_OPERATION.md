@@ -188,3 +188,47 @@ Una prueba no es válida como verificación del último cambio si el editor esta
 8. Si no cambia, seguir probando en la misma sesión activa.
 9. Publicar solo la evidencia y los diagnósticos; nunca el proyecto completo desde Godot Web.
 10. Si Render suspende, reconstruir el laboratorio en la siguiente solicitud y volver a cargar el commit necesario.
+
+
+## 13. Comandos y controles propiedad de cada proyecto
+
+La definición de cómo se controla un juego pertenece al repositorio de ese juego. El repositorio del laboratorio no debe convertirse en una memoria central de combinaciones de teclas, coordenadas, botones o secuencias particulares.
+
+### 13.1 Estructura recomendada dentro del repositorio fuente
+
+```text
+godot-lab/
+  lab-manifest.json
+  control-profile.json
+  commands/
+    smoke-test.json
+    navigation.json
+    gameplay-basic.json
+  CONTROL_PROFILE.md
+  TEST_HISTORY.md
+```
+
+El proyecto puede adaptar los nombres o integrar estos archivos en una estructura de pruebas existente. El manifiesto indica dónde están las instrucciones y qué versión de perfil corresponde al proyecto.
+
+### 13.2 Responsabilidades
+
+- **Repositorio del juego:** declara sus controles, contexto, comandos, secuencias, precondiciones, resultados esperados y evidencias de verificación.
+- **Controlador genérico:** implementa operaciones comunes (entrada, espera, captura, inspección y aserciones) sin asumir controles concretos de ningún juego.
+- **GitHub Actions:** localiza el manifiesto del repositorio seleccionado, valida la revisión y coordina la ejecución. No contiene listas de comandos particulares por juego.
+- **Relay:** transporta solicitudes y resultados; no decide cómo se juega cada proyecto.
+
+### 13.3 Aprendizaje y verificación
+
+En el primer contacto con un proyecto, se inspecciona su interfaz y se experimenta con sus controles. Cada interacción debe confirmar una respuesta observable y repetirse para comprobar que es reproducible. Solo entonces se registra como **Verificado**. Las instrucciones no probadas quedan **Pendiente**; las afectadas por cambios de interfaz, escenas o entrada pasan a **Obsoleto** hasta revalidarse.
+
+El perfil debe documentar teclas y botones, pulsación/retención/arrastre/soltado, escena y estado requerido, viewport y escala de referencia, selectores semánticos preferidos, coordenadas relativas de respaldo, señales de éxito, limitaciones y evidencia. Cada perfil se vincula al repositorio, ruta del proyecto y SHA probado.
+
+### 13.4 Seguridad y aislamiento
+
+Los manifiestos y comandos del repositorio se tratan como datos no confiables. El ejecutor valida el esquema y solo permite operaciones genéricas autorizadas, con límites de tiempo, frecuencia, rutas y recursos. No ejecuta shell arbitrario ni scripts externos automáticamente por estar mencionados en un archivo. Los adaptadores ejecutables particulares requieren revisión, aislamiento y autorización explícita.
+
+Los perfiles nunca se reutilizan entre repositorios por similitud de controles. Para proyectos de solo lectura, el laboratorio conserva una copia de trabajo asociada a la identidad exacta del repositorio, sin modificar el origen. Si el repositorio es editable y la tarea lo autoriza, la documentación definitiva se incorpora al propio proyecto.
+
+### 13.5 Resultado de cada ejecución
+
+El manifiesto de evidencia registra el SHA del proyecto, la versión del perfil, los comandos ejecutados, el estado de cada paso y las pruebas que quedaron pendientes. Una acción enviada no se considera exitosa hasta observar y verificar su resultado.
