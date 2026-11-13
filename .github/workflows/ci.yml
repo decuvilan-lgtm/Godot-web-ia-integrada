@@ -22,6 +22,8 @@ jobs:
           bash -n scripts/ci/run-godot-task.sh
           ruby -e 'require "yaml"; c = YAML.load_file(".circleci/config.yml"); abort "CircleCI job missing" unless c.dig("jobs", "godot-task")'
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/persistent-session-smoke.yml"); YAML.load_file(".github/workflows/remote-godot-task.yml")'
+          ruby -e 'require "yaml"; w = YAML.load_file(".github/workflows/persistent-session-smoke.yml"); s = w.dig("jobs", "persistent-session", "steps").find { |step| step["name"] == "Open persistent editor, inspect, capture and persist evidence" }["run"]; File.write("/tmp/persistent-session-smoke.sh", s); abort "OIDC permission missing" unless w.dig("permissions", "id-token") == "write"'
+          bash -n /tmp/persistent-session-smoke.sh
           python -m py_compile scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/github_archives.py relay/test_github_archives.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/test_app.py relay/storage_cors.py relay/persistent_sessions.py relay/test_persistent_sessions.py tests/live_link/test_storage_cors.py
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
