@@ -195,7 +195,7 @@ jobs:
               summary = ", ".join(controls) if controls else "sin eventos reconocidos"
               lines.append("| " + action["name"] + " | " + summary + " (" + ", ".join(device_names) + ") |")
               print("- " + action["name"] + ": " + summary)
-          Path("artifacts/project-input-map-summary.md").write_text("\\n".join(lines) + "\\n")
+          Path("artifacts/project-input-map-summary.md").write_text("\n".join(lines) + "\n")
           PY
           echo "input_map=generated" >> "$GITHUB_OUTPUT"
 
@@ -220,7 +220,7 @@ jobs:
               raise SystemExit("El perfil de controles no contiene una lista válida de acciones.")
           serialized = json.dumps(actions, separators=(",", ":"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("actions=" + serialized + "\\n")
+              output.write("actions=" + serialized + "\n")
           if actions:
               print(f"Perfil cargado: {profile.get('profile')} ({len(actions)} acciones)")
           else:
@@ -309,7 +309,7 @@ jobs:
                       result["fontBytes"] = len(font)
                       result["fontSha256"] = hashlib.sha256(font).hexdigest()
                       result["fontGitBlobSha1"] = hashlib.sha1(
-                          f"blob {len(font)}\\0".encode() + font
+                          f"blob {len(font)}\0".encode() + font
                       ).hexdigest()
                       result["fontMatchesSourceBlob"] = (
                           len(font) == 627988
@@ -327,7 +327,7 @@ jobs:
           with open("artifacts/project-archive-diagnostic.json", "w", encoding="utf-8") as file:
               json.dump(result, file, ensure_ascii=False, indent=2)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("result=" + result["status"] + "\\n")
+              output.write("result=" + result["status"] + "\n")
           print(json.dumps(result, ensure_ascii=False, indent=2))
           PY
 
