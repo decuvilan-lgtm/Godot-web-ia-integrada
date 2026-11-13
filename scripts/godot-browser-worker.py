@@ -13,6 +13,27 @@ WAIT_SECONDS=int(os.environ.get("WAIT_SECONDS","10")); IMPORT_TIMEOUT=int(os.env
 RUN_ID=os.environ.get("GITHUB_RUN_ID",str(int(time.time()))); ATTEMPT=os.environ.get("GITHUB_RUN_ATTEMPT","1")
 OUT=Path("artifacts"); OUT.mkdir(exist_ok=True)
 
+def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, retry_seconds=360):
+    """Retry only transient startup/deploy failures while Render rolls out the API."""
+    deadline=time.monotonic()+retry_seconds
+    delay=5
+    last_error=None
+    while True:
+        request=urllib.request.Request(url,data=data,method=method,headers=headers or {})
+        try:
+            with urllib.request.urlopen(request,timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {404,502,503,504}:
+                raise
+            last_error=exc
+        except urllib.error.URLError as exc:
+            last_error=exc
+        if time.monotonic()>=deadline:
+            raise RuntimeError(f"Relay did not become ready within {retry_seconds}s: {last_error}") from last_error
+        time.sleep(min(delay, max(1,deadline-time.monotonic())))
+        delay=min(delay+5,25)
+
 def oidc_token():
     url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
     req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
@@ -55,8 +76,23 @@ def main():
                 if readiness["phase"]=="started" and readiness["imported_sha"]==sha and canvases>=1: break
                 page.wait_for_timeout(5000)
             inspection={"url":page.url,"title":page.title(),"visible_text":page.locator("body").inner_text(timeout=20000)[:12000],"canvas_count":page.locator("canvas").count(),"connector_status":page.evaluate("() => window.__godotGithubConnectorStatus || null")}
+            if not(readiness["phase"]=="started" and readiness["imported_sha"]==sha and readiness["canvas_count"]>=1):
+                failure="Exact project SHA was not confirmed before import timeout"
+            else:
+                # Godot's ZIP preloader opens a real Project Manager install dialog.
+                # The current 1365x768 editor shell places its primary Install action here.
+                if "Project Manager" in page.title():
+                    page.screenshot(path=str(OUT/"editor-install-dialog.png"),full_page=False,timeout=30000)
+                    viewport=page.viewport_size or {"width":1365,"height":768}
+                    page.mouse.click(viewport["width"]*0.554,viewport["height"]*0.641)
+                    install_deadline=time.monotonic()+120
+                    while time.monotonic()<install_deadline and "Project Manager" in page.title():
+                        page.wait_for_timeout(3000)
+                    inspection["install_dialog_action"]="clicked Godot Install button; Edit Now was enabled"
+                    inspection["post_install_title"]=page.title()
+                    if "Project Manager" in page.title():
+                        failure="Godot remained in Project Manager after the project Install action"
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
-            if not(readiness["phase"]=="started" and readiness["imported_sha"]==sha and readiness["canvas_count"]>=1): failure="Exact project SHA was not confirmed before import timeout"
         except Exception as exc:
             failure=f"{type(exc).__name__}: {str(exc)[:1000]}"
             try: page.screenshot(path=str(shot),full_page=False,timeout=15000)
@@ -64,7 +100,7 @@ def main():
         finally:
             # Do not close Chromium here: keep the editor alive through the evidence round-trip.
             pass
-    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":["editor-final.png"] if shot.exists() else []}
+    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":[name for name in ("editor-install-dialog.png","editor-final.png") if (OUT/name).exists()]}
     (OUT/"task-result.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     bundle=OUT/"godot-browser-worker-task.zip"
     with zipfile.ZipFile(bundle,"w",zipfile.ZIP_DEFLATED) as z:
@@ -73,11 +109,12 @@ def main():
     payload=bundle.read_bytes()
     if len(payload)>32*1024*1024: raise ValueError("Evidence bundle exceeds 32 MiB")
     digest=hashlib.sha256(payload).hexdigest()
-    req=urllib.request.Request(f"{RELAY_URL}/v1/persistent-sessions/worker-artifacts/{session_id}",data=payload,method="POST",headers={"Authorization":"Bearer "+oidc_token(),"Content-Type":"application/zip","X-Artifact-SHA256":digest})
-    with urllib.request.urlopen(req,timeout=90) as res: uploaded=json.loads(res.read())
+    upload_url=f"{RELAY_URL}/v1/persistent-sessions/worker-artifacts/{session_id}"
+    upload_headers={"Authorization":"Bearer "+oidc_token(),"Content-Type":"application/zip","X-Artifact-SHA256":digest}
+    uploaded=json.loads(relay_request(upload_url,method="POST",headers=upload_headers,data=payload,timeout=90,retry_seconds=360))
     (OUT/"worker-upload.json").write_text(json.dumps(uploaded,indent=2),encoding="utf-8")
-    get=urllib.request.Request(RELAY_URL+uploaded["artifact_url"],headers={"Authorization":"Bearer "+oidc_token()})
-    with urllib.request.urlopen(get,timeout=90) as res: recovered=res.read(32*1024*1024+1)
+    download_headers={"Authorization":"Bearer "+oidc_token()}
+    recovered=relay_request(RELAY_URL+uploaded["artifact_url"],headers=download_headers,timeout=90,retry_seconds=180)
     if hashlib.sha256(recovered).hexdigest()!=uploaded["artifact_sha256"]: raise RuntimeError("Neon evidence round-trip SHA-256 mismatch")
     with zipfile.ZipFile(io.BytesIO(recovered)) as z:
         if z.testzip(): raise RuntimeError("Persisted evidence ZIP failed integrity check")
