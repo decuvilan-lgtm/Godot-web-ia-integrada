@@ -368,8 +368,12 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         commit_sha=effective_sha,
     )
     try:
+        # Keep the Web editor's raster surfaces modest on Render's 512 MiB
+        # instance. The editor remains fully interactive; normalized point
+        # controls continue to scale with the actual viewport.
         session.context = await browser.new_context(
-            viewport={"width": 1440, "height": 900},
+            viewport={"width": 1024, "height": 640},
+            device_scale_factor=1,
             accept_downloads=True,
         )
         session.page = await session.context.new_page()
