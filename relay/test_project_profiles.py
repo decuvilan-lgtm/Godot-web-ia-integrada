@@ -29,6 +29,14 @@ class ProjectProfileValidationTests(unittest.TestCase):
         self.assertEqual(manifest["project"]["project_path"], "game")
         self.assertEqual(manifest["commands"][0]["file"], "godot-lab/commands/smoke-test.json")
 
+    def test_manifest_requires_an_explicit_project_path(self):
+        with self.assertRaises(ValueError):
+            profiles.validate_manifest({
+                "schema_version": 1,
+                "project": {"name": "Sample"},
+                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json"}],
+            })
+
     def test_manifest_rejects_path_traversal(self):
         with self.assertRaises(ValueError):
             profiles.validate_manifest({
