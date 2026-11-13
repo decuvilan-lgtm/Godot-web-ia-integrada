@@ -178,9 +178,20 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["profile_status"], "not_found")
         self.assertEqual(result["manifest_path"], "godot-lab/lab-manifest.json")
 
+    async def test_project_profile_rejects_a_manifest_for_another_project_path(self):
+        profile = {
+            "manifest": {"project": {"project_path": "other"}, "commands": []},
+            "control_profile": {"controls": {}},
+            "commands": {},
+        }
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "load_project_profile", return_value=profile):
+            with self.assertRaises(Exception) as raised:
+                await sessions.get_project_lab_profile("test-session", "Bearer test-secret")
+        self.assertEqual(getattr(raised.exception, "status_code", None), 409)
+
     async def test_project_profile_command_executes_repo_owned_steps(self):
         profile = {
-            "manifest": {"commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json"}]},
+            "manifest": {"project": {"name": "Test", "project_path": "game"}, "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json"}]},
             "control_profile": {"controls": {}},
             "commands": {"smoke-test": {"name": "smoke-test", "steps": [{"op": "inspect"}]}},
         }
