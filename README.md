@@ -1,173 +1,249 @@
 # Godot Web IA Integrada
 
-Entorno genérico para importar, inspeccionar, modificar y probar proyectos Godot desde el navegador, con automatización y evidencia reproducible. No está acoplado a un juego, género, repositorio, nombre de proyecto ni conjunto fijo de controles.
+Laboratorio genérico para **inspección visual y pruebas interactivas de proyectos Godot** mediante el Godot Web real desplegado en Render. GitHub conserva el proyecto y su historial; Godot Web solo permite observar y probar una versión sincronizada. El laboratorio nunca es el lugar de almacenamiento, edición definitiva ni entrega del proyecto completo.
 
-Dragon Realm y Escondite son proyectos de referencia intercambiables para validar el sistema. No son dependencias ni valores especiales.
+Dragon Realm, Escondite, Ajedrez 2c2 y cualquier otro proyecto son objetivos de prueba intercambiables. Ninguno es una dependencia ni recibe un tratamiento especial fuera de perfiles de prueba explícitos.
 
-## Objetivos
+## 1. Propósito y límites
 
-- Importar repositorios públicos de GitHub indicando rama y subcarpeta.
-- Abrir proyectos Godot en Godot Web y observar editor y ejecución.
-- Automatizar entradas reales de teclado, ratón y táctil.
-- Preparar escenarios temporales dentro del proyecto real para probar mecánicas e interacciones.
-- Capturar secuencias, registrar eventos y producir resultados verificables.
-- Mantener separados los proyectos, revisiones y artefactos de cada ejecución.
-- Diferenciar claramente capacidades implementadas, probadas y pendientes.
+El sistema permite seleccionar un proyecto Godot, preparar una versión identificable, cargarla en el editor web real de Render, inspeccionar su presentación, ejecutar interacciones y recopilar evidencia técnica.
 
-## Arquitectura
+### Lo que sí hace Godot Web
+
+- Mostrar visualmente el proyecto seleccionado en el editor Godot Web desplegado.
+- Ejecutar el proyecto cuando el flujo de importación y el propio proyecto lo permitan.
+- Permitir inspecciones del editor, escenas visibles y ejecución del juego.
+- Recibir entradas automatizadas de teclado, ratón y táctil.
+- Ejecutar secuencias de pruebas durante una sesión activa.
+- Producir capturas, grabaciones, observaciones visuales, OCR, eventos, logs y diagnósticos de salida/debugger disponibles.
+- Ayudar a comprobar si un cambio produjo el resultado visual o interactivo esperado.
+
+### Lo que no hace Godot Web
+
+- **No entrega el proyecto completo.**
+- No es la fuente de verdad de los archivos del juego.
+- No conserva ni publica cambios del código del juego como autoridad.
+- No sustituye GitHub ni el sistema de trabajo del proyecto.
+- No se considera sincronizado solo porque una pestaña siga abierta.
+- No garantiza que una modificación en GitHub aparezca automáticamente en una instancia ya importada.
+- No debe usarse como repositorio de artefactos de proyecto ni como mecanismo de backup.
+
+Los resultados del laboratorio son evidencia y diagnósticos, no una copia entregable del juego. El proyecto completo se obtiene del repositorio y de la revisión/commit correspondiente.
+
+## 2. Fuentes de verdad y responsabilidades
 
 | Componente | Responsabilidad |
 |---|---|
-| GitHub | Código fuente, ramas, revisiones e historial de los proyectos |
-| Relay | Descarga controlada de repositorios públicos y entrega de ZIP al navegador |
-| Godot Web | Project Manager, editor y ejecución visual del proyecto |
-| Godot Headless | Importación, validación y pruebas sin interfaz cuando sea compatible |
-| Playwright / Chromium | Automatización del navegador, entradas y capturas |
-| GitHub Actions | Orquestación de importación, comprobaciones y artefactos |
-| Render | Alojamiento del editor web y del Relay |
+| Repositorio GitHub del juego | Fuente de verdad del código, recursos, ramas, commits e historial del proyecto |
+| GitHub Actions | Orquesta la preparación, transferencia/importación, pruebas y publicación de evidencias |
+| Relay en Render | Valida y entrega archivos al flujo de importación; ofrece APIs de coordinación y transferencia |
+| Godot Web en Render | Laboratorio visual real: editor, ejecución, observación y pruebas interactivas |
+| Chromium + Playwright/CDP | Controla la interfaz real del navegador, envía entradas y captura evidencia |
+| Godot Headless | Ejecuta validaciones no visuales cuando son compatibles; complementa, no reemplaza, las pruebas visuales |
+| Almacenamiento duradero de resultados | Conserva los diagnósticos y evidencias que el flujo publique, según su política de retención |
 
-Una prueba Headless no sustituye una prueba visual. Una captura tampoco demuestra por sí sola que una mecánica interna funcione.
+El repositorio del juego y este repositorio de infraestructura son distintos. Este repositorio contiene el laboratorio y sus workflows; no debe confundirse con el repositorio fuente que se esté probando.
 
-## Abrir un proyecto
+## 3. Principio de sincronización: una versión por prueba
 
-Editor publicado: https://godot-web-ia-integrada-rt2l.onrender.com/
+Cada carga del laboratorio representa una revisión concreta del proyecto.
 
-Se puede preparar una importación mediante URL:
+La identidad mínima de una carga es:
+
+- Repositorio del proyecto.
+- Rama o referencia solicitada.
+- SHA exacto del commit cargado.
+- Ruta relativa de la carpeta que contiene `project.godot`.
+- Identificador de ejecución/workflow.
+- Estado de importación y resultado de las comprobaciones.
+
+### Cuándo se vuelve a importar
+
+**Cada vez que cambie el código o cualquier recurso que deba verificarse, el workflow debe preparar y cargar nuevamente el proyecto actualizado en Godot Web.**
+
+No se confía en hot reload, sincronización automática de carpetas ni detección de cambios de GitHub por parte de una pestaña abierta. El procedimiento es explícito:
+
+1. Identificar el commit nuevo.
+2. Descargar y validar el proyecto desde GitHub.
+3. Preparar el ZIP de importación para la carpeta Godot seleccionada.
+4. Ejecutar el workflow de importación/sincronización.
+5. Abrir o importar esa revisión en Godot Web.
+6. Confirmar que la versión visible corresponde al SHA esperado.
+7. Ejecutar las pruebas visuales e interactivas sobre esa revisión.
+
+Si el código no cambió y la sesión sigue viva con la misma revisión, se pueden enviar más pruebas sin volver a importar. Si el código cambió, primero se sincroniza de nuevo; luego se prueba.
+
+### No confundir sincronización con persistencia de sesión
+
+Una pestaña persistente no significa que sus archivos estén actualizados. La sesión puede seguir abierta mostrando una revisión antigua. El SHA cargado debe verificarse antes de cada conjunto de pruebas.
+
+## 4. Ciclo operativo completo
+
+### 4.1 Solicitud y selección
+
+La solicitud identifica el repositorio, rama/referencia y subcarpeta del proyecto. Se valida que la fuente sea accesible y que la carpeta seleccionada contenga `project.godot`.
+
+### 4.2 Activación bajo demanda
+
+El Relay y los servicios de Render pueden estar suspendidos por inactividad. Solo una solicitud explícita de trabajo debe iniciar el flujo de activación. GitHub Actions puede emitir una petición de salud para despertar el servicio y esperar de forma acotada a que responda.
+
+No se usan cron, heartbeats artificiales ni peticiones periódicas para mantener Render despierto. Se conserva el plan Free y se acepta su suspensión natural.
+
+### 4.3 Preparación de archivos
+
+El workflow descarga el commit elegido, valida rutas y límites, y prepara el paquete temporal de importación. Si el proyecto está en una subcarpeta, el empaquetado coloca `project.godot` en la raíz del ZIP de importación. Las exclusiones necesarias para la ejecución web se registran; nunca modifican el repositorio original.
+
+### 4.4 Importación en el editor real
+
+Playwright abre el Godot Web desplegado en Render y completa el flujo de importación en la interfaz real. No se usa un mock del editor ni una simulación de Godot. Chromium puede ejecutarse en modo headless: eso describe cómo se controla el navegador, no sustituye el servicio Godot Web real.
+
+### 4.5 Inspección y pruebas
+
+Con la revisión cargada se pueden realizar, según el proyecto y las capacidades verificadas:
+
+- Inspección del editor y del árbol de escenas visible.
+- Capturas del editor, escenas y juego en ejecución.
+- Secuencias de frames y grabaciones de pantalla.
+- Entradas de teclado: pulsar, mantener y soltar.
+- Entradas de ratón: mover, click, mantener y soltar.
+- Entradas táctiles: tocar, mantener, arrastrar y soltar.
+- Pruebas de menús, navegación, botones, movimiento, combate y otras interacciones configuradas.
+- OCR y comparación de señales visuales.
+- Recolección de logs, salida y mensajes del debugger que estén accesibles.
+- Registro de acciones enviadas, reacciones observadas y aserciones verificadas por separado.
+
+Una acción enviada no prueba por sí sola que el juego haya reaccionado. Los informes deben distinguir entre entrada ejecutada, respuesta visual observada y condición realmente verificada.
+
+### 4.6 Cambios y nueva sincronización
+
+Si una prueba descubre un defecto y se modifica el código del juego, el cambio se guarda en el repositorio fuente mediante el flujo autorizado. Después se vuelve a ejecutar la importación para cargar el nuevo commit en Godot Web. No se intenta parchear únicamente la copia temporal del editor ni se considera válida una prueba sobre una revisión anterior.
+
+### 4.7 Entrega de resultados
+
+El laboratorio entrega únicamente resultados de prueba y evidencia, por ejemplo:
+
+- Diagnóstico estructurado en JSON.
+- Logs de salida y debugger disponibles.
+- Errores, advertencias y trazas relevantes.
+- Capturas PNG.
+- Grabaciones de vídeo/WebM y secuencias de frames.
+- OCR y observaciones de pantalla.
+- Timeline de acciones y eventos.
+- SHA del proyecto probado y manifiesto de la ejecución.
+- Informe que indique qué se probó, qué pasó, qué no pudo comprobarse y qué queda pendiente.
+
+**Nunca se empaqueta ni se presenta el proyecto entero como resultado de Godot Web.** Para obtener el juego completo se utiliza su repositorio GitHub y el commit indicado en el informe.
+
+## 5. Sesiones y límites de Render Free
+
+El sistema puede reutilizar una sesión de navegador mientras el proceso y el servicio sigan vivos. Durante esa sesión pueden ejecutarse varias rondas de inspección y pruebas sobre la misma revisión.
+
+- La finalización de una tarea no debe cerrar deliberadamente el navegador.
+- La sesión se mantiene solo mientras Render lo permita y haya actividad legítima de trabajo.
+- No se envían heartbeats ni tráfico artificial para evitar la suspensión.
+- La expiración de la sesión no elimina el proyecto fuente: está en GitHub.
+- Si Render suspende o reinicia el servicio, el proceso Chromium y la pestaña en memoria no pueden prometerse como persistentes.
+- En la siguiente solicitud explícita, el workflow despierta el servicio y reconstruye el laboratorio cargando nuevamente el proyecto desde el repositorio.
+- Los diagnósticos y evidencias ya generados deben publicarse fuera de la memoria efímera del proceso antes de finalizar cada ejecución.
+
+La persistencia es lógica y basada en GitHub/resultados duraderos; no significa que el mismo proceso de navegador sobreviva a una suspensión de Render.
+
+## 6. Contrato de artefactos
+
+Cada ejecución debe publicar un paquete de evidencia separado del proyecto fuente. Como mínimo, cuando estén disponibles:
 
 ```text
-https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY
-https://godot-web-ia-integrada-rt2l.onrender.com/?repo=OWNER/REPOSITORY&branch=main&path=carpeta/proyecto
+godot-visual-test-<run-id>/
+  result.json
+  manifest.json
+  logs/
+    stdout.log
+    stderr.log
+    debugger.log
+  screenshots/
+    editor.png
+    game-001.png
+  video/
+    session.webm
+  frames/
+    frame-0001.png
+  events/
+    actions.jsonl
+  ocr/
+    observations.json
 ```
 
-- `repo`: repositorio público de GitHub.
-- `branch`: rama seleccionada; si se omite, se resuelve la rama predeterminada.
-- `path`: carpeta relativa que contiene `project.godot`; si se omite, se usa la raíz.
+La estructura es orientativa: solo se incluyen los archivos que la ejecución haya generado realmente. El manifiesto debe registrar repositorio, rama, SHA, carpeta del proyecto, fecha, workflow, versión del editor si se conoce y estado de cada prueba.
 
-El Relay valida las rutas, comprueba `project.godot` y reempaqueta proyectos de subcarpetas para que el archivo del proyecto quede en la raíz del ZIP. La importación inicial no implica que una pestaña ya abierta se actualice automáticamente: para probar una revisión nueva debe sincronizarse/importarse esa revisión y comprobar su identidad.
+Los artefactos deben ser verificables, tener límites de tamaño y retención documentados y estar separados por ejecución/proyecto. Un resultado parcial debe etiquetarse como parcial; no se inventan capturas, logs ni diagnósticos que no existan.
 
-## Workflow E2E
+## 7. Pruebas visuales, interactivas y Headless
 
-[**Importar repositorio en Godot Web — GitHub Actions**](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/workflows/godot-web-import.yml)
+Las tres categorías responden preguntas distintas:
 
-El workflow actual:
+| Tipo | Qué comprueba | Qué no demuestra por sí solo |
+|---|---|---|
+| Visual | Apariencia, disposición, estados visibles, animaciones y respuesta perceptible | Estado interno o lógica no visible |
+| Interactiva | Que entradas concretas producen respuestas observables en el juego | Que todos los casos límite o sistemas internos funcionen |
+| Headless | Importación, parseo, ejecución automatizada y validaciones compatibles | Que la interfaz se vea bien o que el input real funcione |
 
-1. Valida el repositorio público y resuelve rama, subcarpeta y nombre del proyecto.
-2. Abre Godot Web en Chromium.
-3. Comprueba aislamiento del navegador y la entrega del ZIP por el Relay.
-4. Instala y abre el proyecto seleccionado.
-5. Confirma la apertura mediante logs y detección visual/OCR.
-6. Captura el editor y una secuencia de frames.
-7. Envía F5 para intentar abrir el preview del juego y captura otra secuencia si se detecta.
-8. Publica `result.json`, eventos, OCR, capturas y manifiestos como artefactos de Actions.
+Se combinan cuando aportan valor. Los informes nunca convierten una comprobación de una categoría en evidencia de otra.
 
-Parámetros de ejecución manual: `repository_url`, `branch`, `project_path`, `startup_timeout`, `editor_frames`, `editor_interval_ms`, `game_frames` y `game_interval_ms`.
+## 8. Aislamiento y protección de proyectos
 
-Los artefactos se conservan durante 14 días. Las secuencias se validan por cantidad de frames, dimensiones y existencia de PNG; una secuencia incompleta no debe presentarse como completa.
+- Cada ejecución identifica su proyecto y commit.
+- Los perfiles específicos de controles pertenecen a `tests/control-profiles/` y se aplican solo al repositorio objetivo correspondiente.
+- El repositorio fuente se modifica únicamente por el flujo autorizado de desarrollo; importar o probar no autoriza escrituras.
+- Los proyectos de referencia declarados como solo lectura no se modifican.
+- Los archivos temporales de prueba deben estar aislados y tener un manifiesto de limpieza cuando se habilite ese flujo.
+- No se sobrescriben archivos del juego desde Godot Web como mecanismo de sincronización.
+- No se mezclan resultados ni sesiones de proyectos diferentes.
+- No se exponen tokens, claves, códigos de pairing ni URLs firmadas al navegador, a los proyectos o a los logs.
+- Repositorios y scripts externos se tratan como código no confiable.
+- Se limitan rutas, tamaño de descarga, duración, concurrencia y consumo de recursos.
+- No se usan force-push, `reset --hard` ni limpiezas que puedan descartar cambios ajenos.
 
-## Pruebas interactivas y escenarios temporales
+## 9. Estado de capacidades
 
-El controlador ya supera una prueba de gameplay real en Godot Web. La sesión de regresión de Dragon Realm usa un perfil versionado y combina teclado, ratón y gestos táctiles continuos. El controlador genérico no depende de ese juego: los controles específicos viven en perfiles de prueba separados.
+La documentación distingue tres estados:
 
-### Evidencia de control real
+- **Implementado:** existe código para la capacidad.
+- **Verificado:** una ejecución identificable produjo evidencia de que funciona.
+- **Pendiente:** falta implementación o una prueba concluyente.
 
-Ejecución verificada: [GitHub Actions #43330622553](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43330622553).
+No se declara que la sincronización, restauración, importación o una interacción estén terminadas solo porque exista una ruta API o un workflow. La prueba debe confirmar la carga del SHA correcto y la evidencia correspondiente.
 
-- 11 de 11 acciones enviadas en una misma sesión.
-- Teclado: movimiento, salto y ataque mantenido.
-- Ratón: inicio de partida y ejecución del botón de combate.
-- Ataque: OCR detectó el mensaje visible `PUÑO BÁSICO · 29 daño`.
-- Joystick táctil: el arrastre cambió la coordenada X del minimapa de `0266` a `0017`; al soltar, la palanca regresó al centro.
-- Grabación continua: un WebM de la sesión completa, 1440×900.
-- Relay: validación de repositorio, rama y ZIP aprobada.
+## 10. Servicios y enlaces
 
-El controlador admite teclado `press/down/up`, ratón `move/click/down/up` y táctil `tap/down/move/up`. Los gestos táctiles continuos se envían mediante eventos CDP y se liberan automáticamente si una acción falla. Los perfiles de control se guardan en `tests/control-profiles/`; el workflow carga el perfil de Escondite desde un archivo versionado, en vez de duplicar las acciones en YAML.
-
-### Advertencias que siguen abiertas
-
-- Godot registró `Parse Error: Busy` y `Failed loading resource` para `res://scenes/ui/hud.tscn`. El HUD sí apareció y respondió durante la prueba, pero el proyecto conserva esa advertencia. El repositorio de referencia se mantiene de solo lectura.
-- El probe de responsividad del renderer agotó su tiempo. Las capturas, la entrada de controles y la grabación sí funcionaron mediante Playwright/CDP.
-- Una entrada enviada no se considera prueba de funcionamiento por sí sola: el informe separa acciones enviadas, reacción visual y aserciones OCR.
-
-### Siguiente etapa
-
-La prioridad es generalizar los perfiles y las comprobaciones semánticas para otros proyectos, añadir emulación de viewport móvil y reforzar la detección de escenas/controles sin depender de Escondite. Los escenarios temporales dentro del proyecto real siguen pospuestos hasta que el flujo genérico de control y verificación esté suficientemente validado.
-
-### Ciclo temporal autorizado (fase posterior)
-
-Este ciclo no se implementará todavía. Primero debe quedar demostrado el control interactivo del juego en ejecución. Una vez superado ese requisito, el flujo acordado será publicar temporalmente en la **rama principal del repositorio del proyecto seleccionado**, para que la revisión pueda importarse en la web. Después de la prueba, se eliminan los archivos temporales y se comprueba que el contenido funcional anterior quede restaurado.
-
-1. Registrar repositorio, SHA base, rama y estado inicial.
-2. Crear un manifiesto único con los archivos nuevos y los archivos existentes que se modificarán.
-3. Preparar el escenario dentro del proyecto Godot real, reutilizando sus recursos, autoloads y sistemas.
-4. Publicar los cambios temporales en `main` mediante commits normales e identificables.
-5. Importar en Godot Web el commit exacto y comprobar que corresponde al escenario preparado.
-6. Ejecutar las acciones y reunir evidencia visual y funcional.
-7. Eliminar solo los archivos creados por la prueba y restaurar exactamente cualquier archivo preexistente modificado.
-8. Verificar que no se hayan eliminado cambios ajenos y que el repositorio vuelva al contenido funcional previo.
-
-La limpieza no debe usar force-push, `reset --hard` ni operaciones que reescriban el historial o descarten commits de terceros. Si aparecen cambios ajenos o el HEAD no coincide con lo esperado, la limpieza automática debe detenerse y preservar el estado para revisión. Las pruebas deben serializarse para evitar que dos escenarios temporales se pisen.
-
-El editor web alojado en Render no necesita reconstruirse por cada cambio del proyecto externo: el escenario se refleja al importar/sincronizar la revisión nueva del repositorio objetivo. El auto-deploy de Render corresponde al repositorio del propio editor.
-
-**Estado del controlador:** la primera versión admite pulsaciones/soltados de teclado, movimiento/click/presión de ratón y toque táctil puntual. Incluye timeline con duración configurable (10 segundos por defecto), capturas periódicas y liberación de teclas/botones si ocurre un error. Las pruebas unitarias pasaron en [Actions 43278159189](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278159189); la integración E2E del navegador está en [ejecución 43278226182](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43278226182). Los gestos táctiles continuos y el flujo completo de escenarios temporales aún no están terminados.
-
-**Prioridad actual:** lograr control real y verificable del juego en ejecución. No iniciar todavía la creación ni publicación de escenarios temporales. El ciclo en `main` queda documentado para la fase posterior, pero no está automatizado.
-
-Documentación detallada: [Pruebas interactivas y escenarios temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md).
-
-## Evidencia de la última prueba E2E
-
-Ejecución: [43330622553](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43330622553).
-
-- Relay: aprobado.
-- Proyecto Dragon Realm: importado y abierto en Godot Web.
-- Gameplay: 11/11 acciones enviadas.
-- Ataque: mensaje de 29 de daño detectado por OCR.
-- Joystick táctil: coordenada X del minimapa cambió de 0266 a 0017.
-- Grabación: un WebM continuo de la sesión, conservado como artefacto.
-- Advertencias: `hud.tscn` informó `Parse Error: Busy`; el probe de responsividad agotó tiempo aunque la captura y los controles sí funcionaron.
-
-El proyecto de referencia Escondite no se modificó.
-
-## Seguridad y protección de proyectos
-
-- No exponer tokens, claves ni credenciales al navegador, al proyecto importado o a los logs.
-- Tratar repositorios y scripts externos como código no confiable.
-- Limitar rutas, tamaños, duración y consumo de recursos.
-- Mantener separados los proyectos y sus artefactos.
-- Registrar SHA base, commits temporales y manifiesto de archivos.
-- No sobrescribir archivos originales sin guardar su contenido y plan de restauración.
-- No borrar ni revertir cambios ajenos.
-- Separar observación visual de telemetría funcional; no inferir estado interno solo por píxeles.
-- No declarar una capacidad terminada sin pruebas y artefactos que la demuestren.
-
-## Servicios
-
-- Editor: https://godot-web-ia-integrada-rt2l.onrender.com/
+- Godot Web: https://godot-web-ia-integrada-rt2l.onrender.com/
 - Relay: https://godot-web-ia-relay.onrender.com/
 - Salud del Relay: https://godot-web-ia-relay.onrender.com/health
-- Repositorio: https://github.com/decuvilan-lgtm/Godot-web-ia-integrada
+- Repositorio del laboratorio: https://github.com/decuvilan-lgtm/Godot-web-ia-integrada
+- Workflow de importación: [Godot Web Import](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/workflows/godot-web-import.yml)
 
-## Documentación
+## 11. Documentación técnica relacionada
 
+- [Funcionamiento completo del sistema](docs/SYSTEM_OPERATION.md)
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
 - [Flujo Headless + GitHub](docs/HEADLESS_DEVELOPMENT_WORKFLOW.md)
 - [Importación GitHub → Godot Web](docs/GITHUB_TO_GODOT_WEB.md)
 - [Capacidades de inspección verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
 - [Observación visual](docs/VISUAL_OBSERVATION.md)
-- [Pruebas interactivas y escenarios temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md)
-- [Casos de regresión de importación Godot Web](docs/GODOT_WEB_IMPORT_REGRESSION_CASES.md)
+- [Pruebas interactivas](docs/INTERACTIVE_GAMEPLAY_TESTING.md)
+- [Casos de regresión de importación](docs/GODOT_WEB_IMPORT_REGRESSION_CASES.md)
 - [Contrato de comandos visuales](docs/VISUAL_COMMANDS.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
 - [Relay y variables de entorno](relay/README.md)
 
-## Principios para continuar
+## 12. Recorrido resumido: lo más importante
 
-1. El sistema es genérico: no hay un juego de referencia obligatorio.
-2. Cada ejecución identifica repositorio, rama, subcarpeta y commit.
-3. Los controles, escenas y recursos se descubren o configuran por proyecto.
-4. Las pruebas Headless, visuales e interactivas se complementan.
-5. Cada prueba produce evidencia trazable y estados honestos.
-6. Los escenarios temporales pueden probar cualquier sistema o interacción.
-7. La publicación temporal en `main` debe ser reversible, auditada y seguida de limpieza verificada.
-8. Las capacidades pendientes no se presentan como terminadas.
+1. **GitHub es la fuente de verdad:** allí vive y se entrega el proyecto completo.
+2. **Godot Web es solo el laboratorio visual:** inspecciona, ejecuta y prueba; nunca entrega el juego entero.
+3. **Cada carga queda ligada a un SHA:** siempre sabemos qué versión estamos viendo.
+4. **Si cambia el código, se vuelve a importar:** el workflow prepara y carga el proyecto actualizado; no confiamos en actualizaciones automáticas de la pestaña.
+5. **Mientras la sesión siga activa, se pueden enviar más pruebas:** no hace falta reimportar si el commit probado no cambió.
+6. **Las pruebas generan evidencia:** diagnósticos, logs/debugger, capturas, vídeos, eventos y resultados estructurados.
+7. **La sesión no se cierra al terminar una tarea:** Render puede suspenderla naturalmente; no mantenemos el servicio despierto artificialmente.
+8. **Si Render suspende, se reconstruye bajo demanda:** se despierta solo cuando hay una nueva solicitud y se vuelve a cargar el commit requerido.
+9. **La evidencia se conserva fuera de la memoria efímera:** una suspensión no debe borrar resultados ya publicados.
+10. **Nunca confundimos evidencia con proyecto:** el informe indica dónde está el código fuente y qué SHA fue probado.
