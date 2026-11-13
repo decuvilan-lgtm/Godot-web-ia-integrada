@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from visual_storage import BUCKET, storage_client
-from project_profiles import MANIFEST_PATH, execute_profile_command, load_project_profile
+from project_profiles import MANIFEST_PATH, execute_profile_command, load_project_profile, resolve_repository_commit_sha
 
 logger = logging.getLogger("godot_web_ia_persistent_sessions")
 router = APIRouter(prefix="/v1/persistent-sessions", tags=["persistent-sessions"])
@@ -277,6 +277,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         raise HTTPException(status_code=400, detail="Invalid project_path")
     if body.commit_sha and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", body.commit_sha):
         raise HTTPException(status_code=400, detail="commit_sha must be a full 40- or 64-character hexadecimal Git object ID")
+    effective_sha = body.commit_sha or await resolve_repository_commit_sha(body.repository, body.branch)
     for existing in list(_sessions.values()):
         if existing.page is None or existing.page.is_closed():
             await _close_session(existing)
@@ -285,7 +286,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             existing.repository == body.repository
             and existing.branch == body.branch
             and existing.project_path == body.project_path
-            and existing.commit_sha == body.commit_sha
+            and existing.commit_sha == effective_sha
         )
         if body.reuse_existing and same_project:
             _touch(existing)
@@ -312,7 +313,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             }
             try:
                 await existing.page.goto(
-                    _editor_url_for(body.repository, body.branch, body.project_path, body.commit_sha),
+                    _editor_url_for(body.repository, body.branch, body.project_path, effective_sha),
                     wait_until="domcontentloaded",
                     timeout=90000,
                 )
@@ -320,7 +321,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 raise HTTPException(status_code=502, detail=f"Could not re-import project into the existing browser: {type(exc).__name__}") from exc
             existing.branch = body.branch
             existing.project_path = body.project_path
-            existing.commit_sha = body.commit_sha
+            existing.commit_sha = effective_sha
             existing.artifacts.clear()
             existing.events.append({
                 "type": "session.reimported",
@@ -329,7 +330,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "repository": body.repository,
                 "branch": body.branch,
                 "project_path": body.project_path,
-                "commit_sha": body.commit_sha,
+                "commit_sha": effective_sha,
             })
             _touch(existing)
             return {
@@ -359,7 +360,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         repository=body.repository,
         branch=body.branch,
         project_path=body.project_path,
-        commit_sha=body.commit_sha,
+        commit_sha=effective_sha,
     )
     try:
         session.context = await browser.new_context(
@@ -367,7 +368,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             accept_downloads=True,
         )
         session.page = await session.context.new_page()
-        await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, body.commit_sha), wait_until="domcontentloaded", timeout=90000)
+        await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, effective_sha), wait_until="domcontentloaded", timeout=90000)
         session.events.append({
             "type": "session.opened",
             "at": time.time(),
