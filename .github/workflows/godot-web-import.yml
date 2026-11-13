@@ -256,6 +256,57 @@ jobs:
           print(json.dumps(result, ensure_ascii=False, indent=2))
           PY
 
+      - name: Diagnosticar ZIP real del proyecto seleccionado
+        id: archive_diagnostic
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python - <<'PY'
+          import io, json, os, urllib.request, zipfile, collections
+          owner = "gavilandavid89-pixel"
+          repo = "Ajedrez-2c2"
+          branch = "main"
+          path = "ajedrez_2c2_v161"
+          url = f"https://godot-web-ia-relay.onrender.com/v1/github/{owner}/{repo}/archive?branch={branch}&path={path}"
+          req = urllib.request.Request(url, headers={"User-Agent":"Godot-Web-Archive-Diagnostic"})
+          with urllib.request.urlopen(req, timeout=120) as response:
+              body = response.read()
+              report = {
+                  "http_status": response.status,
+                  "bytes": len(body),
+                  "sha256": __import__("hashlib").sha256(body).hexdigest(),
+                  "excluded_count": response.headers.get("X-Godot-Web-Excluded-Count"),
+                  "excluded_files": response.headers.get("X-Godot-Web-Excluded-Files"),
+              }
+          with zipfile.ZipFile(io.BytesIO(body)) as archive:
+              infos = [x for x in archive.infolist() if not x.is_dir()]
+              bad = archive.testzip()
+              report.update({
+                  "zip_entries": len(infos),
+                  "crc_test": "passed" if bad is None else "failed",
+                  "first_bad_entry": bad,
+                  "compression_methods": dict(collections.Counter(x.compress_type for x in infos)),
+                  "encrypted_entries": sum(bool(x.flag_bits & 1) for x in infos),
+                  "zero_byte_entries": sum(x.file_size == 0 for x in infos),
+                  "total_uncompressed_bytes": sum(x.file_size for x in infos),
+                  "root_names": sorted({x.filename.split("/",1)[0] for x in infos}),
+                  "first_entries": [{
+                      "name":x.filename, "size":x.file_size, "compressed":x.compress_size,
+                      "flags":x.flag_bits, "external_attr":x.external_attr,
+                      "create_system":x.create_system, "compression":x.compress_type
+                  } for x in infos[:30]],
+                  "largest_entries": [{
+                      "name":x.filename, "size":x.file_size, "compressed":x.compress_size,
+                      "compression":x.compress_type
+                  } for x in sorted(infos,key=lambda x:x.file_size,reverse=True)[:20]],
+              })
+          with open("artifacts/godot-archive-diagnostic.json","w",encoding="utf-8") as f:
+              json.dump(report,f,ensure_ascii=False,indent=2)
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          if report["http_status"] != 200 or report["crc_test"] != "passed":
+              raise SystemExit("ZIP real del proyecto inválido.")
+          PY
+
       - name: Preparar navegador Chromium
         run: |
           npm init -y
