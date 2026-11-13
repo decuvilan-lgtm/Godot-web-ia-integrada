@@ -227,7 +227,7 @@ El perfil debe documentar teclas y botones, pulsación/retención/arrastre/solta
 
 Los manifiestos y comandos del repositorio se tratan como datos no confiables. El ejecutor valida el esquema y solo permite operaciones genéricas autorizadas, con límites de tiempo, frecuencia, rutas y recursos. No ejecuta shell arbitrario ni scripts externos automáticamente por estar mencionados en un archivo. Los adaptadores ejecutables particulares requieren revisión, aislamiento y autorización explícita.
 
-Los perfiles nunca se reutilizan entre repositorios por similitud de controles. Para proyectos de solo lectura, el laboratorio conserva una copia de trabajo asociada a la identidad exacta del repositorio, sin modificar el origen. Si el repositorio es editable y la tarea lo autoriza, la documentación definitiva se incorpora al propio proyecto.
+Los perfiles nunca se reutilizan entre repositorios por similitud de controles. Para proyectos de solo lectura, cualquier perfil descubierto durante la sesión es temporal: no se guarda como memoria central ni se reutiliza automáticamente en otra sesión. Se puede preparar una propuesta de archivos para incorporarla al repositorio fuente cuando exista autorización. El destino definitivo de los comandos sigue siendo el propio repositorio del juego.
 
 ### 13.5 Resultado de cada ejecución
 
