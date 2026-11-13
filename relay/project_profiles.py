@@ -39,13 +39,13 @@ def _relative_profile_path(value: Any, *, prefix: str) -> str:
     return prefix + value
 
 
-def validate_manifest(data: Any) -> dict[str, Any]:
+def validate_manifest(data: Any, *, expected_commit_sha: str | None = None) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ValueError("Unsupported lab manifest schema_version")
     control_profile = _relative_profile_path(data.get("control_profile", "control-profile.json"), prefix="godot-lab/")
     raw_commands = data.get("commands")
     if not isinstance(raw_commands, list) or not 1 <= len(raw_commands) <= MAX_COMMANDS:
-        raise ValueError("Manifest commands must contain 1 to 100 entries")
+        raise ValueError("Manifest commands must contain 1 to 20 entries")
     commands: list[dict[str, str]] = []
     seen: set[str] = set()
     for entry in raw_commands:
@@ -55,10 +55,11 @@ def validate_manifest(data: Any) -> dict[str, Any]:
         if not isinstance(name, str) or not SLUG_RE.fullmatch(name) or name in seen:
             raise ValueError("Command names must be unique safe slugs")
         file_path = _relative_profile_path(entry.get("file"), prefix="godot-lab/")
+        verification = validate_verification(entry.get("verification"), expected_commit_sha=expected_commit_sha)
         if not file_path.startswith("godot-lab/commands/"):
             raise ValueError("Command files must live under godot-lab/commands/")
         seen.add(name)
-        commands.append({"name": name, "file": file_path, "description": str(entry.get("description", ""))[:240]})
+        commands.append({"name": name, "file": file_path, "description": str(entry.get("description", ""))[:240], "verification": verification})
     project = data.get("project", {})
     if not isinstance(project, dict):
         raise ValueError("Manifest project metadata must be an object")
@@ -83,9 +84,29 @@ def validate_manifest(data: Any) -> dict[str, Any]:
     }
 
 
-def validate_control_profile(data: Any) -> dict[str, Any]:
+def validate_verification(data: Any, *, expected_commit_sha: str | None = None) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Profile verification metadata is required")
+    status = data.get("status")
+    if status not in {"pending", "verified", "obsolete"}:
+        raise ValueError("Profile verification status must be pending, verified, or obsolete")
+    commit_sha = data.get("commit_sha")
+    if commit_sha is not None and (
+        not isinstance(commit_sha, str)
+        or not re.fullmatch(r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", commit_sha)
+    ):
+        raise ValueError("Profile verification commit_sha must be a full Git SHA or null")
+    if status == "verified" and commit_sha is None:
+        raise ValueError("A verified profile must record the exact commit SHA it was tested against")
+    if status == "verified" and expected_commit_sha and commit_sha.lower() != expected_commit_sha.lower():
+        status = "obsolete"
+    return {"status": status, "commit_sha": commit_sha.lower() if commit_sha else None}
+
+
+def validate_control_profile(data: Any, *, expected_commit_sha: str | None = None) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ValueError("Unsupported control profile schema_version")
+    verification = validate_verification(data.get("verification"), expected_commit_sha=expected_commit_sha)
     controls = data.get("controls")
     if not isinstance(controls, dict) or len(controls) > 100:
         raise ValueError("Control profile must contain at most 100 controls")
@@ -111,17 +132,18 @@ def validate_control_profile(data: Any) -> dict[str, Any]:
             validated[name] = {"type": "point", "x": float(x), "y": float(y)}
         else:
             raise ValueError(f"Control {name} uses an unsupported type")
-    return {"schema_version": 1, "controls": validated}
+    return {"schema_version": 1, "verification": verification, "controls": validated}
 
 
-def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any]) -> dict[str, Any]:
+def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any], expected_commit_sha: str | None = None) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ValueError("Unsupported command schema_version")
     if data.get("name") != expected_name:
         raise ValueError("Command file name does not match its manifest entry")
+    verification = validate_verification(data.get("verification"), expected_commit_sha=expected_commit_sha)
     steps = data.get("steps")
     if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
-        raise ValueError("Command must contain 1 to 80 steps")
+        raise ValueError("Command must contain 1 to 40 steps")
     validated_steps: list[dict[str, Any]] = []
     total_delay_ms = 0
     for index, step in enumerate(steps):
@@ -171,7 +193,7 @@ def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any])
             raise ValueError(f"Step {index} uses unsupported operation {op!r}")
         if total_delay_ms > MAX_TOTAL_DELAY_MS:
             raise ValueError("Command exceeds the total wait/hold time budget")
-    return {"schema_version": 1, "name": expected_name, "steps": validated_steps}
+    return {"schema_version": 1, "name": expected_name, "verification": verification, "steps": validated_steps}
 
 
 async def _fetch_json(client: httpx.AsyncClient, url: str) -> Any | None:
@@ -224,11 +246,11 @@ async def load_project_profile(repository: str, ref: str, command_name: str | No
             raw_manifest = await _fetch_json(client, base + MANIFEST_PATH)
             if raw_manifest is None:
                 return None
-            manifest = validate_manifest(raw_manifest)
+            manifest = validate_manifest(raw_manifest, expected_commit_sha=ref)
             raw_controls = await _fetch_json(client, base + manifest["control_profile"])
             if raw_controls is None:
                 raise ValueError("Manifest control profile file was not found")
-            control_profile = validate_control_profile(raw_controls)
+            control_profile = validate_control_profile(raw_controls, expected_commit_sha=ref)
             commands: dict[str, dict[str, Any]] = {}
             if command_name is not None:
                 entry = next((item for item in manifest["commands"] if item["name"] == command_name), None)
@@ -237,11 +259,15 @@ async def load_project_profile(repository: str, ref: str, command_name: str | No
                 raw_command = await _fetch_json(client, base + entry["file"])
                 if raw_command is None:
                     raise ValueError(f"Command file {entry['name']} was not found")
-                commands[entry["name"]] = validate_command(
+                command_profile = validate_command(
                     raw_command,
                     expected_name=entry["name"],
                     controls=control_profile["controls"],
+                    expected_commit_sha=ref,
                 )
+                if command_profile["verification"] != entry["verification"]:
+                    raise ValueError("Command verification metadata must match its manifest entry")
+                commands[entry["name"]] = command_profile
     except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=f"Project-owned lab profile is invalid or unavailable: {type(exc).__name__}") from exc
     return {

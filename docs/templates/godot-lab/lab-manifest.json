@@ -9,7 +9,11 @@
     {
       "name": "smoke-test",
       "file": "commands/smoke-test.json",
-      "description": "Generic editor and canvas smoke test"
+      "description": "Generic editor and canvas smoke test",
+      "verification": {
+        "status": "pending",
+        "commit_sha": null
+      }
     }
   ]
 }

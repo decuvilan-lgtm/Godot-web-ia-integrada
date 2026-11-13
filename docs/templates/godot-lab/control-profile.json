@@ -1,4 +1,8 @@
 {
   "schema_version": 1,
+  "verification": {
+    "status": "pending",
+    "commit_sha": null
+  },
   "controls": {}
 }

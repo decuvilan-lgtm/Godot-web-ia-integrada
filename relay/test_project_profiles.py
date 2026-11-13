@@ -5,11 +5,14 @@ import unittest
 
 import project_profiles as profiles
 
+VERIFIED_SHA = "a" * 40
+
 
 class ProjectProfileValidationTests(unittest.TestCase):
     def setUp(self):
         self.controls = profiles.validate_control_profile({
             "schema_version": 1,
+            "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
             "controls": {
                 "move_left": {"type": "key", "key": "A"},
                 "start": {"type": "text", "text": "JUGAR"},
@@ -23,18 +26,27 @@ class ProjectProfileValidationTests(unittest.TestCase):
             "project": {"name": "Sample", "project_path": "game"},
             "control_profile": "control-profile.json",
             "commands": [
-                {"name": "smoke-test", "file": "commands/smoke-test.json", "description": "Basic UI check"}
+                {"name": "smoke-test", "file": "commands/smoke-test.json", "description": "Basic UI check", "verification": {"status": "pending", "commit_sha": None}}
             ],
         })
         self.assertEqual(manifest["project"]["project_path"], "game")
         self.assertEqual(manifest["commands"][0]["file"], "godot-lab/commands/smoke-test.json")
+        self.assertEqual(manifest["commands"][0]["verification"]["status"], "pending")
+
+    def test_manifest_rejects_verified_command_without_commit_sha(self):
+        with self.assertRaises(ValueError):
+            profiles.validate_manifest({
+                "schema_version": 1,
+                "project": {"name": "Sample", "project_path": "game"},
+                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json", "verification": {"status": "verified", "commit_sha": None}}],
+            })
 
     def test_manifest_requires_an_explicit_project_path(self):
         with self.assertRaises(ValueError):
             profiles.validate_manifest({
                 "schema_version": 1,
                 "project": {"name": "Sample"},
-                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json"}],
+                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json", "verification": {"status": "pending", "commit_sha": None}}],
             })
 
     def test_manifest_rejects_path_traversal(self):
@@ -50,11 +62,13 @@ class ProjectProfileValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             profiles.validate_control_profile({
                 "schema_version": 1,
+                "verification": {"status": "pending", "commit_sha": None},
                 "controls": {"danger": {"type": "key", "key": "Control+Alt+Delete"}},
             })
         with self.assertRaises(ValueError):
             profiles.validate_control_profile({
                 "schema_version": 1,
+                "verification": {"status": "pending", "commit_sha": None},
                 "controls": {"outside": {"type": "point", "x": 1.1, "y": 0.5}},
             })
 
@@ -62,6 +76,7 @@ class ProjectProfileValidationTests(unittest.TestCase):
         command = profiles.validate_command({
             "schema_version": 1,
             "name": "smoke-test",
+            "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
             "steps": [
                 {"op": "wait", "ms": 500},
                 {"op": "tap_control", "control": "start"},
@@ -69,7 +84,7 @@ class ProjectProfileValidationTests(unittest.TestCase):
                 {"op": "assert_canvas"},
                 {"op": "screenshot"},
             ],
-        }, expected_name="smoke-test", controls=self.controls)
+        }, expected_name="smoke-test", controls=self.controls, expected_commit_sha=VERIFIED_SHA)
         self.assertEqual(len(command["steps"]), 5)
 
     def test_command_rejects_shell_script_or_unknown_operation(self):
@@ -77,14 +92,16 @@ class ProjectProfileValidationTests(unittest.TestCase):
             profiles.validate_command({
                 "schema_version": 1,
                 "name": "smoke-test",
+                "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
                 "steps": [{"op": "shell", "command": "echo unsafe"}],
-            }, expected_name="smoke-test", controls=self.controls)
+            }, expected_name="smoke-test", controls=self.controls, expected_commit_sha=VERIFIED_SHA)
 
     def test_command_enforces_total_delay_budget(self):
         with self.assertRaises(ValueError):
             profiles.validate_command({
                 "schema_version": 1,
                 "name": "smoke-test",
+                "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
                 "steps": [
                     {"op": "wait", "ms": 5000},
                     {"op": "wait", "ms": 5000},
@@ -92,7 +109,28 @@ class ProjectProfileValidationTests(unittest.TestCase):
                     {"op": "wait", "ms": 5000},
                     {"op": "wait", "ms": 5000},
                 ],
-            }, expected_name="smoke-test", controls=self.controls)
+            }, expected_name="smoke-test", controls=self.controls, expected_commit_sha=VERIFIED_SHA)
+
+    def test_missing_verification_metadata_is_rejected(self):
+        with self.assertRaises(ValueError):
+            profiles.validate_control_profile({"schema_version": 1, "controls": {}})
+
+    def test_verified_profile_from_another_commit_becomes_obsolete(self):
+        result = profiles.validate_control_profile({
+            "schema_version": 1,
+            "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
+            "controls": {},
+        }, expected_commit_sha="b" * 40)
+        self.assertEqual(result["verification"]["status"], "obsolete")
+
+    def test_pending_command_cannot_become_verified_by_valid_json(self):
+        result = profiles.validate_command({
+            "schema_version": 1,
+            "name": "smoke-test",
+            "verification": {"status": "pending", "commit_sha": None},
+            "steps": [{"op": "inspect"}],
+        }, expected_name="smoke-test", controls={}, expected_commit_sha=VERIFIED_SHA)
+        self.assertEqual(result["verification"]["status"], "pending")
 
 
 class FakePage:
@@ -135,10 +173,11 @@ class ProjectProfileExecutionTests(unittest.IsolatedAsyncioTestCase):
     async def test_safe_command_executes_and_stores_screenshot(self):
         controls = {"start": {"type": "text", "text": "JUGAR"}}
         profile = {
-            "control_profile": {"controls": controls},
+            "control_profile": {"verification": {"status": "verified", "commit_sha": VERIFIED_SHA}, "controls": controls},
             "commands": {
                 "smoke-test": {
                     "name": "smoke-test",
+                    "verification": {"status": "verified", "commit_sha": VERIFIED_SHA},
                     "steps": [
                         {"op": "tap_control", "control": "start"},
                         {"op": "screenshot"},

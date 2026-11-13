@@ -89,7 +89,7 @@ Las capturas intermedias se mantienen temporalmente en memoria hasta completar l
 
 ### Perfiles propios de cada juego
 
-Cada repositorio puede definir `godot-lab/lab-manifest.json`, su perfil de controles y comandos JSON. El Relay obtiene estos archivos desde el SHA importado, valida el esquema, las rutas y cada operación, y solo ejecuta interacciones de navegador incluidas en la lista permitida. No ejecuta shell, Python, JavaScript ni scripts externos suministrados por el proyecto.
+Cada repositorio puede definir `godot-lab/lab-manifest.json`, su perfil de controles y comandos JSON. El Relay obtiene estos archivos desde el SHA importado, valida el esquema, las rutas y cada operación, y solo ejecuta interacciones de navegador incluidas en la lista permitida. No ejecuta shell, Python, JavaScript ni scripts externos suministrados por el proyecto. Cada perfil de controles y cada comando lleva un estado `pending`, `verified` u `obsolete`; para ejecutarse, ambos deben estar `verified` contra el SHA exacto importado. Una revisión nueva invalida automáticamente una verificación hecha contra otro SHA. El JSON válido por sí solo nunca significa que los controles hayan sido comprobados.
 
 Si el repositorio no tiene un perfil válido, el laboratorio puede inspeccionar y capturar el editor, pero no inventa controles ni copia perfiles de otros juegos. Los repositorios de juegos siguen siendo la fuente de verdad; el Relay no modifica sus archivos.
 

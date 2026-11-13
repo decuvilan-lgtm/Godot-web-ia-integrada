@@ -448,7 +448,7 @@ async def get_project_lab_profile(session_id: str, authorization: str | None = H
     _assert_profile_matches_session(profile, session)
     return {
         "available": True,
-        "profile_status": "verified",
+        "profile_status": profile["control_profile"]["verification"]["status"],
         "manifest_path": MANIFEST_PATH,
         "repository": session.repository,
         "ref": session.commit_sha or session.branch,
@@ -475,6 +475,11 @@ async def run_project_lab_command(
     if profile is None:
         raise HTTPException(status_code=404, detail="This repository revision has no project-owned lab manifest")
     _assert_profile_matches_session(profile, session)
+    if profile["control_profile"]["verification"]["status"] != "verified":
+        raise HTTPException(status_code=409, detail="Project control profile has not been verified against this exact commit SHA")
+    command_profile = profile["commands"].get(command_name)
+    if command_profile is None or command_profile["verification"]["status"] != "verified":
+        raise HTTPException(status_code=409, detail="Project command has not been verified against this exact commit SHA")
     async with session.lock:
         try:
             results = await asyncio.wait_for(
