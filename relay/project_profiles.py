@@ -45,7 +45,7 @@ def validate_manifest(data: Any, *, expected_commit_sha: str | None = None) -> d
     control_profile = _relative_profile_path(data.get("control_profile", "control-profile.json"), prefix="godot-lab/")
     raw_commands = data.get("commands")
     if not isinstance(raw_commands, list) or not 1 <= len(raw_commands) <= MAX_COMMANDS:
-        raise ValueError("Manifest commands must contain 1 to 100 entries")
+        raise ValueError("Manifest commands must contain 1 to 20 entries")
     commands: list[dict[str, str]] = []
     seen: set[str] = set()
     for entry in raw_commands:
@@ -143,7 +143,7 @@ def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any],
     verification = validate_verification(data.get("verification"), expected_commit_sha=expected_commit_sha)
     steps = data.get("steps")
     if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
-        raise ValueError("Command must contain 1 to 80 steps")
+        raise ValueError("Command must contain 1 to 40 steps")
     validated_steps: list[dict[str, Any]] = []
     total_delay_ms = 0
     for index, step in enumerate(steps):
