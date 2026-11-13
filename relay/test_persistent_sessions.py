@@ -200,10 +200,11 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(getattr(raised.exception, "status_code", None), 409)
 
     async def test_project_profile_command_executes_repo_owned_steps(self):
+        verified = {"status": "verified", "commit_sha": "a" * 40}
         profile = {
-            "manifest": {"project": {"name": "Test", "project_path": "game"}, "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json"}]},
-            "control_profile": {"controls": {}},
-            "commands": {"smoke-test": {"name": "smoke-test", "steps": [{"op": "inspect"}]}},
+            "manifest": {"project": {"name": "Test", "project_path": "game"}, "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json", "verification": verified}]},
+            "control_profile": {"verification": verified, "controls": {}},
+            "commands": {"smoke-test": {"name": "smoke-test", "verification": verified, "steps": [{"op": "inspect"}]}},
         }
         async def fake_execute(page, loaded_profile, command_name, artifacts):
             return [{"step": 0, "op": "inspect", "result": {"canvas_count": 1}}]
