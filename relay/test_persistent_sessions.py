@@ -28,6 +28,15 @@ class FakePage:
         return self.closed
     async def screenshot(self, **kwargs):
         return b"fake-png-bytes"
+    async def evaluate(self, script):
+        return {"phase": "started", "commitSha": None}
+    def locator(self, selector):
+        class FakeLocator:
+            async def inner_text(self, **kwargs):
+                return "Godot Web test editor"
+            async def count(self):
+                return 1
+        return FakeLocator()
 
 
 class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
@@ -93,6 +102,17 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         async for chunk in response.body_iterator:
             chunks.append(chunk)
         self.assertTrue(b"".join(chunks).startswith(b"PK"))
+
+    async def test_github_oidc_claims_are_restricted_to_the_expected_workflow(self):
+        claims = {
+            "repository": sessions.OIDC_REPOSITORY,
+            "ref": sessions.OIDC_REF,
+            "workflow_ref": f"{sessions.OIDC_REPOSITORY}/{sessions.OIDC_WORKFLOW}@{sessions.OIDC_REF}",
+        }
+        sessions._validate_github_oidc_claims(claims)
+        claims["repository"] = "someone-else/other-repo"
+        with self.assertRaises(ValueError):
+            sessions._validate_github_oidc_claims(claims)
 
     async def test_commit_sha_is_validated_and_saved(self):
         request = sessions.OpenSessionRequest(repository="owner/project", commit_sha="a" * 40)
