@@ -121,6 +121,43 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception):
             sessions.OpenSessionRequest(repository="owner/project", commit_sha="not-a-sha")
 
+    async def test_open_session_reuses_the_existing_browser_for_the_same_revision(self):
+        body = sessions.OpenSessionRequest(
+            repository="owner/project",
+            branch="main",
+            project_path="game",
+        )
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "_get_browser") as get_browser:
+            result = await sessions.open_persistent_session(body, "Bearer test-secret")
+        self.assertTrue(result["reused"])
+        self.assertEqual(result["session_id"], "test-session")
+        get_browser.assert_not_called()
+
+    async def test_open_session_rejects_switching_projects_without_closing_the_current_session(self):
+        body = sessions.OpenSessionRequest(
+            repository="owner/project",
+            branch="main",
+            project_path="another-game",
+        )
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+            with self.assertRaises(Exception) as raised:
+                await sessions.open_persistent_session(body, "Bearer test-secret")
+        self.assertEqual(getattr(raised.exception, "status_code", None), 409)
+        self.assertIn("test-session", sessions._sessions)
+
+    async def test_session_list_returns_existing_session_metadata(self):
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+            result = await sessions.list_persistent_sessions("Bearer test-secret")
+        self.assertEqual(result["sessions"][0]["session_id"], "test-session")
+        self.assertEqual(result["sessions"][0]["commit_sha"], None)
+
+    def test_session_list_route_is_registered(self):
+        self.assertTrue(any(
+            getattr(route, "path", None) == "/v1/persistent-sessions"
+            and "GET" in getattr(route, "methods", set())
+            for route in app.routes
+        ))
+
     def test_artifact_download_route_is_registered(self):
         self.assertTrue(any(
             getattr(route, "path", None) == "/v1/persistent-sessions/{session_id}/artifacts/{artifact_id}"
