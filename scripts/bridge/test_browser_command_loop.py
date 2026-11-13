@@ -36,6 +36,20 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(self.command("press_key",key="Alt+F4"),SESSION,0)
 
+    def test_type_text_is_bounded(self):
+        self.assertEqual(_validate(self.command("type_text",text="BridgeSandbox"),SESSION,0),(1,"type_text"))
+        with self.assertRaises(ValueError):
+            _validate(self.command("type_text",text="x"*501),SESSION,0)
+
+    def test_canvas_scroll_accepts_bounded_deltas(self):
+        cmd=self.command("canvas_scroll",x=0.5,y=0.5,delta_y=-600)
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"canvas_scroll"))
+
+    def test_canvas_scroll_rejects_excessive_deltas(self):
+        cmd=self.command("canvas_scroll",x=0.5,y=0.5,delta_y=1201)
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_unknown_fields_are_rejected(self):
         with self.assertRaises(ValueError):
             _validate(self.command("canvas_click",x=0.5,y=0.5,script="alert(1)"),SESSION,0)
