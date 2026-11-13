@@ -26,18 +26,27 @@ class ProjectProfileValidationTests(unittest.TestCase):
             "project": {"name": "Sample", "project_path": "game"},
             "control_profile": "control-profile.json",
             "commands": [
-                {"name": "smoke-test", "file": "commands/smoke-test.json", "description": "Basic UI check"}
+                {"name": "smoke-test", "file": "commands/smoke-test.json", "description": "Basic UI check", "verification": {"status": "pending", "commit_sha": None}}
             ],
         })
         self.assertEqual(manifest["project"]["project_path"], "game")
         self.assertEqual(manifest["commands"][0]["file"], "godot-lab/commands/smoke-test.json")
+        self.assertEqual(manifest["commands"][0]["verification"]["status"], "pending")
+
+    def test_manifest_rejects_verified_command_without_commit_sha(self):
+        with self.assertRaises(ValueError):
+            profiles.validate_manifest({
+                "schema_version": 1,
+                "project": {"name": "Sample", "project_path": "game"},
+                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json", "verification": {"status": "verified", "commit_sha": None}}],
+            })
 
     def test_manifest_requires_an_explicit_project_path(self):
         with self.assertRaises(ValueError):
             profiles.validate_manifest({
                 "schema_version": 1,
                 "project": {"name": "Sample"},
-                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json"}],
+                "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json", "verification": {"status": "pending", "commit_sha": None}}],
             })
 
     def test_manifest_rejects_path_traversal(self):
