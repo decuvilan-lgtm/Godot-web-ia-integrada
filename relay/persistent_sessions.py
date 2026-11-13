@@ -9,9 +9,7 @@ import logging
 import os
 import re
 import secrets
-import subprocess
-import sys
-import time
+import subprocessimport time
 import threading
 import zipfile
 from dataclasses import dataclass, field
@@ -157,6 +155,12 @@ def _get_session(session_id: str) -> PersistentSession:
     return session
 
 async def _get_browser():
+    """Return the single shared Chromium process.
+
+    Chromium must be installed during the Render build. Installing it on the
+    first request creates a large transient memory spike in the 512 MiB Free
+    instance and can kill the API process while a task is running.
+    """
     global _browser
     async with _browser_lock:
         if _browser is None or not _browser.is_connected():
@@ -168,31 +172,31 @@ async def _get_browser():
                 _get_browser._playwright = await async_playwright().start()
             launch_args = {
                 "headless": True,
-                "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                "args": [
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-background-networking",
+                    "--disable-default-apps",
+                    "--disable-sync",
+                    "--disable-translate",
+                    "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter",
+                    "--renderer-process-limit=1",
+                    "--js-flags=--max-old-space-size=128",
+                ],
             }
             try:
                 _browser = await _get_browser._playwright.chromium.launch(**launch_args)
-            except Exception as first_error:
-                # Render's existing service build command may not yet include the
-                # browser-install step from render-relay.yaml. Install the pinned
-                # Playwright Chromium on first use, then retry once.
-                logger.warning("Chromium binary missing; installing Playwright Chromium on first use")
-                try:
-                    process = await asyncio.create_subprocess_exec(
-                        sys.executable, "-m", "playwright", "install", "chromium",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.STDOUT,
-                    )
-                    output, _ = await asyncio.wait_for(process.communicate(), timeout=180)
-                    if process.returncode != 0:
-                        raise RuntimeError(output.decode("utf-8", "replace")[-3000:])
-                    _browser = await _get_browser._playwright.chromium.launch(**launch_args)
-                except Exception as exc:
-                    logger.exception("Could not install or start persistent Chromium")
-                    raise HTTPException(
-                        status_code=503,
-                        detail=f"Persistent browser unavailable: {type(exc).__name__}; check Render memory and system libraries",
-                    ) from first_error
+            except Exception as exc:
+                logger.exception("Could not start preinstalled persistent Chromium")
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Persistent Chromium is unavailable. Install it during the Render build "
+                        "with: python -m playwright install chromium"
+                    ),
+                ) from exc
         return _browser
 
 async def _close_session(session: PersistentSession) -> None:
