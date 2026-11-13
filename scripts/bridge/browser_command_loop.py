@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded, allowlisted command loop for an already-open Godot Web page."""
 from __future__ import annotations
-import json, math, os, re, time, urllib.request
+import json, os, re, time, urllib.request
 from pathlib import Path
 
 API="https://api.github.com"
@@ -30,7 +30,7 @@ def _post_result(repo, issue, token, command_id, result):
     _api(f"{API}/repos/{repo}/issues/{issue}/comments",token,"POST",{"body":body})
 
 def _valid_unit(value):
-    return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and 0<=value<=1
+    return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
     allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key"}
