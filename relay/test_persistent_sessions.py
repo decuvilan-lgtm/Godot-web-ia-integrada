@@ -16,10 +16,18 @@ class FakeS3:
     def __init__(self):
         self.objects = {}
     def put_object(self, **kwargs):
-        self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
+        key = (kwargs["Bucket"], kwargs["Key"])
+        self.objects[key] = kwargs["Body"]
+        self.metadata = getattr(self, "metadata", {})
+        self.metadata[key] = kwargs.get("Metadata", {})
     def get_object(self, **kwargs):
         import io
-        return {"Body": io.BytesIO(self.objects[(kwargs["Bucket"], kwargs["Key"])])}
+        data = self.objects[(kwargs["Bucket"], kwargs["Key"])]
+        return {
+            "Body": io.BytesIO(data),
+            "ContentLength": len(data),
+            "Metadata": self.metadata[(kwargs["Bucket"], kwargs["Key"])],
+        }
 
 
 class FakePage:
