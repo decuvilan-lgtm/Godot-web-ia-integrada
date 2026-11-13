@@ -55,11 +55,21 @@ def validate_project_path(project_path: str) -> str:
     return value
 
 
-def archive_url(owner: str, repository: str, branch: str = "main") -> str:
+def validate_commit_sha(commit_sha: str) -> str:
+    value = str(commit_sha or "").strip().lower()
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value):
+        raise HTTPException(status_code=422, detail="commit_sha must be a full 40- or 64-character hexadecimal Git object ID")
+    return value
+
+
+def archive_url(owner: str, repository: str, branch: str = "main", commit_sha: str | None = None) -> str:
     if not OWNER_RE.fullmatch(owner) or not REPO_RE.fullmatch(repository):
         raise HTTPException(status_code=422, detail="Invalid public GitHub owner/repository")
     if repository in {".", ".."}:
         raise HTTPException(status_code=422, detail="Invalid repository name")
+    if commit_sha:
+        pinned_sha = validate_commit_sha(commit_sha)
+        return f"https://codeload.github.com/{owner}/{repository}/zip/{pinned_sha}"
     ref = validate_branch(branch)
     return f"https://codeload.github.com/{owner}/{repository}/zip/refs/heads/{quote(ref, safe='/')}"
 
@@ -188,6 +198,7 @@ async def public_repository_archive(
     owner: str,
     repository: str,
     branch: str | None = Query(default=None, max_length=128),
+    sha: str | None = Query(default=None, min_length=40, max_length=64),
     path: str = Query(default="", max_length=240),
 ):
     """Return a public repository ZIP; branch defaults to the repository's default branch."""
@@ -204,7 +215,9 @@ async def public_repository_archive(
                 headers={"User-Agent": "Godot-Web-IA-Repository-Importer", "Accept": "application/zip"},
             ) as client:
                 selected_branch = validate_branch(branch) if branch else await resolve_default_branch(client, owner, repository)
-                url = archive_url(owner, repository, selected_branch)
+                selected_sha = validate_commit_sha(sha) if sha else None
+                selected_ref = selected_sha or selected_branch
+                url = archive_url(owner, repository, selected_branch, selected_sha)
                 async with client.stream("GET", url) as upstream:
                     if upstream.status_code == 404:
                         raise HTTPException(status_code=404, detail="Public repository or selected branch not found")
@@ -240,7 +253,7 @@ async def public_repository_archive(
         archive.close()
         archive = selected
 
-        branch_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", selected_branch).strip(".-") or "branch"
+        branch_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", selected_ref).strip(".-") or "ref"
         safe_name = f"{owner}-{repository}-{branch_slug}.zip"
         return StreamingResponse(
             _file_chunks(archive),
@@ -250,7 +263,9 @@ async def public_repository_archive(
                 "Cache-Control": "no-store, max-age=0",
                 "X-Content-Type-Options": "nosniff",
                 "X-GitHub-Repository": f"{owner}/{repository}",
-                "X-GitHub-Ref": selected_branch,
+                "X-GitHub-Ref": selected_ref,
+                "X-GitHub-Branch": selected_branch,
+                **({"X-GitHub-Commit-SHA": selected_sha} if selected_sha else {}),
                 "X-Godot-Web-Excluded-Count": str(len(excluded_native)),
                 "X-Godot-Web-Excluded-Files": ";".join(quote(path, safe="/") for path in excluded_native[:20]),
             },
