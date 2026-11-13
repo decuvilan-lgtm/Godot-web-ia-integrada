@@ -138,6 +138,8 @@ jobs:
             jq -n --arg status "$profile_status" --arg command "$PROFILE_COMMAND" '{status:$status,requested_command:$command,executed:false}' > artifacts/profile-execution.json
             if [[ "$profile_status" == "verified" ]]; then profile_run_status="command_not_found"; fi
           fi
+          oidc_token="$(get_oidc_token)"
+          echo "::add-mask::$oidc_token"
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"inspect","timeout_ms":20000}' -o artifacts/editor-inspection.json
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"screenshot","timeout_ms":20000}' -o artifacts/screenshot-command.json
           connector_phase="$(jq -r '.result.connector_status.phase // "missing"' artifacts/editor-inspection.json)"
