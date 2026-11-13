@@ -54,7 +54,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
     if not token or not issue_number:
         return {"enabled":False,"reason":"Missing issue-scoped GitHub token or issue number"}
     issue=int(issue_number)
-    deadline=time.monotonic()+max(30,min(int(duration_seconds),300))
+    deadline=time.monotonic()+max(600,min(int(duration_seconds),600))
     last_comment_id=0
     last_seq=0
     processed=0
