@@ -20,7 +20,7 @@ jobs:
       github.event.issue.user.login == 'decuvilan-lgtm' &&
       startsWith(github.event.issue.title, '[CHATGPT-BROWSER]')
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out lab controller
         uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
           SESSION_ISSUE_NUMBER: ${{ github.event.issue.number }}
           BROWSER_SESSION_ID: issue-${{ github.event.issue.number }}
-          BROWSER_COMMAND_WINDOW_SECONDS: '180'
+          BROWSER_COMMAND_WINDOW_SECONDS: '600'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/godot-browser-worker.py
       - name: Upload browser evidence
