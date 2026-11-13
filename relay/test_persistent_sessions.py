@@ -214,6 +214,41 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["command"], "smoke-test")
         self.assertTrue(result["session_kept_open"])
 
+    async def test_project_profile_route_reports_pending_verification(self):
+        pending = {"status": "pending", "commit_sha": None}
+        profile = {
+            "manifest": {
+                "project": {"name": "Test", "project_path": "game"},
+                "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json", "verification": pending}],
+            },
+            "control_profile": {"verification": pending, "controls": {}},
+            "commands": {},
+        }
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "load_project_profile", return_value=profile):
+            result = await sessions.get_project_lab_profile("test-session", "Bearer test-secret")
+        self.assertEqual(result["profile_status"], "pending")
+
+    async def test_project_profile_command_does_not_execute_pending_profile(self):
+        pending = {"status": "pending", "commit_sha": None}
+        profile = {
+            "manifest": {
+                "project": {"name": "Test", "project_path": "game"},
+                "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json", "verification": pending}],
+            },
+            "control_profile": {"verification": pending, "controls": {}},
+            "commands": {"smoke-test": {"name": "smoke-test", "verification": pending, "steps": [{"op": "inspect"}]}},
+        }
+        executed = False
+        async def fake_execute(page, loaded_profile, command_name, artifacts):
+            nonlocal executed
+            executed = True
+            return []
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "load_project_profile", return_value=profile), patch.object(sessions, "execute_profile_command", side_effect=fake_execute):
+            with self.assertRaises(Exception) as raised:
+                await sessions.run_project_lab_command("test-session", "smoke-test", "Bearer test-secret")
+        self.assertEqual(getattr(raised.exception, "status_code", None), 409)
+        self.assertFalse(executed)
+
     def test_project_profile_routes_are_registered(self):
         paths = {getattr(route, "path", None) for route in app.routes}
         self.assertIn("/v1/persistent-sessions/{session_id}/profile", paths)
