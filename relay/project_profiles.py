@@ -18,9 +18,10 @@ from fastapi import HTTPException
 MANIFEST_PATH = "godot-lab/lab-manifest.json"
 MAX_JSON_BYTES = 128 * 1024
 MAX_COMMANDS = 100
-MAX_STEPS = 80
-MAX_WAIT_MS = 10_000
-MAX_HOLD_MS = 3_000
+MAX_STEPS = 40
+MAX_WAIT_MS = 5_000
+MAX_TOTAL_DELAY_MS = 20_000
+MAX_HOLD_MS = 2_000
 KEY_RE = re.compile(r"^(?:[A-Z0-9]|Arrow(?:Left|Right|Up|Down)|Enter|Escape|Space|Tab|Backspace|Delete|Home|End|PageUp|PageDown|F(?:[1-9]|1[0-2]))$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,37}/[A-Za-z0-9][A-Za-z0-9._-]{0,98}$")
@@ -87,7 +88,7 @@ def validate_control_profile(data: Any) -> dict[str, Any]:
             validated[name] = {"type": "text", "text": label}
         elif kind == "point":
             x, y = control.get("x"), control.get("y")
-            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not 0 <= x <= 1 or not 0 <= y <= 1:
+            if isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not 0 <= x <= 1 or not 0 <= y <= 1:
                 raise ValueError(f"Control {name} must use normalized viewport coordinates")
             validated[name] = {"type": "point", "x": float(x), "y": float(y)}
         else:
@@ -104,29 +105,34 @@ def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any])
     if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
         raise ValueError("Command must contain 1 to 80 steps")
     validated_steps: list[dict[str, Any]] = []
+    total_delay_ms = 0
     for index, step in enumerate(steps):
         if not isinstance(step, dict):
             raise ValueError(f"Step {index} must be an object")
         op = step.get("op")
+        if not isinstance(op, str):
+            raise ValueError(f"Step {index} operation must be a string")
         if op == "wait":
             ms = step.get("ms")
-            if not isinstance(ms, int) or not 0 <= ms <= MAX_WAIT_MS:
+            if isinstance(ms, bool) or not isinstance(ms, int) or not 0 <= ms <= MAX_WAIT_MS:
                 raise ValueError(f"Step {index} has an invalid wait duration")
+            total_delay_ms += ms
             validated_steps.append({"op": op, "ms": ms})
         elif op in {"inspect", "screenshot", "assert_canvas"}:
             validated_steps.append({"op": op})
         elif op == "tap_control":
             control = step.get("control")
-            if control not in controls:
+            if not isinstance(control, str) or control not in controls:
                 raise ValueError(f"Step {index} references an unknown control")
             validated_steps.append({"op": op, "control": control})
         elif op == "hold_control":
             control = step.get("control")
             duration = step.get("duration_ms")
-            if control not in controls or controls[control]["type"] != "key":
+            if not isinstance(control, str) or control not in controls or controls[control]["type"] != "key":
                 raise ValueError(f"Step {index} can only hold a key control")
-            if not isinstance(duration, int) or not 1 <= duration <= MAX_HOLD_MS:
+            if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= MAX_HOLD_MS:
                 raise ValueError(f"Step {index} has an invalid hold duration")
+            total_delay_ms += duration
             validated_steps.append({"op": op, "control": control, "duration_ms": duration})
         elif op == "click_text":
             label = step.get("text")
@@ -145,17 +151,25 @@ def validate_command(data: Any, *, expected_name: str, controls: dict[str, Any])
             validated_steps.append({"op": op, "text": label})
         else:
             raise ValueError(f"Step {index} uses unsupported operation {op!r}")
+        if total_delay_ms > MAX_TOTAL_DELAY_MS:
+            raise ValueError("Command exceeds the total wait/hold time budget")
     return {"schema_version": 1, "name": expected_name, "steps": validated_steps}
 
 
 async def _fetch_json(client: httpx.AsyncClient, url: str) -> Any | None:
-    response = await client.get(url)
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    if len(response.content) > MAX_JSON_BYTES:
-        raise ValueError("Project profile file exceeds the size limit")
-    return json.loads(response.content)
+    async with client.stream("GET", url) as response:
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        content_length = response.headers.get("content-length")
+        if content_length and int(content_length) > MAX_JSON_BYTES:
+            raise ValueError("Project profile file exceeds the size limit")
+        content = bytearray()
+        async for chunk in response.aiter_bytes():
+            content.extend(chunk)
+            if len(content) > MAX_JSON_BYTES:
+                raise ValueError("Project profile file exceeds the size limit")
+        return json.loads(bytes(content))
 
 
 async def load_project_profile(repository: str, ref: str) -> dict[str, Any] | None:
@@ -227,7 +241,7 @@ async def execute_profile_command(page: Any, profile: dict[str, Any], command_na
                     await page.keyboard.press(control["key"])
                     output = {"control": step["control"], "pressed_key": control["key"]}
                 elif control["type"] == "text":
-                    await page.get_by_text(control["text"], exact=True).first.click(timeout=15000)
+                    await page.get_by_text(control["text"], exact=True).first.click(timeout=5000)
                     output = {"control": step["control"], "clicked_text": control["text"]}
                 else:
                     viewport = await page.evaluate("() => ({width: window.innerWidth, height: window.innerHeight})")
