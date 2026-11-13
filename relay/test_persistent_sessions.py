@@ -255,6 +255,19 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/v1/persistent-sessions/{session_id}/profile", paths)
         self.assertIn("/v1/persistent-sessions/{session_id}/profiles/{command_name}/run", paths)
 
+
+    def test_open_session_post_route_is_registered_to_request_handler(self):
+        routes = [
+            route for route in app.routes
+            if getattr(route, "path", None) == "/v1/persistent-sessions"
+            and "POST" in getattr(route, "methods", set())
+        ]
+        self.assertEqual(len(routes), 1)
+        self.assertIs(routes[0].endpoint, sessions.open_persistent_session)
+        body_names = [parameter.name for parameter in routes[0].dependant.body_params]
+        self.assertIn("body", body_names)
+
+
     def test_session_list_route_is_registered(self):
         self.assertTrue(any(
             getattr(route, "path", None) == "/v1/persistent-sessions"
