@@ -19,6 +19,7 @@ router = APIRouter(prefix="/v1/github", tags=["github-import"])
 OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$")
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
+MAX_SOURCE_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_PROJECT_BYTES = 256 * 1024 * 1024
 CHUNK_BYTES = 256 * 1024
@@ -102,8 +103,8 @@ def _validate_root_project(archive) -> None:
         raise HTTPException(status_code=422, detail="Could not find project.godot at repository root; supply the project subdirectory")
 
 
-def _select_project_subdirectory(archive, project_path: str):
-    """Repackage a selected repository subfolder so project.godot is at ZIP root."""
+def _select_project_subdirectory(archive, project_path: str, *, preserve_root: bool = False):
+    """Repackage a selected project, omitting native ELF executables unusable in Web."""
     try:
         source = zipfile.ZipFile(archive, "r")
     except zipfile.BadZipFile as exc:
@@ -117,6 +118,7 @@ def _select_project_subdirectory(archive, project_path: str):
         root = next(iter(roots))
         prefix = root + (f"/{project_path}/" if project_path else "/")
         selected = []
+        excluded_native = []
         total_uncompressed = 0
         found_project = False
 
@@ -132,6 +134,13 @@ def _select_project_subdirectory(archive, project_path: str):
             mode = (item.external_attr >> 16) & 0o170000
             if mode == 0o120000:
                 continue
+            # ELF executables are platform-native (including Android ARM) and
+            # cannot run in the browser's WebAssembly environment. Keep them in
+            # the source repository; omit them only from this temporary Web ZIP.
+            with source.open(item, "r") as entry:
+                if entry.read(4) == bytes((0x7F,)) + b"ELF":
+                    excluded_native.append(relative)
+                    continue
             total_uncompressed += item.file_size
             if total_uncompressed > MAX_PROJECT_BYTES:
                 raise HTTPException(status_code=413, detail="Selected Godot project exceeds the 256 MiB unpacked import limit")
@@ -146,7 +155,8 @@ def _select_project_subdirectory(archive, project_path: str):
         try:
             with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as target:
                 for original, relative in selected:
-                    info = zipfile.ZipInfo(relative, date_time=original.date_time)
+                    target_name = f"{root}/{relative}" if preserve_root else relative
+                    info = zipfile.ZipInfo(target_name, date_time=original.date_time)
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = original.external_attr
                     info.create_system = original.create_system
@@ -155,7 +165,7 @@ def _select_project_subdirectory(archive, project_path: str):
             if output.tell() > MAX_ARCHIVE_BYTES:
                 raise HTTPException(status_code=413, detail="Selected Godot project archive exceeds the 128 MiB import limit")
             output.seek(0)
-            return output
+            return output, excluded_native
         except Exception:
             output.close()
             raise
@@ -196,30 +206,27 @@ async def public_repository_archive(
                     declared_size = upstream.headers.get("content-length")
                     if declared_size:
                         try:
-                            if int(declared_size) > MAX_ARCHIVE_BYTES:
-                                raise HTTPException(status_code=413, detail="Repository archive exceeds the 128 MiB import limit")
+                            if int(declared_size) > MAX_SOURCE_ARCHIVE_BYTES:
+                                raise HTTPException(status_code=413, detail="Source repository archive exceeds the 256 MiB processing limit")
                         except ValueError as exc:
                             raise HTTPException(status_code=502, detail="GitHub returned an invalid archive size") from exc
 
                     total = 0
                     async for chunk in upstream.aiter_bytes(CHUNK_BYTES):
                         total += len(chunk)
-                        if total > MAX_ARCHIVE_BYTES:
-                            raise HTTPException(status_code=413, detail="Repository archive exceeds the 128 MiB import limit")
+                        if total > MAX_SOURCE_ARCHIVE_BYTES:
+                            raise HTTPException(status_code=413, detail="Source repository archive exceeds the 256 MiB processing limit")
                         archive.write(chunk)
 
         archive.seek(0)
         if archive.read(4) != b"PK" + bytes((3, 4)):
             raise HTTPException(status_code=502, detail="GitHub response was not a valid ZIP archive")
         archive.seek(0)
-        if project_path:
-            selected = _select_project_subdirectory(archive, project_path)
-            archive.close()
-            archive = selected
-        else:
-            # Root projects must be explicit; nested projects use the path query.
-            _validate_root_project(archive)
-            archive.seek(0)
+        selected, excluded_native = _select_project_subdirectory(
+            archive, project_path, preserve_root=not bool(project_path)
+        )
+        archive.close()
+        archive = selected
 
         branch_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", selected_branch).strip(".-") or "branch"
         safe_name = f"{owner}-{repository}-{branch_slug}.zip"
@@ -232,6 +239,8 @@ async def public_repository_archive(
                 "X-Content-Type-Options": "nosniff",
                 "X-GitHub-Repository": f"{owner}/{repository}",
                 "X-GitHub-Ref": selected_branch,
+                "X-Godot-Web-Excluded-Count": str(len(excluded_native)),
+                "X-Godot-Web-Excluded-Files": ";".join(quote(path, safe="/") for path in excluded_native[:20]),
             },
             background=BackgroundTask(archive.close),
         )

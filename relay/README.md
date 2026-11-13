@@ -23,7 +23,7 @@ No se guardan secretos en el repositorio. No registrar tokens, códigos temporal
 ## API principal
 
 - `GET /health`: liveness del relay y estado de inicialización de Neon.
-- `GET /v1/github/{owner}/{repository}/archive`: descarga acotada del ZIP público de main para precarga del Project Manager Godot Web.
+- `GET /v1/github/{owner}/{repository}/archive`: descarga acotada del ZIP público de la rama solicitada para precarga del Project Manager Godot Web. Acepta `branch` y `path`; reempaqueta subcarpetas para dejar `project.godot` en la raíz del ZIP.
 - `/v1/command-center/*`: emparejamiento, órdenes, leases, resultados y consulta.
 - `/v1/command-center/visual/*`: transferencias autenticadas de capturas.
 - `/v1/command-center/projects/*`: sincronización de proyectos compartidos.
@@ -52,4 +52,5 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 - La misma clave idempotente con el mismo contenido devuelve la orden existente; reutilizarla con contenido diferente produce conflicto.
 - El bucket de capturas permanece privado. El navegador no recibe credenciales S3.
 - No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
+- La importación Web acepta archivos fuente de repositorio de hasta 256 MiB y entrega ZIPs de hasta 128 MiB; los ejecutables ELF nativos se omiten solo del paquete temporal Web, nunca del repositorio original. La respuesta informa las exclusiones en `X-Godot-Web-Excluded-*`.
 - Mantener Render en el plan Free.

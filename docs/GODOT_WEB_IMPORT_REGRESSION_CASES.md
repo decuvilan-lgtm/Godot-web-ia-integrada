@@ -37,6 +37,16 @@ Este registro conserva fallos reales del flujo GitHub → Relay → navegador �
 2. El workflow supera la comprobación de versión antes de esperar el ZIP.
 3. Si el servicio vuelve a una versión anterior, la prueba falla en preflight y registra la versión detectada.
 
+## GWI-003 — El ZIP del repositorio supera el límite aunque el proyecto esté en una subcarpeta
+
+- **Detectado:** 2026-11-13, al reintentar la importación después de desplegar `branch-path-v2`.
+- **Ejecución:** [GitHub Actions #43349169921, intento 2](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43349169921).
+- **Síntoma:** el conector nuevo se ejecuta y reporta `Repository archive exceeds the 128 MiB import limit` antes de asignar el ZIP al control de Godot.
+- **Causa comprobada:** el Relay descarga primero el ZIP de todo el repositorio y solo después extrae la subcarpeta seleccionada. El árbol GitHub de `ajedrez_2c2_v161` contiene 890 archivos y 196.97 MiB sin comprimir. Dos ejecutables ELF nativos de Android (ARM32 y ARM64) suman aproximadamente 191.7 MiB y no pueden ejecutarse en el editor Web.
+- **Corrección propuesta en `fix/web-import-native-binaries`:** permitir hasta 256 MiB para el ZIP fuente del repositorio, mantener el límite de 128 MiB para el ZIP final de importación, y omitir del paquete temporal los archivos ELF nativos. La exclusión se aplica solo a la copia preparada para Godot Web; no modifica, elimina ni reescribe ningún archivo del repositorio GitHub. El Relay expone el recuento y las rutas omitidas mediante cabeceras de diagnóstico.
+- **Pruebas añadidas:** aceptar un archivo fuente superior a 128 MiB cuando el ZIP resultante queda bajo el límite; rechazar fuentes superiores a 256 MiB; verificar que los ELF se omiten tanto en proyectos raíz como en subcarpetas; conservar la estructura del ZIP y la detección de `project.godot`.
+- **Estado:** parche preparado en la rama indicada; pendiente de CI, revisión y despliegue del Relay. No declarar resuelto hasta repetir la importación E2E y confirmar que Godot abre el proyecto.
+
 ## Reglas para nuevos casos
 
 - No atribuir un fallo al Relay solo porque Godot muestre el Project Manager vacío: separar respuesta HTTP, contenido ZIP, asignación al input, inicio del motor e identidad del proyecto.
