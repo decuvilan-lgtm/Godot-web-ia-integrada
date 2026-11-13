@@ -90,7 +90,8 @@ jobs:
             exit 1
           fi
           task_id="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          completion_payload="$(jq -n --arg task_id "$task_id" --arg summary "Persistent Godot Web import and visual inspection" --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg sha "$COMMIT_SHA" --argjson canvas_count "$canvas_count" --arg connector_phase "$connector_phase" '{task_id:$task_id,summary:$summary,result:{repository:$repository,branch:$branch,commit_sha:$sha,connector_phase:$connector_phase,canvas_count:$canvas_count,inspection_file:"editor-inspection.json"}}')"
+          inspection_result="$(jq -c '.result' artifacts/editor-inspection.json)"
+          completion_payload="$(jq -n --arg task_id "$task_id" --arg summary "Persistent Godot Web import and visual inspection" --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg sha "$COMMIT_SHA" --argjson canvas_count "$canvas_count" --arg connector_phase "$connector_phase" --argjson inspection "$inspection_result" '{task_id:$task_id,summary:$summary,result:{repository:$repository,branch:$branch,commit_sha:$sha,connector_phase:$connector_phase,canvas_count:$canvas_count,inspection:$inspection}}')"
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/tasks/complete" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$completion_payload" -o artifacts/task-complete.json
           artifact_id="$(jq -er '.artifact_id' artifacts/task-complete.json)"
           artifact_url="$(jq -er '.artifact_url' artifacts/task-complete.json)"
