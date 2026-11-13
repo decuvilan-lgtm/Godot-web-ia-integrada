@@ -156,6 +156,7 @@ El proyecto de referencia Escondite no se modificó.
 - [Capacidades de inspección verificadas](docs/VERIFIED_GODOT_INSPECTION_CAPABILITIES.md)
 - [Observación visual](docs/VISUAL_OBSERVATION.md)
 - [Pruebas interactivas y escenarios temporales](docs/INTERACTIVE_GAMEPLAY_TESTING.md)
+- [Casos de regresión de importación Godot Web](docs/GODOT_WEB_IMPORT_REGRESSION_CASES.md)
 - [Contrato de comandos visuales](docs/VISUAL_COMMANDS.md)
 - [Centro de mando](docs/COMMAND_CENTER.md)
 - [Relay y variables de entorno](relay/README.md)
