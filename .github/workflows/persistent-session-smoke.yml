@@ -131,12 +131,15 @@ jobs:
           curl --fail-with-body --silent --show-error "$RELAY_URL/v1/persistent-sessions/${session_id}/profile" -H "Authorization: Bearer $oidc_token" -o artifacts/project-profile.json
           profile_status="$(jq -r '.profile_status // "unknown"' artifacts/project-profile.json)"
           profile_run_status="skipped"
-          if [[ "$profile_status" == "verified" ]] && jq -e --arg name "$PROFILE_COMMAND" '.commands[]? | select(.name == $name)' artifacts/project-profile.json >/dev/null; then
+          command_verification="$(jq -r --arg name "$PROFILE_COMMAND" '.commands[]? | select(.name == $name) | .verification.status // "pending"' artifacts/project-profile.json | head -n 1)"
+          if [[ "$profile_status" == "verified" && "$command_verification" == "verified" ]]; then
             curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/profiles/${PROFILE_COMMAND}/run" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{}' -o artifacts/profile-execution.json
             profile_run_status="executed"
           else
-            jq -n --arg status "$profile_status" --arg command "$PROFILE_COMMAND" '{status:$status,requested_command:$command,executed:false}' > artifacts/profile-execution.json
-            if [[ "$profile_status" == "verified" ]]; then profile_run_status="command_not_found"; fi
+            jq -n --arg status "$profile_status" --arg command_status "$command_verification" --arg command "$PROFILE_COMMAND" '{status:$status,command_status:$command_status,requested_command:$command,executed:false}' > artifacts/profile-execution.json
+            if [[ "$profile_status" == "verified" && "$command_verification" == "pending" ]]; then profile_run_status="command_pending"; fi
+            if [[ "$profile_status" == "verified" && "$command_verification" == "obsolete" ]]; then profile_run_status="command_obsolete"; fi
+            if [[ "$profile_status" == "verified" && -z "$command_verification" ]]; then profile_run_status="command_not_found"; fi
           fi
           oidc_token="$(get_oidc_token)"
           echo "::add-mask::$oidc_token"
