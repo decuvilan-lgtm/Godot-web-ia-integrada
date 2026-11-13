@@ -7,7 +7,7 @@ on:
       repository:
         description: Public GitHub repository containing the Godot project (owner/repository)
         required: true
-        default: gavilandavid89-pixel/Escondite
+        default: gavilandavid89-pixel/Ajedrez-2c2
         type: string
       branch:
         description: Branch to import
@@ -20,9 +20,9 @@ on:
         default: ''
         type: string
       project_path:
-        description: Folder containing project.godot (empty means repository root)
+        description: Folder containing project.godot
         required: false
-        default: ''
+        default: ajedrez_2c2_v161
         type: string
       wait_seconds:
         description: Time to let the editor initialize before inspection
