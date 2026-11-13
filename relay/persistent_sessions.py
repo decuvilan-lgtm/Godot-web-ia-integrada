@@ -413,6 +413,15 @@ async def persistent_session_heartbeat(session_id: str, authorization: str | Non
     _touch(session)
     return {"ok": True, "session_id": session_id, "idle_ttl_seconds": IDLE_TTL}
 
+def _assert_profile_matches_session(profile: dict[str, Any], session: PersistentSession) -> None:
+    declared_path = profile["manifest"].get("project", {}).get("project_path")
+    if declared_path is not None and declared_path != session.project_path:
+        raise HTTPException(
+            status_code=409,
+            detail="Project-owned lab manifest targets a different project_path than the imported project",
+        )
+
+
 @router.get("/{session_id}/profile")
 async def get_project_lab_profile(session_id: str, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
@@ -427,12 +436,14 @@ async def get_project_lab_profile(session_id: str, authorization: str | None = H
             "ref": session.commit_sha or session.branch,
             "note": "This repository revision has no project-owned Godot lab manifest. No global game-specific commands were substituted.",
         }
+    _assert_profile_matches_session(profile, session)
     return {
         "available": True,
         "profile_status": "verified",
         "manifest_path": MANIFEST_PATH,
         "repository": session.repository,
         "ref": session.commit_sha or session.branch,
+        "project": profile["manifest"]["project"],
         "control_profile": profile["manifest"]["control_profile"],
         "commands": profile["manifest"]["commands"],
         "controls": profile["control_profile"]["controls"],
@@ -454,6 +465,7 @@ async def run_project_lab_command(
     profile = await load_project_profile(session.repository, session.commit_sha or session.branch)
     if profile is None:
         raise HTTPException(status_code=404, detail="This repository revision has no project-owned lab manifest")
+    _assert_profile_matches_session(profile, session)
     async with session.lock:
         try:
             results = await asyncio.wait_for(
