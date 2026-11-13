@@ -1,0 +1,114 @@
+name: ChatGPT Godot Browser Bridge
+run-name: Browser inspection ${{ github.event.issue.number }}
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: browser-bridge-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  inspect-editor:
+    if: >-
+      github.event.issue.user.login == 'decuvilan-lgtm' &&
+      startsWith(github.event.issue.title, '[CHATGPT-BROWSER]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out lab controller
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          submodules: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.52.0-${{ runner.os }}
+      - name: Install browser worker
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+      - name: Validate browser task
+        id: task
+        continue-on-error: true
+        run: |
+          python scripts/bridge/prepare_browser_issue.py \
+            "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT" /tmp/browser-task-result.json
+      - name: Open Godot Web and inspect the selected project
+        if: steps.task.outputs.accepted == 'true'
+        env:
+          REPOSITORY: ${{ steps.task.outputs.repository }}
+          BRANCH: ${{ steps.task.outputs.branch }}
+          COMMIT_SHA: ${{ steps.task.outputs.commit_sha }}
+          PROJECT_PATH: ${{ steps.task.outputs.project_path }}
+          WAIT_SECONDS: ${{ steps.task.outputs.wait_seconds }}
+          IMPORT_TIMEOUT_SECONDS: ${{ steps.task.outputs.import_timeout_seconds }}
+          RELAY_URL: https://godot-web-ia-relay.onrender.com
+          EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
+        run: python scripts/godot-browser-worker.py
+      - name: Upload browser evidence
+        if: always() && steps.task.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-browser-${{ github.event.issue.number }}-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Return browser inspection result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          ACCEPTED: ${{ steps.task.outputs.accepted || 'false' }}
+          TASK_ID: ${{ steps.task.outputs.task_id || 'unknown' }}
+          REPOSITORY: ${{ steps.task.outputs.repository || 'unknown' }}
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const fs = require('fs');
+            let result = {};
+            try { result = JSON.parse(fs.readFileSync('/tmp/browser-task-result.json', 'utf8')); } catch (_) {}
+            let task = {};
+            try { task = JSON.parse(fs.readFileSync('artifacts/task-result.json', 'utf8')); } catch (_) {}
+            const inspection = task.result?.inspection || {};
+            const validation = inspection.visual_validation || {};
+            const summary = {
+              accepted: process.env.ACCEPTED === 'true',
+              task_id: process.env.TASK_ID,
+              repository: process.env.REPOSITORY,
+              status: process.env.JOB_STATUS,
+              import_phase: task.result?.readiness?.phase || null,
+              imported_sha: task.result?.readiness?.imported_sha || null,
+              visual_status: validation.status || null,
+              resource_errors: validation.project_resource_errors || [],
+              gameplay_verified: validation.gameplay_verified === true,
+              evidence_artifact: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            };
+            if (result.error) summary.validation_error = result.error;
+            const body = [
+              '## Godot Browser Bridge · resultado',
+              '',
+              '```json',
+              JSON.stringify(summary, null, 2),
+              '```',
+              '',
+              'La inspección usa Chromium real en GitHub Actions. La sesión del navegador termina al finalizar el trabajo; se conserva la evidencia. No se modificó el repositorio del proyecto.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
