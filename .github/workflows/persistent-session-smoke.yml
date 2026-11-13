@@ -27,6 +27,11 @@ on:
         required: false
         default: ''
         type: string
+      profile_command:
+        description: Project-owned command to run when the repository has a lab manifest
+        required: false
+        default: smoke-test
+        type: string
       reimport_existing:
         description: Re-import a different revision of the same repository into the existing browser context
         required: false
@@ -62,6 +67,7 @@ jobs:
           BRANCH: ${{ inputs.branch || 'main' }}
           COMMIT_SHA: ${{ inputs.commit_sha || '' }}
           REIMPORT_EXISTING: ${{ inputs.reimport_existing || false }}
+          PROFILE_COMMAND: ${{ inputs.profile_command || 'smoke-test' }}
           PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
           WAIT_SECONDS: ${{ inputs.wait_seconds || '45' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
@@ -112,6 +118,20 @@ jobs:
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$payload" -o artifacts/session-open.json
           session_id="$(jq -er '.session_id' artifacts/session-open.json)"
           sleep "$wait_seconds"
+          if ! [[ "$PROFILE_COMMAND" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+            echo "profile_command must be a safe command slug" >&2
+            exit 2
+          fi
+          curl --fail-with-body --silent --show-error "$RELAY_URL/v1/persistent-sessions/${session_id}/profile" -H "Authorization: Bearer $oidc_token" -o artifacts/project-profile.json
+          profile_status="$(jq -r '.profile_status // "unknown"' artifacts/project-profile.json)"
+          profile_run_status="skipped"
+          if [[ "$profile_status" == "verified" ]] && jq -e --arg name "$PROFILE_COMMAND" '.commands[]? | select(.name == $name)' artifacts/project-profile.json >/dev/null; then
+            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/profiles/${PROFILE_COMMAND}/run" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{}' -o artifacts/profile-execution.json
+            profile_run_status="executed"
+          else
+            jq -n --arg status "$profile_status" --arg command "$PROFILE_COMMAND" '{status:$status,requested_command:$command,executed:false}' > artifacts/profile-execution.json
+            if [[ "$profile_status" == "verified" ]]; then profile_run_status="command_not_found"; fi
+          fi
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"inspect","timeout_ms":20000}' -o artifacts/editor-inspection.json
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"screenshot","timeout_ms":20000}' -o artifacts/screenshot-command.json
           connector_phase="$(jq -r '.result.connector_status.phase // "missing"' artifacts/editor-inspection.json)"
@@ -124,14 +144,15 @@ jobs:
           fi
           task_id="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inspection_result="$(jq -c '.result' artifacts/editor-inspection.json)"
-          completion_payload="$(jq -n --arg task_id "$task_id" --arg summary "Persistent Godot Web import and visual inspection" --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg sha "$COMMIT_SHA" --argjson canvas_count "$canvas_count" --arg connector_phase "$connector_phase" --argjson inspection "$inspection_result" '{task_id:$task_id,summary:$summary,result:{repository:$repository,branch:$branch,commit_sha:$sha,connector_phase:$connector_phase,canvas_count:$canvas_count,inspection:$inspection}}')"
+          profile_result="$(jq -c '.' artifacts/profile-execution.json)"
+          completion_payload="$(jq -n --arg task_id "$task_id" --arg summary "Persistent Godot Web import and visual inspection" --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg sha "$COMMIT_SHA" --arg profile_status "$profile_run_status" --argjson canvas_count "$canvas_count" --arg connector_phase "$connector_phase" --argjson inspection "$inspection_result" --argjson profile_result "$profile_result" '{task_id:$task_id,summary:$summary,result:{repository:$repository,branch:$branch,commit_sha:$sha,connector_phase:$connector_phase,canvas_count:$canvas_count,profile_status:$profile_status,profile_result:$profile_result,inspection:$inspection}}')"
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/tasks/complete" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$completion_payload" -o artifacts/task-complete.json
           artifact_id="$(jq -er '.artifact_id' artifacts/task-complete.json)"
           artifact_url="$(jq -er '.artifact_url' artifacts/task-complete.json)"
           curl --fail-with-body --silent --show-error "$RELAY_URL$artifact_url" -H "Authorization: Bearer $oidc_token" -o artifacts/godot-persistent-task.zip
           unzip -t artifacts/godot-persistent-task.zip
           curl --fail-with-body --silent --show-error "$RELAY_URL/v1/persistent-sessions/${session_id}" -H "Authorization: Bearer $oidc_token" -o artifacts/session-status.json
-          jq -n --arg session_id "$session_id" --arg artifact_id "$artifact_id" --arg storage "Neon Object Storage" --arg commit_sha "$COMMIT_SHA" '{session_id:$session_id,artifact_id:$artifact_id,storage:$storage,commit_sha:$commit_sha,session_left_open:true}' > artifacts/persistent-session-summary.json
+          jq -n --arg session_id "$session_id" --arg artifact_id "$artifact_id" --arg storage "Neon Object Storage" --arg commit_sha "$COMMIT_SHA" '{session_id:$session_id,artifact_id:$artifact_id,storage:$storage,commit_sha:$commit_sha,profile_status:$profile_run_status,session_left_open:true}' > artifacts/persistent-session-summary.json
       - name: Upload persistent session evidence index
         if: always()
         uses: actions/upload-artifact@v4
