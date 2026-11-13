@@ -50,8 +50,11 @@ permissions:
   contents: read
   id-token: write
 
+# Serialize imports that target the same repository/project. A unique run_id
+# here would create a different group for every run and therefore no locking.
+# Do not cancel an active browser job: let its evidence upload finish.
 concurrency:
-  group: godot-browser-worker-${{ github.run_id }}
+  group: godot-browser-worker-${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}-${{ inputs.project_path || 'ajedrez_2c2_v161' }}
   cancel-in-progress: false
 
 jobs:
