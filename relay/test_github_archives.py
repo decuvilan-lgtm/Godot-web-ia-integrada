@@ -35,8 +35,10 @@ class FakeUpstream:
         self.body = body if body is not None else make_zip({
             "game-main/project.godot": b'config/name="Example"',
             "game-main/README.md": b"root project",
+            "game-main/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
             "game-main/examples/demo/project.godot": b'config/name="Nested"',
             "game-main/examples/demo/assets/icon.svg": b"<svg/>",
+            "game-main/examples/demo/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
         })
         self.headers = {"content-length": str(size if size is not None else len(self.body))}
 
@@ -75,8 +77,10 @@ class FakeClient:
         entries = {
             f"{root}/project.godot": b'config/name="Example"',
             f"{root}/README.md": b"root project",
+            f"{root}/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
             f"{root}/examples/demo/project.godot": b'config/name="Nested"',
             f"{root}/examples/demo/assets/icon.svg": b"<svg/>",
+            f"{root}/examples/demo/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
         }
         body = make_zip(entries)
         return FakeUpstream(
@@ -126,6 +130,9 @@ class GitHubArchiveTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
             self.assertIn("game-main/project.godot", archive.namelist())
             self.assertIn("game-main/README.md", archive.namelist())
+            self.assertNotIn("game-main/engine/native_android", archive.namelist())
+        self.assertEqual(response.headers["x-godot-web-excluded-count"], "1")
+        self.assertEqual(response.headers["x-godot-web-excluded-files"], "engine/native_android")
 
     def test_nested_project_is_repacked_with_project_file_at_zip_root(self):
         with patch("github_archives.httpx.AsyncClient", FakeClient):
@@ -137,7 +144,9 @@ class GitHubArchiveTests(unittest.TestCase):
             self.assertIn("project.godot", names)
             self.assertIn("assets/icon.svg", names)
             self.assertNotIn("README.md", names)
+            self.assertNotIn("engine/native_android", names)
             self.assertEqual(archive.read("project.godot"), b'config/name="Nested"')
+        self.assertEqual(response.headers["x-godot-web-excluded-count"], "1")
 
     def test_missing_public_repository_is_reported_as_not_found(self):
         class MissingClient(FakeClient):
@@ -146,10 +155,18 @@ class GitHubArchiveTests(unittest.TestCase):
             response = self.client.get("/v1/github/example/missing/archive?branch=main")
         self.assertEqual(response.status_code, 404)
 
-    def test_declared_oversized_archive_is_rejected_before_download(self):
-        class LargeClient(FakeClient):
+    def test_source_archive_over_128_mib_is_accepted_when_filtered_output_is_small(self):
+        class LargeButAllowedClient(FakeClient):
             declared_size = 128 * 1024 * 1024 + 1
-        with patch("github_archives.httpx.AsyncClient", LargeClient):
+        with patch("github_archives.httpx.AsyncClient", LargeButAllowedClient):
+            response = self.client.get("/v1/github/example/large/archive?branch=main&path=examples%2Fdemo")
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(len(response.content), 128 * 1024 * 1024)
+
+    def test_declared_source_archive_over_256_mib_is_rejected_before_download(self):
+        class TooLargeClient(FakeClient):
+            declared_size = 256 * 1024 * 1024 + 1
+        with patch("github_archives.httpx.AsyncClient", TooLargeClient):
             response = self.client.get("/v1/github/example/large/archive?branch=main")
         self.assertEqual(response.status_code, 413)
 
