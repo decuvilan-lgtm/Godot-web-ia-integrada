@@ -207,7 +207,7 @@ async def public_repository_archive(
                     if declared_size:
                         try:
                             if int(declared_size) > MAX_SOURCE_ARCHIVE_BYTES:
-                                raise HTTPException(status_code=413, detail="Repository archive exceeds the 128 MiB import limit")
+                                raise HTTPException(status_code=413, detail="Source repository archive exceeds the 256 MiB processing limit")
                         except ValueError as exc:
                             raise HTTPException(status_code=502, detail="GitHub returned an invalid archive size") from exc
 
@@ -215,7 +215,7 @@ async def public_repository_archive(
                     async for chunk in upstream.aiter_bytes(CHUNK_BYTES):
                         total += len(chunk)
                         if total > MAX_SOURCE_ARCHIVE_BYTES:
-                            raise HTTPException(status_code=413, detail="Repository archive exceeds the 128 MiB import limit")
+                            raise HTTPException(status_code=413, detail="Source repository archive exceeds the 256 MiB processing limit")
                         archive.write(chunk)
 
         archive.seek(0)
