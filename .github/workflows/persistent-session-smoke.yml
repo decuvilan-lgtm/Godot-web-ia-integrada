@@ -46,9 +46,14 @@ on:
         default: ajedrez_2c2_v161
         type: string
       wait_seconds:
-        description: Time to let the editor initialize before inspection
+        description: Initial editor settle delay before readiness polling
         required: false
-        default: '45'
+        default: '10'
+        type: string
+      import_timeout_seconds:
+        description: Maximum time to wait for the exact project commit to finish importing (60-600)
+        required: false
+        default: '480'
         type: string
 
 permissions:
@@ -62,7 +67,7 @@ concurrency:
 jobs:
   persistent-session:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Open persistent editor, inspect, capture and persist evidence
         env:
@@ -72,7 +77,8 @@ jobs:
           REIMPORT_EXISTING: ${{ inputs.reimport_existing || false }}
           PROFILE_COMMAND: ${{ inputs.profile_command || 'smoke-test' }}
           PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
-          WAIT_SECONDS: ${{ inputs.wait_seconds || '45' }}
+          WAIT_SECONDS: ${{ inputs.wait_seconds || '10' }}
+          IMPORT_TIMEOUT_SECONDS: ${{ inputs.import_timeout_seconds || '480' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
         run: |
@@ -131,6 +137,46 @@ jobs:
           curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$payload" -o artifacts/session-open.json
           session_id="$(jq -er '.session_id' artifacts/session-open.json)"
           sleep "$wait_seconds"
+          import_timeout_seconds="${IMPORT_TIMEOUT_SECONDS:-480}"
+          if ! [[ "$import_timeout_seconds" =~ ^[0-9]+$ ]] || (( import_timeout_seconds < 60 || import_timeout_seconds > 600 )); then
+            echo "import_timeout_seconds must be between 60 and 600" >&2
+            exit 2
+          fi
+
+          # The editor can remain on the loading screen while a multi-megabyte
+          # project is downloaded and imported. Poll its real connector state
+          # instead of assuming a fixed sleep means the import has completed.
+          import_deadline=$((SECONDS + import_timeout_seconds))
+          connector_phase="unknown"
+          imported_sha=""
+          canvas_count=0
+          poll_count=0
+          while (( SECONDS < import_deadline )); do
+            oidc_token="$(get_oidc_token)"
+            echo "::add-mask::$oidc_token"
+            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/heartbeat" -H "Authorization: Bearer $oidc_token" -o artifacts/session-heartbeat.json
+            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"inspect","timeout_ms":20000}' -o artifacts/editor-inspection-latest.json
+
+            connector_phase="$(jq -r '.result.connector_status.phase // "unknown"' artifacts/editor-inspection-latest.json)"
+            imported_sha="$(jq -r '.result.connector_status.commitSha // ""' artifacts/editor-inspection-latest.json)"
+            canvas_count="$(jq -r '.result.canvas_count // 0' artifacts/editor-inspection-latest.json)"
+            poll_count=$((poll_count + 1))
+            jq -n --arg phase "$connector_phase" --arg imported_sha "$imported_sha" --arg expected_sha "$COMMIT_SHA" --argjson canvas_count "$canvas_count" --argjson poll_count "$poll_count" '{poll_count:$poll_count,phase:$phase,imported_sha:$imported_sha,expected_sha:$expected_sha,canvas_count:$canvas_count}' > artifacts/import-readiness.json
+
+            if [[ "$connector_phase" == "started" && "$imported_sha" == "$COMMIT_SHA" && "$canvas_count" -ge 1 ]]; then
+              cp artifacts/editor-inspection-latest.json artifacts/editor-inspection.json
+              break
+            fi
+            sleep 10
+          done
+
+          if [[ "$connector_phase" != "started" || "$imported_sha" != "$COMMIT_SHA" || "$canvas_count" -lt 1 ]]; then
+            echo "Godot Web did not finish importing the requested commit within ${import_timeout_seconds}s. phase=${connector_phase} imported_sha=${imported_sha} expected_sha=${COMMIT_SHA} canvas_count=${canvas_count}" >&2
+            cp artifacts/editor-inspection-latest.json artifacts/editor-inspection.json
+            cat artifacts/editor-inspection.json
+            exit 1
+          fi
+
           oidc_token="$(get_oidc_token)"
           echo "::add-mask::$oidc_token"
           if ! [[ "$PROFILE_COMMAND" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
