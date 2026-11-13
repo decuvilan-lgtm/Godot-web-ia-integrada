@@ -7,7 +7,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app import app
-from github_archives import archive_url, validate_branch, validate_project_path
+from github_archives import archive_url, validate_branch, validate_commit_sha, validate_project_path
 
 
 def make_zip(entries):
@@ -72,8 +72,11 @@ class FakeClient:
         return response
 
     def stream(self, method, url):
-        branch = url.split("/refs/heads/", 1)[-1]
-        root = "game-" + branch.replace("/", "-")
+        if "/refs/heads/" in url:
+            ref = url.split("/refs/heads/", 1)[-1]
+        else:
+            ref = url.rsplit("/zip/", 1)[-1]
+        root = "game-" + ref.replace("/", "-")[:40]
         entries = {
             f"{root}/": b"",
             f"{root}/project.godot": b'config/name="Example"',
@@ -107,6 +110,18 @@ class GitHubArchiveTests(unittest.TestCase):
             "https://codeload.github.com/octocat/hello-world/zip/refs/heads/release/2.0",
         )
 
+    def test_commit_sha_archive_url_is_immutable_and_validated(self):
+        sha = "a" * 40
+        self.assertEqual(
+            archive_url("octocat", "hello-world", "main", sha),
+            f"https://codeload.github.com/octocat/hello-world/zip/{sha}",
+        )
+        self.assertEqual(validate_commit_sha(sha), sha)
+        for invalid in ("main", "a" * 39, "g" * 40, "a" * 41):
+            with self.subTest(commit_sha=invalid):
+                with self.assertRaises(Exception):
+                    validate_commit_sha(invalid)
+
     def test_invalid_branch_and_project_paths_are_rejected(self):
         for branch in ("../main", "/main", "main//next", "main\\evil", "main?x=1"):
             with self.subTest(branch=branch):
@@ -123,6 +138,17 @@ class GitHubArchiveTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["x-github-ref"], "trunk")
         self.assertTrue(response.headers["content-disposition"].endswith('example-game-trunk.zip"'))
+
+    def test_commit_pinned_archive_returns_the_exact_sha(self):
+        sha = "b" * 40
+        with patch("github_archives.httpx.AsyncClient", FakeClient):
+            response = self.client.get(f"/v1/github/example/game/archive?branch=main&sha={sha}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["x-github-ref"], sha)
+        self.assertEqual(response.headers["x-github-commit-sha"], sha)
+        self.assertEqual(response.headers["x-github-branch"], "main")
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertIn(f"game-{sha}/project.godot", archive.namelist())
 
     def test_public_root_project_archive_is_streamed(self):
         with patch("github_archives.httpx.AsyncClient", FakeClient):

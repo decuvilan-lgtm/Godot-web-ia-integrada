@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "REPLACE_WITH_GAME_NAME",
+    "project_path": "path/to/project"
+  },
+  "control_profile": "control-profile.json",
+  "commands": [
+    {
+      "name": "smoke-test",
+      "file": "commands/smoke-test.json",
+      "description": "Generic editor and canvas smoke test"
+    }
+  ]
+}

@@ -36,7 +36,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin", "X-Command-Id", "X-Frame-Index", "X-Project-Path", "X-Base-SHA256", "X-File-SHA256", "Last-Event-ID"],
-    expose_headers=["X-File-SHA256", "X-GitHub-Ref", "X-Godot-Web-Excluded-Count", "X-Godot-Web-Excluded-Files"],
+    expose_headers=["X-File-SHA256", "X-GitHub-Ref", "X-GitHub-Branch", "X-GitHub-Commit-SHA", "X-Godot-Web-Excluded-Count", "X-Godot-Web-Excluded-Files"],
 )
 
 @dataclass

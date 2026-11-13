@@ -25,6 +25,11 @@ on:
         required: false
         default: ""
         type: string
+      commit_sha:
+        description: "SHA completo del commit que se debe importar (vacío = HEAD de la rama)"
+        required: false
+        default: ""
+        type: string
       project_path:
         description: "Subcarpeta que contiene project.godot (vacío = raíz)"
         required: false
@@ -106,6 +111,7 @@ jobs:
         env:
           REPOSITORY_URL: ${{ inputs.repository_url || (github.event_name == 'push' && 'https://github.com/gavilandavid89-pixel/Ajedrez-2c2') || 'https://github.com/gavilandavid89-pixel/Escondite' }}
           REQUESTED_BRANCH: ${{ inputs.branch || (github.event_name == 'push' && 'main') || '' }}
+          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha || '' }}
           PROJECT_PATH: ${{ inputs.project_path || (github.event_name == 'push' && 'ajedrez_2c2_v161') || '' }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -152,16 +158,28 @@ jobs:
 
           branch_ref = urllib.parse.quote(branch, safe="")
           try:
-              get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_ref}")
+              branch_data = get_json(f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_ref}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
                   raise SystemExit(f"No existe la rama {branch}.")
               raise
 
+          requested_sha = os.environ.get("REQUESTED_COMMIT_SHA", "").strip().lower()
+          if requested_sha and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", requested_sha):
+              raise SystemExit("El commit_sha debe ser un SHA Git completo de 40 o 64 caracteres hexadecimales.")
+          commit_sha = requested_sha or str(branch_data.get("commit", {}).get("sha") or "").lower()
+          if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", commit_sha):
+              raise SystemExit("GitHub no devolvió un SHA de commit válido para la rama seleccionada.")
+          if requested_sha:
+              commit_data = get_json(f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}")
+              if str(commit_data.get("sha", "")).lower() != commit_sha:
+                  raise SystemExit("GitHub no confirmó el commit_sha solicitado.")
+
           project_file_path = (project_path + "/" if project_path else "") + "project.godot"
           encoded_path = urllib.parse.quote(project_file_path, safe="/")
+          commit_ref = urllib.parse.quote(commit_sha, safe="")
           try:
-              project_file = get_json(f"https://api.github.com/repos/{owner}/{repo}/contents/{encoded_path}?ref={branch_ref}")
+              project_file = get_json(f"https://api.github.com/repos/{owner}/{repo}/contents/{encoded_path}?ref={commit_ref}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
                   raise SystemExit(f"No se encontró {project_file_path} en la rama {branch}.")
@@ -173,8 +191,8 @@ jobs:
           name_match = re.search(r'^\s*config/name\s*=\s*"([^"\r\n]+)"', project_text, re.MULTILINE)
           project_name = re.sub(r'[\r\n]+', ' ', name_match.group(1)).strip()[:80] if name_match else repo
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\nbranch_is_default={str(branch_is_default).lower()}\nproject_path={project_path}\nproject_name={project_name}\n")
-          print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, ruta {project_file_path}, nombre: {project_name})")
+              out.write(f"owner={owner}\nrepo={repo}\nfull_name={owner}/{repo}\nbranch={branch}\ncommit_sha={commit_sha}\nbranch_is_default={str(branch_is_default).lower()}\nproject_path={project_path}\nproject_name={project_name}\n")
+          print(f"Proyecto Godot validado: {owner}/{repo} (rama {branch}, commit {commit_sha}, ruta {project_file_path}, nombre: {project_name})")
           PY
 
       - name: Descubrir mapa de entradas del proyecto
@@ -274,6 +292,7 @@ jobs:
           OWNER: ${{ steps.repo.outputs.owner }}
           REPO: ${{ steps.repo.outputs.repo }}
           BRANCH: ${{ steps.repo.outputs.branch }}
+          COMMIT_SHA: ${{ steps.repo.outputs.commit_sha }}
           PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
         run: |
           set -euo pipefail
@@ -284,9 +303,10 @@ jobs:
           repo = os.environ["REPO"]
           branch = os.environ["BRANCH"]
           project_path = os.environ.get("PROJECT_PATH", "")
-          query = urllib.parse.urlencode({"branch": branch, "path": project_path})
+          commit_sha = os.environ["COMMIT_SHA"]
+          query = urllib.parse.urlencode({"branch": branch, "sha": commit_sha, "path": project_path})
           url = f"https://godot-web-ia-relay.onrender.com/v1/github/{owner}/{repo}/archive?{query}"
-          result = {"url": url, "status": "failed", "expectedFont": "assets/fonts/Inter-Medium.otf"}
+          result = {"url": url, "status": "failed", "repository": owner + "/" + repo, "branch": branch, "commitSha": commit_sha, "expectedFont": "assets/fonts/Inter-Medium.otf"}
           try:
               request = urllib.request.Request(url, headers={
                   "Origin": "https://godot-web-ia-integrada-rt2l.onrender.com",
@@ -371,6 +391,7 @@ jobs:
           REPO: ${{ steps.repo.outputs.repo }}
           PROJECT_NAME: ${{ steps.repo.outputs.project_name }}
           BRANCH: ${{ steps.repo.outputs.branch }}
+          COMMIT_SHA: ${{ steps.repo.outputs.commit_sha }}
           BRANCH_IS_DEFAULT: ${{ steps.repo.outputs.branch_is_default }}
           PROJECT_PATH: ${{ steps.repo.outputs.project_path }}
           LIVE_RELAY_CHECK: ${{ steps.relay_live.outputs.result || 'failed' }}
@@ -407,6 +428,7 @@ jobs:
           const repo = `${process.env.OWNER}/${repoName}`;
           const importParams = new URLSearchParams({ repo });
           if (process.env.BRANCH) importParams.set('branch', process.env.BRANCH);
+          if (process.env.COMMIT_SHA) importParams.set('sha', process.env.COMMIT_SHA);
           if (process.env.PROJECT_PATH) importParams.set('path', process.env.PROJECT_PATH);
           const target = `https://godot-web-ia-integrada-rt2l.onrender.com/?${importParams.toString()}`;
           function inspectImage(path) {
@@ -622,10 +644,12 @@ jobs:
             page.on('pageerror', error => events.push({ type: 'pageerror', text: String(error) }));
             page.on('requestfailed', request => events.push({ type: 'requestfailed', url: request.url(), error: request.failure()?.errorText }));
             let archiveStatus = null;
+            let archiveCommitSha = null;
             page.on('response', response => {
               if (response.url().includes('/v1/github/') && new URL(response.url()).pathname.endsWith('/archive')) {
                 archiveStatus = response.status();
-                events.push({ type: 'archive-response', status: archiveStatus, contentType: response.headers()['content-type'] });
+                archiveCommitSha = response.headers()['x-github-commit-sha'] || null;
+                events.push({ type: 'archive-response', status: archiveStatus, commitSha: archiveCommitSha, contentType: response.headers()['content-type'] });
               }
             });
             const result = { repository: repo, projectLabel, target, startedAt: new Date().toISOString() };
@@ -633,8 +657,8 @@ jobs:
               const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout });
               result.httpStatus = response?.status() ?? null;
               result.connectorVersion = await page.locator('#godot-github-connector').getAttribute('data-version').catch(() => null);
-              if (result.connectorVersion !== 'branch-path-v2') {
-                throw new Error('El editor publicado usa el conector ' + (result.connectorVersion || 'sin versión') + '; esta prueba requiere branch-path-v2. Despliega primero el parche del integrador antes de ejecutar la importación E2E.');
+              if (result.connectorVersion !== 'commit-pinned-v3') {
+                throw new Error('El editor publicado usa el conector ' + (result.connectorVersion || 'sin versión') + '; esta prueba requiere commit-pinned-v3. Despliega primero el parche del integrador antes de ejecutar la importación E2E.');
               }
               await page.waitForSelector('#startButton', { state: 'attached', timeout });
               await page.waitForSelector('#zip-file', { state: 'attached', timeout });
@@ -656,14 +680,18 @@ jobs:
               }));
               result.preloadedFilename = await page.locator('#zip-file').evaluate(el => el.files[0]?.name || null);
               result.repositoryBranch = process.env.BRANCH;
+              result.commitSha = process.env.COMMIT_SHA;
+              result.archiveCommitSha = archiveCommitSha;
               result.branchResolvedByRelay = process.env.BRANCH_IS_DEFAULT === 'true';
               result.liveRelayCheck = process.env.LIVE_RELAY_CHECK || 'not-run';
               result.projectSubdirectory = process.env.PROJECT_PATH || '';
               result.connectorButtonPresent = await page.locator('#godot-connect-github').count() > 0;
               result.archiveStatus = archiveStatus;
               if (archiveStatus !== 200) throw new Error('El Relay no entregó el ZIP con HTTP 200.');
-              const branchFilename = process.env.BRANCH.replace(/[^A-Za-z0-9._-]+/g, '-');
-              if (!result.preloadedFilename?.endsWith(`-${branchFilename}.zip`)) throw new Error('El ZIP no quedó asignado al input oficial de Godot para la rama seleccionada.');
+              const pinnedFilenameRef = process.env.COMMIT_SHA || process.env.BRANCH;
+              const expectedFilenameRef = pinnedFilenameRef.replace(/[^A-Za-z0-9._-]+/g, '-');
+              if (!result.preloadedFilename?.endsWith(`-${expectedFilenameRef}.zip`)) throw new Error('El ZIP no quedó asignado al input oficial de Godot para el commit seleccionado.');
+              if (archiveCommitSha !== process.env.COMMIT_SHA) throw new Error('El Relay no confirmó el SHA exacto del archivo importado.');
               await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(c => {
                 const r = c.getBoundingClientRect();
                 return c.width > 500 && c.height > 300 && r.width > 500 && r.height > 300;
