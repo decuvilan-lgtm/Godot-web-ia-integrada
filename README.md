@@ -92,7 +92,7 @@ Los archivos del repositorio son datos de entrada no confiables. El ejecutor val
 
 Cada perfil se vincula como mínimo a repositorio, ruta del proyecto, rama/ref y SHA verificado. El informe de prueba registra qué versión del perfil se utilizó. Si el proyecto no incluye un perfil, se realiza descubrimiento controlado y se propone documentarlo; no se improvisa reutilizando comandos de otro repositorio.
 
-Para proyectos de solo lectura, el laboratorio puede conservar una copia de trabajo del perfil en un espacio aislado asociado a la identidad exacta del repositorio, pero no escribirá en el repositorio fuente sin autorización. Cuando el repositorio sea editable y la tarea lo permita, el perfil definitivo debe incorporarse allí.
+Para proyectos de solo lectura, cualquier perfil descubierto durante la sesión será temporal y no se convertirá en memoria central ni se reutilizará automáticamente en otra sesión. Se podrá preparar una propuesta de archivos para que el perfil quede incorporado en el repositorio fuente cuando se autorice. El destino definitivo de los comandos sigue siendo el repositorio del propio proyecto.
 
 ## 4. Principio de sincronización: una versión por prueba
 
