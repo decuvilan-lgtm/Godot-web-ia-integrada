@@ -126,7 +126,7 @@ def main():
                 # DOM text alone cannot prove the editor opened. A scene filename
                 # in the document title plus a visible render surface is stronger
                 # evidence; it still does not prove that the game runs.
-                scene_title=bool(re.search(r"[^/\\\\]+\\.tscn\\s+-",title,re.I))
+                scene_title=bool(re.search(r"[^/\\]+\.tscn\s+-",title,re.I))
                 editor_visible=visible_surface and scene_title
                 resource_errors=[e for e in errors if "Cannot open file" in e or "Failed loading resource" in e or "Parse Error" in e]
                 inspection["visual_validation"]={
