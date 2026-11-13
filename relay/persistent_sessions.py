@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from visual_storage import BUCKET, storage_client
+from project_profiles import MANIFEST_PATH, execute_profile_command, load_project_profile
 
 logger = logging.getLogger("godot_web_ia_persistent_sessions")
 router = APIRouter(prefix="/v1/persistent-sessions", tags=["persistent-sessions"])
@@ -411,6 +412,79 @@ async def persistent_session_heartbeat(session_id: str, authorization: str | Non
     session = _get_session(session_id)
     _touch(session)
     return {"ok": True, "session_id": session_id, "idle_ttl_seconds": IDLE_TTL}
+
+@router.get("/{session_id}/profile")
+async def get_project_lab_profile(session_id: str, authorization: str | None = Header(default=None)):
+    await _authorize(authorization)
+    session = _get_session(session_id)
+    profile = await load_project_profile(session.repository, session.commit_sha or session.branch)
+    if profile is None:
+        return {
+            "available": False,
+            "profile_status": "not_found",
+            "manifest_path": MANIFEST_PATH,
+            "repository": session.repository,
+            "ref": session.commit_sha or session.branch,
+            "note": "This repository revision has no project-owned Godot lab manifest. No global game-specific commands were substituted.",
+        }
+    return {
+        "available": True,
+        "profile_status": "verified",
+        "manifest_path": MANIFEST_PATH,
+        "repository": session.repository,
+        "ref": session.commit_sha or session.branch,
+        "control_profile": profile["manifest"]["control_profile"],
+        "commands": profile["manifest"]["commands"],
+        "controls": profile["control_profile"]["controls"],
+    }
+
+
+@router.post("/{session_id}/profiles/{command_name}/run")
+async def run_project_lab_command(
+    session_id: str,
+    command_name: str,
+    authorization: str | None = Header(default=None),
+):
+    await _authorize(authorization)
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", command_name):
+        raise HTTPException(status_code=400, detail="Invalid project-owned command name")
+    session = _get_session(session_id)
+    if session.page is None or session.page.is_closed():
+        raise HTTPException(status_code=409, detail="Editor page is disconnected")
+    profile = await load_project_profile(session.repository, session.commit_sha or session.branch)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="This repository revision has no project-owned lab manifest")
+    async with session.lock:
+        try:
+            results = await asyncio.wait_for(
+                execute_profile_command(session.page, profile, command_name, session.artifacts),
+                timeout=120,
+            )
+        except asyncio.TimeoutError as exc:
+            raise HTTPException(status_code=504, detail="Project-owned command exceeded the 120-second execution limit") from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Project-owned lab command failed")
+            raise HTTPException(status_code=502, detail=f"Project-owned command failed: {type(exc).__name__}") from exc
+        session.events.append({
+            "type": "project-profile.command.completed",
+            "command": command_name,
+            "at": time.time(),
+            "step_count": len(results),
+        })
+        session.events = session.events[-1000:]
+        _touch(session)
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "repository": session.repository,
+        "commit_sha": session.commit_sha,
+        "command": command_name,
+        "results": results,
+        "session_kept_open": True,
+    }
+
 
 @router.post("/{session_id}/commands")
 async def persistent_session_command(session_id: str, body: CommandRequest, authorization: str | None = Header(default=None)):
