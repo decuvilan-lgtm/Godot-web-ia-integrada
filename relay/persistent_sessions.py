@@ -36,6 +36,17 @@ SESSION_TOKEN = os.environ.get("PERSISTENT_SESSION_TOKEN", "")
 OIDC_AUDIENCE = os.environ.get("PERSISTENT_SESSION_OIDC_AUDIENCE", "godot-web-ia-relay")
 OIDC_REPOSITORY = os.environ.get("PERSISTENT_SESSION_OIDC_REPOSITORY", "decuvilan-lgtm/Godot-web-ia-integrada")
 OIDC_WORKFLOW = os.environ.get("PERSISTENT_SESSION_OIDC_WORKFLOW", ".github/workflows/persistent-session-smoke.yml")
+# Only explicitly named workflows in this repository/ref may mint worker identities.
+# The browser bridge is a second, separately allowlisted workflow; no branch-wide
+# or arbitrary workflow identity is accepted.
+OIDC_ADDITIONAL_WORKFLOWS = tuple(
+    item.strip()
+    for item in os.environ.get(
+        "PERSISTENT_SESSION_OIDC_ADDITIONAL_WORKFLOWS",
+        ".github/workflows/chatgpt-browser-bridge.yml",
+    ).split(",")
+    if item.strip()
+)
 OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
 _oidc_jwks_client = None
 _oidc_jwks_lock = threading.Lock()
@@ -87,11 +98,15 @@ class CompleteTaskRequest(BaseModel):
     result: dict[str, Any] = Field(default_factory=dict)
 
 def _validate_github_oidc_claims(claims: dict[str, Any]) -> None:
-    expected_workflow_ref = f"{OIDC_REPOSITORY}/{OIDC_WORKFLOW}@{OIDC_REF}"
+    allowed_workflows = (OIDC_WORKFLOW, *OIDC_ADDITIONAL_WORKFLOWS)
+    allowed_workflow_refs = {
+        f"{OIDC_REPOSITORY}/{workflow}@{OIDC_REF}"
+        for workflow in allowed_workflows
+    }
     if (
         claims.get("repository") != OIDC_REPOSITORY
         or claims.get("ref") != OIDC_REF
-        or claims.get("workflow_ref") != expected_workflow_ref
+        or claims.get("workflow_ref") not in allowed_workflow_refs
     ):
         raise ValueError("GitHub Actions identity is not allowed for persistent sessions")
 
