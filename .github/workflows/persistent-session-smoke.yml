@@ -78,18 +78,25 @@ jobs:
           mkdir -p artifacts
           relay_ready=false
           editor_ready=false
+          relay_api_present=false
+          editor_version="unavailable"
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error "$RELAY_URL/openapi.json" -o /tmp/relay-openapi.json && jq -e '.paths["/v1/persistent-sessions"]' /tmp/relay-openapi.json >/dev/null; then
-              relay_ready=true
+            if curl --fail --silent --show-error "$RELAY_URL/openapi.json" -o /tmp/relay-openapi.json; then
+              if jq -e '.paths["/v1/persistent-sessions"]' /tmp/relay-openapi.json >/dev/null; then
+                relay_ready=true
+                relay_api_present=true
+              fi
             fi
-            if curl --fail --silent --show-error "$EDITOR_URL" -o /tmp/editor-index.html && grep -q 'data-version="commit-pinned-v3"' /tmp/editor-index.html; then
-              editor_ready=true
+            if curl --fail --silent --show-error "$EDITOR_URL" -o /tmp/editor-index.html; then
+              editor_version="$(grep -o 'data-version="[^"]*"' /tmp/editor-index.html | head -n 1 | cut -d '"' -f 2 || true)"
+              if [[ "$editor_version" == "commit-pinned-v3" ]]; then editor_ready=true; fi
             fi
             if [[ "$relay_ready" == true && "$editor_ready" == true ]]; then
               break
             fi
             if (( attempt == 30 )); then
-              echo "Relay API or commit-pinned editor did not finish deploying." >&2
+              jq -n --arg relay_ready "$relay_ready" --arg relay_api_present "$relay_api_present" --arg editor_ready "$editor_ready" --arg editor_version "$editor_version" --arg relay_url "$RELAY_URL" --arg editor_url "$EDITOR_URL" '{relay_ready:($relay_ready=="true"),persistent_session_route_present:($relay_api_present=="true"),editor_ready:($editor_ready=="true"),editor_version:$editor_version,expected_editor_version:"commit-pinned-v3",relay_url:$relay_url,editor_url:$editor_url}' > artifacts/deploy-readiness-failure.json
+              echo "Relay API or commit-pinned editor did not finish deploying; see deploy-readiness-failure.json." >&2
               exit 1
             fi
             sleep 10
