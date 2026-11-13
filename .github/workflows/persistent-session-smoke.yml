@@ -1,14 +1,14 @@
-name: Godot Web persistent session smoke test
-run-name: Persistent Godot session ${{ github.run_id }}
+name: Godot Web browser worker
+run-name: Godot browser worker \${{ github.run_id }}
 
 on:
   push:
     branches: [main]
     paths:
+      - relay/worker_artifacts.py
+      - scripts/godot-browser-worker.py
       - relay/persistent_sessions.py
       - relay/requirements.txt
-      - relay/test_persistent_sessions.py
-      - relay/project_profiles.py
       - relay/github_archives.py
       - scripts/patch-web-shell.py
       - render-relay.yaml
@@ -26,32 +26,22 @@ on:
         default: main
         type: string
       commit_sha:
-        description: Optional full immutable Git commit SHA (empty resolves branch HEAD)
+        description: Optional full immutable Git commit SHA
         required: false
         default: ''
         type: string
-      profile_command:
-        description: Project-owned command to run when the repository has a lab manifest
-        required: false
-        default: smoke-test
-        type: string
-      reimport_existing:
-        description: Re-import a different revision of the same repository into the existing browser context
-        required: false
-        default: false
-        type: boolean
       project_path:
         description: Folder containing project.godot
         required: false
         default: ajedrez_2c2_v161
         type: string
       wait_seconds:
-        description: Initial editor settle delay before readiness polling
+        description: Initial editor settle delay
         required: false
         default: '10'
         type: string
       import_timeout_seconds:
-        description: Maximum time to wait for the exact project commit to finish importing (60-600)
+        description: Maximum import wait (60-600 seconds)
         required: false
         default: '480'
         type: string
@@ -61,175 +51,46 @@ permissions:
   id-token: write
 
 concurrency:
-  group: persistent-godot-session-${{ github.run_id }}
+  group: godot-browser-worker-\${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  persistent-session:
+  browser-worker:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Open persistent editor, inspect, capture and persist evidence
+      - name: Check out lab controller
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.52.0-\${{ runner.os }}
+      - name: Install browser worker
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+      - name: Open Godot Web in runner-owned Chromium and persist evidence
         env:
-          REPOSITORY: ${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
-          BRANCH: ${{ inputs.branch || 'main' }}
-          COMMIT_SHA: ${{ inputs.commit_sha || '' }}
-          REIMPORT_EXISTING: ${{ inputs.reimport_existing || false }}
-          PROFILE_COMMAND: ${{ inputs.profile_command || 'smoke-test' }}
-          PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
-          WAIT_SECONDS: ${{ inputs.wait_seconds || '10' }}
-          IMPORT_TIMEOUT_SECONDS: ${{ inputs.import_timeout_seconds || '480' }}
+          REPOSITORY: \${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
+          BRANCH: \${{ inputs.branch || 'main' }}
+          COMMIT_SHA: \${{ inputs.commit_sha || '' }}
+          PROJECT_PATH: \${{ inputs.project_path || 'ajedrez_2c2_v161' }}
+          WAIT_SECONDS: \${{ inputs.wait_seconds || '10' }}
+          IMPORT_TIMEOUT_SECONDS: \${{ inputs.import_timeout_seconds || '480' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          relay_ready=false
-          editor_ready=false
-          relay_api_present=false
-          editor_version="unavailable"
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error "$RELAY_URL/openapi.json" -o /tmp/relay-openapi.json; then
-              if jq -e '.paths["/v1/persistent-sessions"]' /tmp/relay-openapi.json >/dev/null; then
-                relay_ready=true
-                relay_api_present=true
-              fi
-            fi
-            if curl --fail --silent --show-error "$EDITOR_URL" -o /tmp/editor-index.html; then
-              editor_version="$(grep -o 'data-version="[^"]*"' /tmp/editor-index.html | head -n 1 | cut -d '"' -f 2 || true)"
-              if [[ "$editor_version" == "commit-pinned-v3" ]]; then editor_ready=true; fi
-            fi
-            if [[ "$relay_ready" == true && "$editor_ready" == true ]]; then
-              break
-            fi
-            if (( attempt == 30 )); then
-              jq -n --arg relay_ready "$relay_ready" --arg relay_api_present "$relay_api_present" --arg editor_ready "$editor_ready" --arg editor_version "$editor_version" --arg relay_url "$RELAY_URL" --arg editor_url "$EDITOR_URL" '{relay_ready:($relay_ready=="true"),persistent_session_route_present:($relay_api_present=="true"),editor_ready:($editor_ready=="true"),editor_version:$editor_version,expected_editor_version:"commit-pinned-v3",relay_url:$relay_url,editor_url:$editor_url}' > artifacts/deploy-readiness-failure.json
-              echo "Relay API or commit-pinned editor did not finish deploying; see deploy-readiness-failure.json." >&2
-              exit 1
-            fi
-            sleep 10
-          done
-          wait_seconds="${WAIT_SECONDS:-45}"
-          if ! [[ "$wait_seconds" =~ ^[0-9]+$ ]] || (( wait_seconds < 5 || wait_seconds > 120 )); then
-            echo "wait_seconds must be between 5 and 120" >&2
-            exit 2
-          fi
-          if [[ ! "$REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,37}/[A-Za-z0-9][A-Za-z0-9._-]{0,98}$ ]]; then
-            echo "repository must be owner/repository" >&2
-            exit 2
-          fi
-          if [[ -z "${COMMIT_SHA:-}" ]]; then
-            encoded_branch="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))')"
-            COMMIT_SHA="$(curl --fail --silent --show-error "https://api.github.com/repos/${REPOSITORY}/branches/${encoded_branch}" | jq -er '.commit.sha')"
-          fi
-          if ! [[ "$COMMIT_SHA" =~ ^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$ ]]; then
-            echo "commit_sha must be a full 40- or 64-character Git SHA" >&2
-            exit 2
-          fi
-          COMMIT_SHA="${COMMIT_SHA,,}"
-          get_oidc_token() {
-            local token_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=godot-web-ia-relay"
-            curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$token_url" | jq -er '.value'
-          }
-          oidc_token="$(get_oidc_token)"
-          echo "::add-mask::$oidc_token"
-          payload="$(jq -n --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg path "$PROJECT_PATH" --arg sha "$COMMIT_SHA" --argjson reimport "$REIMPORT_EXISTING" '{repository:$repository,branch:$branch,project_path:$path,commit_sha:$sha,reimport_existing:$reimport}')"
-          curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$payload" -o artifacts/session-open.json
-          session_id="$(jq -er '.session_id' artifacts/session-open.json)"
-          sleep "$wait_seconds"
-          import_timeout_seconds="${IMPORT_TIMEOUT_SECONDS:-480}"
-          if ! [[ "$import_timeout_seconds" =~ ^[0-9]+$ ]] || (( import_timeout_seconds < 60 || import_timeout_seconds > 600 )); then
-            echo "import_timeout_seconds must be between 60 and 600" >&2
-            exit 2
-          fi
-
-          # The editor can remain on the loading screen while a multi-megabyte
-          # project is downloaded and imported. Poll its real connector state
-          # instead of assuming a fixed sleep means the import has completed.
-          import_deadline=$((SECONDS + import_timeout_seconds))
-          connector_phase="unknown"
-          imported_sha=""
-          canvas_count=0
-          poll_count=0
-          while (( SECONDS < import_deadline )); do
-            oidc_token="$(get_oidc_token)"
-            echo "::add-mask::$oidc_token"
-            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/heartbeat" -H "Authorization: Bearer $oidc_token" -o artifacts/session-heartbeat.json
-            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"inspect","timeout_ms":20000}' -o artifacts/editor-inspection-latest.json
-
-            connector_phase="$(jq -r '.result.connector_status.phase // "unknown"' artifacts/editor-inspection-latest.json)"
-            imported_sha="$(jq -r '.result.connector_status.commitSha // ""' artifacts/editor-inspection-latest.json)"
-            canvas_count="$(jq -r '.result.canvas_count // 0' artifacts/editor-inspection-latest.json)"
-            poll_count=$((poll_count + 1))
-            jq -n --arg phase "$connector_phase" --arg imported_sha "$imported_sha" --arg expected_sha "$COMMIT_SHA" --argjson canvas_count "$canvas_count" --argjson poll_count "$poll_count" '{poll_count:$poll_count,phase:$phase,imported_sha:$imported_sha,expected_sha:$expected_sha,canvas_count:$canvas_count}' > artifacts/import-readiness.json
-
-            if [[ "$connector_phase" == "started" && "$imported_sha" == "$COMMIT_SHA" && "$canvas_count" -ge 1 ]]; then
-              cp artifacts/editor-inspection-latest.json artifacts/editor-inspection.json
-              break
-            fi
-            sleep 10
-          done
-
-          if [[ "$connector_phase" != "started" || "$imported_sha" != "$COMMIT_SHA" || "$canvas_count" -lt 1 ]]; then
-            echo "Godot Web did not finish importing the requested commit within ${import_timeout_seconds}s. phase=${connector_phase} imported_sha=${imported_sha} expected_sha=${COMMIT_SHA} canvas_count=${canvas_count}" >&2
-            cp artifacts/editor-inspection-latest.json artifacts/editor-inspection.json
-            cat artifacts/editor-inspection.json
-            exit 1
-          fi
-
-          oidc_token="$(get_oidc_token)"
-          echo "::add-mask::$oidc_token"
-          if ! [[ "$PROFILE_COMMAND" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
-            echo "profile_command must be a safe command slug" >&2
-            exit 2
-          fi
-          curl --fail-with-body --silent --show-error "$RELAY_URL/v1/persistent-sessions/${session_id}/profile" -H "Authorization: Bearer $oidc_token" -o artifacts/project-profile.json
-          profile_status="$(jq -r '.profile_status // "unknown"' artifacts/project-profile.json)"
-          profile_run_status="skipped"
-          command_verification="$(jq -r --arg name "$PROFILE_COMMAND" '.commands[]? | select(.name == $name) | .verification.status // "pending"' artifacts/project-profile.json | head -n 1)"
-          if [[ "$profile_status" == "verified" && "$command_verification" == "verified" ]]; then
-            curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/profiles/${PROFILE_COMMAND}/run" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{}' -o artifacts/profile-execution.json
-            profile_run_status="executed"
-          else
-            jq -n --arg status "$profile_status" --arg command_status "$command_verification" --arg command "$PROFILE_COMMAND" '{status:$status,command_status:$command_status,requested_command:$command,executed:false}' > artifacts/profile-execution.json
-            if [[ "$profile_status" == "verified" && "$command_verification" == "pending" ]]; then profile_run_status="command_pending"; fi
-            if [[ "$profile_status" == "verified" && "$command_verification" == "obsolete" ]]; then profile_run_status="command_obsolete"; fi
-            if [[ "$profile_status" == "verified" && -z "$command_verification" ]]; then profile_run_status="command_not_found"; fi
-          fi
-          oidc_token="$(get_oidc_token)"
-          echo "::add-mask::$oidc_token"
-          curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"inspect","timeout_ms":20000}' -o artifacts/editor-inspection.json
-          curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/commands" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d '{"command":"screenshot","timeout_ms":20000}' -o artifacts/screenshot-command.json
-          connector_phase="$(jq -r '.result.connector_status.phase // "missing"' artifacts/editor-inspection.json)"
-          imported_sha="$(jq -r '.result.connector_status.commitSha // ""' artifacts/editor-inspection.json)"
-          canvas_count="$(jq -r '.result.canvas_count // 0' artifacts/editor-inspection.json)"
-          if [[ "$connector_phase" != "started" || "$imported_sha" != "$COMMIT_SHA" || "$canvas_count" -lt 1 ]]; then
-            echo "Godot Web did not confirm the requested commit. phase=${connector_phase} imported_sha=${imported_sha} expected_sha=${COMMIT_SHA}" >&2
-            cat artifacts/editor-inspection.json
-            exit 1
-          fi
-          oidc_token="$(get_oidc_token)"
-          echo "::add-mask::$oidc_token"
-          task_id="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          inspection_result="$(jq -c '.result' artifacts/editor-inspection.json)"
-          profile_result="$(jq -c '.' artifacts/profile-execution.json)"
-          completion_payload="$(jq -n --arg task_id "$task_id" --arg summary "Persistent Godot Web import and visual inspection" --arg repository "$REPOSITORY" --arg branch "$BRANCH" --arg sha "$COMMIT_SHA" --arg profile_status "$profile_run_status" --argjson canvas_count "$canvas_count" --arg connector_phase "$connector_phase" --argjson inspection "$inspection_result" --argjson profile_result "$profile_result" '{task_id:$task_id,summary:$summary,result:{repository:$repository,branch:$branch,commit_sha:$sha,connector_phase:$connector_phase,canvas_count:$canvas_count,profile_status:$profile_status,profile_result:$profile_result,inspection:$inspection}}')"
-          curl --fail-with-body --silent --show-error -X POST "$RELAY_URL/v1/persistent-sessions/${session_id}/tasks/complete" -H "Authorization: Bearer $oidc_token" -H "Content-Type: application/json" -d "$completion_payload" -o artifacts/task-complete.json
-          artifact_id="$(jq -er '.artifact_id' artifacts/task-complete.json)"
-          artifact_url="$(jq -er '.artifact_url' artifacts/task-complete.json)"
-          curl --fail-with-body --silent --show-error "$RELAY_URL$artifact_url" -H "Authorization: Bearer $oidc_token" -o artifacts/godot-persistent-task.zip
-          unzip -t artifacts/godot-persistent-task.zip
-          curl --fail-with-body --silent --show-error "$RELAY_URL/v1/persistent-sessions/${session_id}" -H "Authorization: Bearer $oidc_token" -o artifacts/session-status.json
-          jq -n --arg session_id "$session_id" --arg artifact_id "$artifact_id" --arg storage "Neon Object Storage" --arg commit_sha "$COMMIT_SHA" '{session_id:$session_id,artifact_id:$artifact_id,storage:$storage,commit_sha:$commit_sha,profile_status:$profile_run_status,session_left_open:true}' > artifacts/persistent-session-summary.json
-      - name: Upload persistent session evidence index
+        run: python scripts/godot-browser-worker.py
+      - name: Upload runner diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: godot-web-persistent-session-${{ github.run_id }}
+          name: godot-browser-worker-\${{ github.run_id }}
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Preserve session after task completion
-        if: always()
-        run: echo "The Relay browser session is intentionally left open; Render may suspend it naturally after its idle TTL."
