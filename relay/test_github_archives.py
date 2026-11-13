@@ -66,7 +66,7 @@ class FakeClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def get(self, url):
+    async def get(self, url, headers=None):
         response = FakeMetadata(self.default_branch)
         response.status_code = self.status_code
         return response
@@ -131,8 +131,14 @@ class GitHubArchiveTests(unittest.TestCase):
             self.assertIn("game-main/project.godot", archive.namelist())
             self.assertIn("game-main/README.md", archive.namelist())
             self.assertNotIn("game-main/engine/native_android", archive.namelist())
-        self.assertEqual(response.headers["x-godot-web-excluded-count"], "1")
-        self.assertEqual(response.headers["x-godot-web-excluded-files"], "engine/native_android")
+        self.assertEqual(response.headers["x-godot-web-excluded-count"], "2")
+        self.assertEqual(
+            set(response.headers["x-godot-web-excluded-files"].split(";")),
+            {"engine/native_android", "examples/demo/engine/native_android"},
+        )
+        exposed = response.headers.get("access-control-expose-headers", "").lower()
+        self.assertIn("x-godot-web-excluded-count", exposed)
+        self.assertIn("x-godot-web-excluded-files", exposed)
 
     def test_nested_project_is_repacked_with_project_file_at_zip_root(self):
         with patch("github_archives.httpx.AsyncClient", FakeClient):
