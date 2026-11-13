@@ -51,7 +51,7 @@ def patch_html(html: str) -> str:
         )
 
     connector = r"""
-<script id="godot-github-connector" data-version="branch-path-v1">
+<script id="godot-github-connector" data-version="branch-path-v2">
 (function () {
   "use strict";
   const relay = "__RELAY_URL__";
@@ -116,65 +116,134 @@ def patch_html(html: str) -> str:
     bar.appendChild(button);
   });
 
-  window.addEventListener("load", async function () {
-    const startButton = document.getElementById("startButton");
-    if (!startButton || startButton.disabled) return;
+  async function waitForElement(selector, predicate, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const element = document.querySelector(selector);
+      if (element && (!predicate || predicate(element))) return element;
+      await new Promise(resolve => window.setTimeout(resolve, 150));
+    }
+    throw new Error("Tiempo agotado esperando " + selector + ".");
+  }
 
+  async function startGodotWeb() {
+    const startButton = await waitForElement("#startButton", null, 45000);
+    const input = await waitForElement("#zip-file", null, 45000);
     const params = new URLSearchParams(window.location.search);
     const repo = params.get("repo");
+
+    window.__godotGithubConnectorStatus = { phase: "initializing", repo: repo || null };
+
     if (repo) {
       const branch = (params.get("branch") || "").trim();
       const projectPath = (params.get("path") || "").trim();
       if (!repoPattern.test(repo) || !validBranch(branch) || !validProjectPath(projectPath)) {
-        window.alert("No se pudo conectar el repositorio: revisa owner/repository, rama y carpeta del proyecto.");
-      } else {
-        const [owner, repository] = repo.split("/");
-        try {
-          const archiveUrl = new URL(
-            relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive"
-          );
-          if (branch) archiveUrl.searchParams.set("branch", branch);
-          if (projectPath) archiveUrl.searchParams.set("path", projectPath);
-          const response = await fetch(
-            archiveUrl.toString(),
-            { method: "GET", mode: "cors", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer" }
-          );
-          if (!response.ok) {
-            let detail = "HTTP " + response.status;
-            try {
-              const payload = await response.json();
-              if (payload && payload.detail) detail = payload.detail;
-            } catch (_error) {}
-            throw new Error(detail);
-          }
-          const blob = await response.blob();
-          if (!blob.size || blob.size > 128 * 1024 * 1024) {
-            throw new Error("El ZIP está vacío o supera el límite de 128 MiB.");
-          }
-          const input = document.getElementById("zip-file");
-          if (!input || typeof DataTransfer === "undefined") {
-            throw new Error("Este navegador no permite precargar el ZIP automáticamente.");
-          }
-          const selectedBranch = response.headers.get("X-GitHub-Ref") || branch || "default";
-          const branchFile = selectedBranch.replace(/[^A-Za-z0-9._-]+/g, "-");
-          const transfer = new DataTransfer();
-          transfer.items.add(new File([blob], owner + "-" + repository + "-" + branchFile + ".zip", { type: "application/zip" }));
-          input.files = transfer.files;
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete("repo");
-          cleanUrl.searchParams.delete("branch");
-          cleanUrl.searchParams.delete("path");
-          window.history.replaceState(null, "", cleanUrl.toString());
-        } catch (error) {
-          window.alert("No se pudo descargar " + repo + ": " + String(error.message || error));
+        window.__godotGithubConnectorStatus = { phase: "invalid-parameters", repo };
+        throw new Error("Revisa owner/repository, rama y carpeta del proyecto.");
+      }
+
+      const [owner, repository] = repo.split("/");
+      try {
+        window.__godotGithubConnectorStatus.phase = "downloading";
+        const archiveUrl = new URL(
+          relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive"
+        );
+        if (branch) archiveUrl.searchParams.set("branch", branch);
+        if (projectPath) archiveUrl.searchParams.set("path", projectPath);
+
+        const response = await fetch(archiveUrl.toString(), {
+          method: "GET",
+          mode: "cors",
+          credentials: "omit",
+          cache: "no-store",
+          referrerPolicy: "no-referrer"
+        });
+        if (!response.ok) {
+          let detail = "HTTP " + response.status;
+          try {
+            const payload = await response.json();
+            if (payload && payload.detail) detail = payload.detail;
+          } catch (_error) {}
+          throw new Error(detail);
         }
+
+        const blob = await response.blob();
+        if (!blob.size || blob.size > 128 * 1024 * 1024) {
+          throw new Error("El ZIP está vacío o supera el límite de 128 MiB.");
+        }
+        if (typeof DataTransfer === "undefined") {
+          throw new Error("Este navegador no permite precargar el ZIP automáticamente.");
+        }
+
+        const selectedBranch = response.headers.get("X-GitHub-Ref") || branch || "default";
+        const branchFile = selectedBranch.replace(/[^A-Za-z0-9._-]+/g, "-");
+        const filename = owner + "-" + repository + "-" + branchFile + ".zip";
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([blob], filename, { type: "application/zip" }));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+
+        if (input.files.length !== 1 || input.files[0].name !== filename) {
+          throw new Error("El navegador no conservó el ZIP en el control oficial de Godot.");
+        }
+        window.__godotGithubConnectorStatus = {
+          phase: "zip-assigned",
+          repo,
+          filename,
+          bytes: blob.size,
+          branch: selectedBranch
+        };
+
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("repo");
+        cleanUrl.searchParams.delete("branch");
+        cleanUrl.searchParams.delete("path");
+        window.history.replaceState(null, "", cleanUrl.toString());
+      } catch (error) {
+        window.__godotGithubConnectorStatus = {
+          phase: "failed",
+          repo,
+          error: String(error.message || error)
+        };
+        window.alert("No se pudo descargar " + repo + ": " + String(error.message || error));
+        return;
       }
     }
 
+    // Godot puede mantener Start deshabilitado mientras termina su inicialización.
+    // No abortar la importación: esperar a que el botón esté listo.
+    await waitForElement("#startButton", element => !element.disabled, 90000);
     if (typeof closeWelcomeModal === "function") closeWelcomeModal(false);
+    window.__godotGithubConnectorStatus = {
+      ...(window.__godotGithubConnectorStatus || {}),
+      phase: "starting"
+    };
     startButton.click();
-  }, { once: true });
+    window.__godotGithubConnectorStatus = {
+      ...(window.__godotGithubConnectorStatus || {}),
+      phase: "started"
+    };
+  }
+
+  function scheduleGodotStart() {
+    startGodotWeb().catch(error => {
+      window.__godotGithubConnectorStatus = {
+        ...(window.__godotGithubConnectorStatus || {}),
+        phase: "failed",
+        error: String(error.message || error)
+      };
+      console.error("[Godot GitHub connector]", error);
+      window.alert("No se pudo iniciar Godot Web: " + String(error.message || error));
+    });
+  }
+
+  // No depender exclusivamente del evento load: el script puede ejecutarse
+  // después de ese evento en navegaciones/restauraciones del navegador.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scheduleGodotStart, { once: true });
+  } else {
+    scheduleGodotStart();
+  }
 })();
 </script>
 """.replace("__RELAY_URL__", RELAY_URL)
