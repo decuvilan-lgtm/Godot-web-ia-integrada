@@ -9,6 +9,7 @@ import zipfile
 from unittest.mock import patch
 
 import persistent_sessions as sessions
+from app import app
 
 
 class FakeS3:
@@ -119,6 +120,13 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.commit_sha, "a" * 40)
         with self.assertRaises(Exception):
             sessions.OpenSessionRequest(repository="owner/project", commit_sha="not-a-sha")
+
+    def test_artifact_download_route_is_registered(self):
+        self.assertTrue(any(
+            getattr(route, "path", None) == "/v1/persistent-sessions/{session_id}/artifacts/{artifact_id}"
+            and getattr(route, "endpoint", None) is sessions.download_persistent_artifact
+            for route in app.routes
+        ))
 
     async def test_idle_expiry_is_at_least_fifteen_minutes(self):
         self.assertGreaterEqual(sessions.IDLE_TTL, 900)
