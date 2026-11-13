@@ -79,19 +79,47 @@ def main():
             if not(readiness["phase"]=="started" and readiness["imported_sha"]==sha and readiness["canvas_count"]>=1):
                 failure="Exact project SHA was not confirmed before import timeout"
             else:
-                # Godot's ZIP preloader opens a real Project Manager install dialog.
-                # The current 1365x768 editor shell places its primary Install action here.
+                # The published web app has separate Loader, Editor and Game tabs.
+                # Import completion leaves Loader selected; explicitly open Editor
+                # before judging the project's visual state.
+                editor_tab=page.get_by_text("Editor",exact=True)
+                if editor_tab.count():
+                    editor_tab.first.click(timeout=10000)
+                    page.wait_for_timeout(15000)
+                    inspection["editor_tab_action"]="clicked Editor tab and waited for the Godot editor surface"
+                else:
+                    inspection["editor_tab_action"]="Editor tab text was not found"
                 if "Project Manager" in page.title():
                     page.screenshot(path=str(OUT/"editor-install-dialog.png"),full_page=False,timeout=30000)
-                    viewport=page.viewport_size or {"width":1365,"height":768}
-                    page.mouse.click(viewport["width"]*0.554,viewport["height"]*0.641)
+                    install_button=page.get_by_role("button",name=re.compile("Install",re.I))
+                    if install_button.count():
+                        install_button.first.click(timeout=10000)
+                    else:
+                        viewport=page.viewport_size or {"width":1365,"height":768}
+                        page.mouse.click(viewport["width"]*0.554,viewport["height"]*0.641)
                     install_deadline=time.monotonic()+120
                     while time.monotonic()<install_deadline and "Project Manager" in page.title():
                         page.wait_for_timeout(3000)
-                    inspection["install_dialog_action"]="clicked Godot Install button; Edit Now was enabled"
+                    inspection["install_dialog_action"]="attempted Godot Install action"
                     inspection["post_install_title"]=page.title()
                     if "Project Manager" in page.title():
                         failure="Godot remained in Project Manager after the project Install action"
+                inspection["visual_surface"]=page.evaluate("""() => ({
+                    canvases:[...document.querySelectorAll('canvas')].map((c,i)=> {
+                        const r=c.getBoundingClientRect(), s=getComputedStyle(c);
+                        return {index:i,width:c.width,height:c.height,css_width:Math.round(r.width),css_height:Math.round(r.height),visible:r.width>100&&r.height>100&&s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0};
+                    }),
+                    iframes:[...document.querySelectorAll('iframe')].map((f,i)=> {
+                        const r=f.getBoundingClientRect(),s=getComputedStyle(f);
+                        return {index:i,src:f.src,width:Math.round(r.width),height:Math.round(r.height),visible:r.width>100&&r.height>100&&s.display!=='none'&&s.visibility!=='hidden'};
+                    }),
+                    body_text:document.body.innerText.slice(0,12000)
+                })""")
+                inspection["visual_validation"]={
+                    "status":"surface_detected" if any(c["visible"] for c in inspection["visual_surface"]["canvases"]) or any(f["visible"] for f in inspection["visual_surface"]["iframes"]) else "no_visible_godot_surface",
+                    "manual_review_required":True,
+                    "note":"Import SHA confirmation is not proof that the project scene is rendered or playable."
+                }
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
         except Exception as exc:
             failure=f"{type(exc).__name__}: {str(exc)[:1000]}"
