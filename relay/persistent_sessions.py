@@ -562,6 +562,8 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
             screenshot = await session.page.screenshot(full_page=False, timeout=20000)
             screenshot_name = f"task-{body.task_id[:40]}-final.png"
             _store_session_artifact(session, screenshot_name, screenshot)
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Could not capture final editor state: {type(exc).__name__}") from exc
         manifest = {
@@ -642,13 +644,19 @@ async def download_persistent_artifact(session_id: str, artifact_id: str, author
     try:
         client = storage_client()
         response = await run_in_threadpool(client.get_object, Bucket=BUCKET, Key=key)
+        content_length = int(response.get("ContentLength", 0))
+        if content_length < 1 or content_length > MAX_ARTIFACT_BYTES:
+            raise HTTPException(status_code=404, detail="Artifact not found")
         body = response["Body"]
         try:
             payload = await run_in_threadpool(body.read, MAX_ARTIFACT_BYTES + 1)
         finally:
             await run_in_threadpool(body.close)
-        if not payload or len(payload) > MAX_ARTIFACT_BYTES:
+        if not payload or len(payload) > MAX_ARTIFACT_BYTES or len(payload) != content_length:
             raise HTTPException(status_code=404, detail="Artifact not found")
+        expected_digest = str(response.get("Metadata", {}).get("sha256", ""))
+        if expected_digest and not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), expected_digest):
+            raise HTTPException(status_code=502, detail="Persistent artifact integrity check failed")
     except HTTPException:
         raise
     except Exception as exc:
