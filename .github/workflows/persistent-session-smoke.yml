@@ -55,7 +55,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  browser-worker:
+  persistent-session:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -75,7 +75,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright==1.52.0
           python -m playwright install --with-deps chromium
-      - name: Open Godot Web in runner-owned Chromium and persist evidence
+      - name: Open persistent editor, inspect, capture and persist evidence
         env:
           REPOSITORY: ${{ inputs.repository || 'gavilandavid89-pixel/Ajedrez-2c2' }}
           BRANCH: ${{ inputs.branch || 'main' }}
