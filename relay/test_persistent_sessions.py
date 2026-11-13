@@ -219,6 +219,7 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         profile = {
             "manifest": {
                 "project": {"name": "Test", "project_path": "game"},
+                "control_profile": "control-profile.json",
                 "commands": [{"name": "smoke-test", "file": "godot-lab/commands/smoke-test.json", "verification": pending}],
             },
             "control_profile": {"verification": pending, "controls": {}},
