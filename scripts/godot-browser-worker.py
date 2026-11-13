@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib, io, json, os, re, time, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from bridge.browser_command_loop import run_command_loop
 
 RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
 EDITOR_URL=os.environ.get("EDITOR_URL","https://godot-web-ia-integrada-rt2l.onrender.com/")
@@ -141,6 +142,13 @@ def main():
                     "note":"A visible Godot scene editor is not proof that the game runs; project resource errors are reported separately."
                 }
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
+            # Keep this real Chromium session available for a short, bounded command window.
+            command_session=run_command_loop(
+                page, REPOSITORY, os.environ.get("SESSION_ISSUE_NUMBER"),
+                os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
+                duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
+            )
+            inspection["command_session"]=command_session
         except Exception as exc:
             failure=f"{type(exc).__name__}: {str(exc)[:1000]}"
             try: page.screenshot(path=str(shot),full_page=False,timeout=15000)
