@@ -6,7 +6,7 @@ services:
     region: oregon
     branch: main
     rootDir: relay
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python -m playwright install chromium
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
@@ -17,6 +17,14 @@ services:
         value: "1800"
       - key: ALLOWED_ORIGINS
         value: "https://godot-web-ia-integrada-rt2l.onrender.com"
+      - key: PERSISTENT_SESSION_TOKEN
+        generateValue: true
+      - key: PERSISTENT_SESSION_IDLE_TTL_SECONDS
+        value: "900"
+      - key: PERSISTENT_SESSION_MAX_COUNT
+        value: "1"
+      - key: GODOT_WEB_EDITOR_URL
+        value: "https://godot-web-ia-integrada-rt2l.onrender.com/"
       - key: COMMAND_CENTER_DATABASE_URL
         sync: false
       - key: COMMAND_CENTER_ADMIN_TOKEN
