@@ -201,19 +201,30 @@ jobs:
 
       - name: Preparar perfil de controles de regresión
         id: control_profile
+        env:
+          REPOSITORY_FULL_NAME: ${{ steps.repo.outputs.full_name }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, os
           from pathlib import Path
           profile = json.loads(Path("tests/control-profiles/escondite-smoke.json").read_text())
-          actions = profile.get("actions", [])
+          selected_repo = os.environ.get("REPOSITORY_FULL_NAME", "").strip().lower()
+          profile_repo = str(profile.get("repository", "")).strip().lower()
+          if not selected_repo:
+              raise SystemExit("No se pudo identificar el repositorio para seleccionar su perfil de controles.")
+          # Smoke profiles belong to one project; never send another game's
+          # controls to an unrelated project when this workflow is reused.
+          actions = profile.get("actions", []) if profile_repo == selected_repo else []
           if not isinstance(actions, list) or len(actions) > 200:
               raise SystemExit("El perfil de controles no contiene una lista válida de acciones.")
           serialized = json.dumps(actions, separators=(",", ":"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("actions=" + serialized + "\n")
-          print(f"Perfil cargado: {profile.get('profile')} ({len(actions)} acciones)")
+              output.write("actions=" + serialized + "\\n")
+          if actions:
+              print(f"Perfil cargado: {profile.get('profile')} ({len(actions)} acciones)")
+          else:
+              print(f"Perfil omitido: {profile.get('profile')} pertenece a {profile_repo or 'ningún repositorio'}, no a {selected_repo}. No se enviarán controles ajenos.")
           PY
 
       - name: Verificar Relay desplegado con rama y subcarpeta
