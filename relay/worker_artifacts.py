@@ -35,7 +35,8 @@ async def upload_worker_artifact(session_id:str,request:Request,authorization:st
         raise HTTPException(status_code=400,detail="Evidence repository metadata is invalid")
     if not isinstance(sha,str) or not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})",sha):
         raise HTTPException(status_code=400,detail="Evidence commit SHA is invalid")
-    artifact_id=secrets.token_urlsafe(18); key=_persistent_artifact_key(session_id,artifact_id)
+    # Deterministic ID makes safe retries idempotent if the HTTP response is lost.
+    artifact_id=hashlib.sha256(f"{session_id}:{digest}".encode("utf-8")).hexdigest()[:36]; key=_persistent_artifact_key(session_id,artifact_id)
     try:
         await run_in_threadpool(storage_client().put_object,Bucket=BUCKET,Key=key,Body=payload,ContentType="application/zip",Metadata={"sha256":digest,"repository":repository[:200],"commit-sha":sha,"worker":"github-actions"})
     except Exception as exc:
