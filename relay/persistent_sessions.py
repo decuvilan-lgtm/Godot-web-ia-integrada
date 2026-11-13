@@ -12,6 +12,7 @@ import secrets
 import subprocess
 import sys
 import time
+import threading
 import zipfile
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,6 +37,8 @@ OIDC_AUDIENCE = os.environ.get("PERSISTENT_SESSION_OIDC_AUDIENCE", "godot-web-ia
 OIDC_REPOSITORY = os.environ.get("PERSISTENT_SESSION_OIDC_REPOSITORY", "decuvilan-lgtm/Godot-web-ia-integrada")
 OIDC_WORKFLOW = os.environ.get("PERSISTENT_SESSION_OIDC_WORKFLOW", ".github/workflows/persistent-session-smoke.yml")
 OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
+_oidc_jwks_client = None
+_oidc_jwks_lock = threading.Lock()
 IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
@@ -93,13 +96,17 @@ def _validate_github_oidc_claims(claims: dict[str, Any]) -> None:
 def _verify_github_oidc_token(token: str) -> None:
     try:
         import jwt
-    except ImportError as exc:
-        raise RuntimeError("PyJWT is not installed") from exc
-    client = jwt.PyJWKClient(
-        "https://token.actions.githubusercontent.com/.well-known/jwks",
-        cache_keys=True,
-    )
-    signing_key = client.get_signing_key_from_jwt(token)
+    except ImportError:
+        raise
+    global _oidc_jwks_client
+    if _oidc_jwks_client is None:
+        with _oidc_jwks_lock:
+            if _oidc_jwks_client is None:
+                _oidc_jwks_client = jwt.PyJWKClient(
+                    "https://token.actions.githubusercontent.com/.well-known/jwks",
+                    cache_keys=True,
+                )
+    signing_key = _oidc_jwks_client.get_signing_key_from_jwt(token)
     claims = jwt.decode(
         token,
         signing_key.key,
