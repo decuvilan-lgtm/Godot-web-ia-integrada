@@ -9,6 +9,8 @@ on:
       - "scripts/godot-input-map.cjs"
       - "scripts/test-godot-input-map.cjs"
       - "scripts/analyze_gameplay_captures.py"
+      - "scripts/patch-web-shell.py"
+      - "scripts/test_patch_web_shell.py"
       - "scripts/test_analyze_gameplay_captures.py"
       - "tests/control-profiles/escondite-smoke.json"
   workflow_dispatch:
@@ -88,6 +90,8 @@ jobs:
             scripts/godot-input-map.cjs
             scripts/test-godot-input-map.cjs
             scripts/analyze_gameplay_captures.py
+            scripts/patch-web-shell.py
+            scripts/test_patch_web_shell.py
             tests/control-profiles/escondite-smoke.json
           sparse-checkout-cone-mode: false
 
@@ -95,13 +99,14 @@ jobs:
         run: |
           node scripts/test-gameplay-test-controller.cjs
           node scripts/test-godot-input-map.cjs
+          python scripts/test_patch_web_shell.py
 
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
         env:
-          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
-          REQUESTED_BRANCH: ${{ inputs.branch || '' }}
-          PROJECT_PATH: ${{ inputs.project_path || '' }}
+          REPOSITORY_URL: ${{ inputs.repository_url || (github.event_name == 'push' && 'https://github.com/gavilandavid89-pixel/Ajedrez-2c2') || 'https://github.com/gavilandavid89-pixel/Escondite' }}
+          REQUESTED_BRANCH: ${{ inputs.branch || (github.event_name == 'push' && 'main') || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || (github.event_name == 'push' && 'ajedrez_2c2_v161') || '' }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -534,12 +539,21 @@ jobs:
             try {
               const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout });
               result.httpStatus = response?.status() ?? null;
+              result.connectorVersion = await page.locator('#godot-github-connector').getAttribute('data-version').catch(() => null);
+              if (result.connectorVersion !== 'branch-path-v2') {
+                throw new Error('El editor publicado usa el conector ' + (result.connectorVersion || 'sin versión') + '; esta prueba requiere branch-path-v2. Despliega primero el parche del integrador antes de ejecutar la importación E2E.');
+              }
               await page.waitForSelector('#startButton', { state: 'attached', timeout });
               await page.waitForSelector('#zip-file', { state: 'attached', timeout });
               await page.waitForFunction(() => {
                 const input = document.querySelector('#zip-file');
-                return input?.files?.length === 1 && !new URLSearchParams(location.search).has('repo');
+                const connector = window.__godotGithubConnectorStatus;
+                return input?.files?.length === 1 || connector?.phase === 'failed';
               }, null, { timeout });
+              result.connectorStatus = await page.evaluate(() => window.__godotGithubConnectorStatus || null);
+              if (result.connectorStatus?.phase === 'failed') {
+                throw new Error('El conector falló antes de asignar el ZIP: ' + (result.connectorStatus.error || 'causa no informada'));
+              }
               result.preloadConfirmed = true;
               result.browserIsolation = await page.evaluate(() => ({
                 crossOriginIsolated: window.crossOriginIsolated,
@@ -574,6 +588,19 @@ jobs:
                   await page.screenshot({ path: 'artifacts/godot-project-manager.png', fullPage: true });
                   scan = inspectImage('artifacts/godot-project-manager.png');
                   result.projectManagerOcr = scan.text;
+                }
+              }
+              // El ZIP queda precargado en #zip-file, pero Godot no abre por sí solo
+              // el diálogo de instalación. Entrar explícitamente por Import Existing Project.
+              if (!/Install Project|Install\\s*&\\s*Edit|Install\\s+and\\s+Edit/i.test(scan.text)) {
+                const importButton = page.getByRole('button', { name: /Import Existing Project/i });
+                if (await importButton.count()) {
+                  await importButton.click({ timeout: 10000 });
+                  await page.waitForTimeout(2500);
+                  await page.screenshot({ path: 'artifacts/godot-import-dialog.png', type: 'png', fullPage: false, animations: 'disabled', timeout: 20000 });
+                  scan = inspectImage('artifacts/godot-import-dialog.png');
+                  result.importExistingProjectClicked = true;
+                  result.importDialogOcr = scan.text;
                 }
               }
               if (/Install Project/i.test(scan.text)) {                const nameLine = findLine(scan, /^Preload$/i, 'campo de nombre del proyecto');
