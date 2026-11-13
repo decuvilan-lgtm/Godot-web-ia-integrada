@@ -625,6 +625,7 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
             "object_key": object_key,
         }
         session.completed_tasks[body.task_id] = result
+        session.artifacts.clear()
         session.events.append({"type": "task.completed", "task_id": body.task_id, "artifact_id": artifact_id, "at": time.time()})
         _touch(session)
         return result
@@ -655,7 +656,7 @@ async def download_persistent_artifact(session_id: str, artifact_id: str, author
             await run_in_threadpool(body.close)
         if not payload or len(payload) > MAX_ARTIFACT_BYTES or len(payload) != content_length:
             raise HTTPException(status_code=404, detail="Artifact not found")
-        expected_digest = str(response.get("Metadata", {}).get("sha256", ""))
+        expected_digest = str((response.get("Metadata") or {}).get("sha256", ""))
         if expected_digest and not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), expected_digest):
             raise HTTPException(status_code=502, detail="Persistent artifact integrity check failed")
     except HTTPException:
