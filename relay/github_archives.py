@@ -111,8 +111,8 @@ def _select_project_subdirectory(archive, project_path: str, *, preserve_root: b
         raise HTTPException(status_code=502, detail="GitHub response was not a valid ZIP archive") from exc
 
     with source:
-        files = [item for item in source.infolist() if not item.is_dir()]
-        roots = {item.filename.split("/", 1)[0] for item in source.infolist() if "/" in item.filename}
+        entries = source.infolist()
+        roots = {item.filename.split("/", 1)[0] for item in entries if "/" in item.filename}
         if len(roots) != 1:
             raise HTTPException(status_code=502, detail="GitHub archive has an unexpected directory layout")
         root = next(iter(roots))
@@ -122,13 +122,23 @@ def _select_project_subdirectory(archive, project_path: str, *, preserve_root: b
         total_uncompressed = 0
         found_project = False
 
-        for item in files:
+        for item in entries:
             name = item.filename.replace("\\", "/")
             if name.startswith("/") or any(part == ".." for part in PurePosixPath(name).parts):
                 raise HTTPException(status_code=502, detail="GitHub archive contains an unsafe path")
             if not name.startswith(prefix):
                 continue
             relative = name[len(prefix):]
+            if item.is_dir():
+                if not relative:
+                    continue
+                directory = relative.rstrip("/")
+                if not directory or directory.startswith("/") or any(part in {"", ".", ".."} for part in PurePosixPath(directory).parts):
+                    raise HTTPException(status_code=502, detail="GitHub archive contains an unsafe project directory")
+                # Godot Project Manager creates parent folders from explicit ZIP
+                # directory entries before extracting files. Preserve them.
+                selected.append((item, directory + "/", True))
+                continue
             if not relative or relative.startswith("/") or any(part in {"", ".", ".."} for part in PurePosixPath(relative).parts):
                 raise HTTPException(status_code=502, detail="GitHub archive contains an unsafe project path")
             mode = (item.external_attr >> 16) & 0o170000
@@ -145,7 +155,7 @@ def _select_project_subdirectory(archive, project_path: str, *, preserve_root: b
             if total_uncompressed > MAX_PROJECT_BYTES:
                 raise HTTPException(status_code=413, detail="Selected Godot project exceeds the 256 MiB unpacked import limit")
             found_project = found_project or relative == "project.godot"
-            selected.append((item, relative))
+            selected.append((item, relative, False))
 
         if not found_project:
             location = f"{project_path}/project.godot" if project_path else "project.godot at repository root"
@@ -154,13 +164,15 @@ def _select_project_subdirectory(archive, project_path: str, *, preserve_root: b
         output = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
         try:
             with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as target:
-                for original, relative in selected:
+                for original, relative, is_directory in selected:
                     target_name = f"{root}/{relative}" if preserve_root else relative
+                    if is_directory and not target_name.endswith("/"):
+                        target_name += "/"
                     info = zipfile.ZipInfo(target_name, date_time=original.date_time)
-                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.compress_type = zipfile.ZIP_STORED if is_directory else zipfile.ZIP_DEFLATED
                     info.external_attr = original.external_attr
                     info.create_system = original.create_system
-                    target.writestr(info, source.read(original.filename))
+                    target.writestr(info, b"" if is_directory else source.read(original.filename))
             output.seek(0, 2)
             if output.tell() > MAX_ARCHIVE_BYTES:
                 raise HTTPException(status_code=413, detail="Selected Godot project archive exceeds the 128 MiB import limit")
