@@ -25,8 +25,12 @@ class FakeS3:
 class FakePage:
     def __init__(self):
         self.closed = False
+        self.url = "https://godot-web-ia-integrada-rt2l.onrender.com/"
     def is_closed(self):
         return self.closed
+    async def goto(self, url, **kwargs):
+        self.url = url
+        return None
     async def screenshot(self, **kwargs):
         return b"fake-png-bytes"
     async def evaluate(self, script):
@@ -132,6 +136,22 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["reused"])
         self.assertEqual(result["session_id"], "test-session")
         get_browser.assert_not_called()
+
+    async def test_open_session_can_reimport_a_new_revision_in_the_same_browser(self):
+        body = sessions.OpenSessionRequest(
+            repository="owner/project",
+            branch="main",
+            project_path="game",
+            commit_sha="a" * 40,
+            reimport_existing=True,
+        )
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+            result = await sessions.open_persistent_session(body, "Bearer test-secret")
+        self.assertTrue(result["reused"])
+        self.assertTrue(result["reimported"])
+        self.assertEqual(result["session_id"], "test-session")
+        self.assertEqual(self.session.commit_sha, "a" * 40)
+        self.assertIn("sha=" + "a" * 40, self.page.url)
 
     async def test_open_session_rejects_switching_projects_without_closing_the_current_session(self):
         body = sessions.OpenSessionRequest(
