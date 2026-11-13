@@ -71,9 +71,10 @@ Los valores predeterminados de OIDC corresponden a este repositorio, al workflow
 ### API
 
 - `GET /v1/persistent-sessions`: lista las sesiones activas del proceso.
-- `POST /v1/persistent-sessions`: abre o reutiliza una sesión; resuelve la rama a un SHA si no se proporciona uno.
+- `POST /v1/persistent-sessions`: ruta heredada de sesión local; no la utiliza el Browser Worker externo.
+- `POST /v1/persistent-sessions/worker-artifacts/{id}`: recibe evidencia ZIP del runner, valida el manifiesto y SHA-256, y la guarda en Neon.
 - `GET /v1/persistent-sessions/{id}`: consulta el estado y las tareas completadas.
-- `POST /v1/persistent-sessions/{id}/heartbeat`: renueva el plazo de inactividad mientras una tarea autorizada está en curso.
+- `POST /v1/persistent-sessions/{id}/heartbeat`: heartbeat de la ruta heredada; no se usa para mantener vivo el runner.
 - `GET /v1/persistent-sessions/{id}/profile`: obtiene el perfil de laboratorio del repositorio en el SHA importado.
 - `POST /v1/persistent-sessions/{id}/profiles/{command}/run`: ejecuta una secuencia JSON validada y limitada, propiedad del repositorio del juego.
 - `POST /v1/persistent-sessions/{id}/commands`: permite `inspect`, `screenshot`, `click_text` y teclas de una lista permitida.
@@ -98,6 +99,6 @@ Si el repositorio no tiene un perfil válido, el laboratorio puede inspeccionar 
 - Chromium y su pestaña viven únicamente durante el job de GitHub Actions. Los runners hospedados son efímeros: no se promete conservar el mismo proceso entre jobs. La siguiente ejecución reconstruye el editor desde el mismo SHA exacto y registra esa reconstrucción en `checkpoint`.
 - Los paquetes de evidencias sí son duraderos porque se guardan en Neon Object Storage.
 - Render Free no aloja Chromium ni necesita memoria adicional para el navegador. El worker usa un único navegador/contexto por job y finaliza al terminar el trabajo.
-- El navegador corre en modo headless dentro del runner de GitHub Actions; no es una simulación de Godot. Se carga y utiliza el editor Godot Web publicado.
+- El navegador corre en modo headless dentro del runner de GitHub Actions; no es una simulación de Godot. Se carga y utiliza el editor Godot Web publicado. La instalación de Chromium se quitó del build de Render.
 - No se deben usar heartbeats, cron ni tráfico sintético para impedir la suspensión del plan Free. Una tarea explícita puede despertar el servicio; después se reconstruye una sesión nueva si la anterior ya no existe.
 - El workflow instala Playwright/Chromium en el runner (con caché de binarios), abre/importa el proyecto, confirma el SHA informado por el conector, recoge evidencias, las guarda en Neon y verifica la recuperación del ZIP. El navegador se mantiene durante toda la ejecución activa; al terminar el job, GitHub destruye su runner y la próxima tarea reconstruye una sesión nueva.
