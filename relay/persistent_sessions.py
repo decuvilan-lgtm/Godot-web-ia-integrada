@@ -376,7 +376,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "repository": body.repository,
             "branch": body.branch,
             "project_path": body.project_path,
-            "commit_sha": body.commit_sha,
+            "commit_sha": effective_sha,
         })
         _sessions[session_id] = session
     except Exception as exc:
@@ -390,7 +390,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "repository": body.repository,
         "branch": body.branch,
         "project_path": body.project_path,
-        "commit_sha": body.commit_sha,
+        "commit_sha": effective_sha,
         "idle_ttl_seconds": IDLE_TTL,
         "reused": False,
         "reused_for_follow_up_tasks": True,
