@@ -11,6 +11,16 @@ from unittest.mock import patch
 import persistent_sessions as sessions
 
 
+class FakeS3:
+    def __init__(self):
+        self.objects = {}
+    def put_object(self, **kwargs):
+        self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
+    def get_object(self, **kwargs):
+        import io
+        return {"Body": io.BytesIO(self.objects[(kwargs["Bucket"], kwargs["Key"])])}
+
+
 class FakePage:
     def __init__(self):
         self.closed = False
@@ -39,13 +49,16 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             summary="Finished inspection",
             result={"checks": ["editor-open", "screenshot"]},
         )
-        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+        fake_s3 = FakeS3()
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "storage_client", return_value=fake_s3):
             result = await sessions.complete_persistent_task(
                 "test-session", body, "Bearer test-secret"
             )
             self.assertTrue(result["session_kept_open"])
             self.assertEqual(result["state"], "completed")
             self.assertFalse(self.page.closed)
+            self.assertEqual(result["storage"], "neon-object-storage")
+            self.assertEqual(len(fake_s3.objects), 1)
             payload = sessions._sessions["test-session"].artifacts[
                 f"bundle-{result['artifact_id']}.zip"
             ]
@@ -57,7 +70,8 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_completed_task_is_idempotent_and_keeps_session(self):
         body = sessions.CompleteTaskRequest(task_id="same-task")
-        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+        fake_s3 = FakeS3()
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "storage_client", return_value=fake_s3):
             first = await sessions.complete_persistent_task(
                 "test-session", body, "Bearer test-secret"
             )
@@ -67,6 +81,24 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["artifact_id"], second["artifact_id"])
         self.assertTrue(second["session_kept_open"])
         self.assertFalse(self.page.closed)
+
+    async def test_artifact_can_be_downloaded_after_session_memory_is_lost(self):
+        fake_s3 = FakeS3()
+        body = sessions.CompleteTaskRequest(task_id="restart-safe-task")
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "storage_client", return_value=fake_s3):
+            result = await sessions.complete_persistent_task("test-session", body, "Bearer test-secret")
+            sessions._sessions.clear()
+            response = await sessions.download_persistent_artifact("test-session", result["artifact_id"], "Bearer test-secret")
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+        self.assertTrue(b"".join(chunks).startswith(b"PK"))
+
+    async def test_commit_sha_is_validated_and_saved(self):
+        request = sessions.OpenSessionRequest(repository="owner/project", commit_sha="a" * 40)
+        self.assertEqual(request.commit_sha, "a" * 40)
+        with self.assertRaises(Exception):
+            sessions.OpenSessionRequest(repository="owner/project", commit_sha="not-a-sha")
 
     async def test_idle_expiry_is_at_least_fifteen_minutes(self):
         self.assertGreaterEqual(sessions.IDLE_TTL, 900)
