@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - relay/persistent_sessions.py
+      - relay/requirements.txt
+      - relay/test_persistent_sessions.py
       - relay/project_profiles.py
       - relay/github_archives.py
       - scripts/patch-web-shell.py
