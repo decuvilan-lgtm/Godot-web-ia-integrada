@@ -282,6 +282,31 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             for route in app.routes
         ))
 
+    async def test_browser_failure_does_not_install_chromium_at_runtime(self):
+        class FakeChromium:
+            def __init__(self):
+                self.launch_args = None
+
+            async def launch(self, **kwargs):
+                self.launch_args = kwargs
+                raise RuntimeError("chromium binary missing")
+
+        class FakePlaywright:
+            def __init__(self):
+                self.chromium = FakeChromium()
+
+        fake_playwright = FakePlaywright()
+        with patch.object(sessions, "_browser", None), patch.object(
+            sessions._get_browser, "_playwright", fake_playwright, create=True
+        ):
+            with self.assertRaises(Exception) as raised:
+                await sessions._get_browser()
+
+        self.assertEqual(getattr(raised.exception, "status_code", None), 503)
+        self.assertIn("Install it during the Render build", raised.exception.detail)
+        self.assertIn("--renderer-process-limit=1", fake_playwright.chromium.launch_args["args"])
+        self.assertIn("--js-flags=--max-old-space-size=128", fake_playwright.chromium.launch_args["args"])
+
     async def test_idle_expiry_is_at_least_fifteen_minutes(self):
         self.assertGreaterEqual(sessions.IDLE_TTL, 900)
         self.session.last_activity = time.time() - 901
