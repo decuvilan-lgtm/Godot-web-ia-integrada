@@ -43,6 +43,7 @@ _oidc_jwks_lock = threading.Lock()
 IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
+MAX_SESSION_ARTIFACT_BYTES = 24 * 1024 * 1024
 REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$")
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 
@@ -136,6 +137,13 @@ async def _authorize(value: str | None) -> None:
     except Exception as exc:
         logger.info("Rejected persistent-session identity: %s", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Invalid persistent-session identity") from exc
+
+def _store_session_artifact(session: PersistentSession, name: str, data: bytes) -> None:
+    current_size = sum(len(item) for item in session.artifacts.values())
+    if len(data) > MAX_SESSION_ARTIFACT_BYTES or current_size + len(data) > MAX_SESSION_ARTIFACT_BYTES:
+        raise HTTPException(status_code=413, detail="Session screenshot artifacts exceed the 24 MiB limit")
+    session.artifacts[name] = data
+
 
 def _touch(session: PersistentSession) -> None:
     session.last_activity = time.time()
@@ -509,7 +517,7 @@ async def persistent_session_command(session_id: str, body: CommandRequest, auth
             if body.command == "screenshot":
                 image = await session.page.screenshot(full_page=False, timeout=body.timeout_ms)
                 name = f"screenshot-{int(time.time() * 1000)}.png"
-                session.artifacts[name] = image
+                _store_session_artifact(session, name, image)
                 output: dict[str, Any] = {"artifact": name, "bytes": len(image)}
             elif body.command == "click_text":
                 if not body.text:
@@ -553,7 +561,7 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
         try:
             screenshot = await session.page.screenshot(full_page=False, timeout=20000)
             screenshot_name = f"task-{body.task_id[:40]}-final.png"
-            session.artifacts[screenshot_name] = screenshot
+            _store_session_artifact(session, screenshot_name, screenshot)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Could not capture final editor state: {type(exc).__name__}") from exc
         manifest = {
@@ -600,13 +608,14 @@ async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, a
         except Exception as exc:
             logger.exception("Could not persist completed task bundle in Neon Object Storage")
             raise HTTPException(status_code=503, detail="Task bundle could not be persisted in Neon Object Storage") from exc
-        session.artifacts[f"bundle-{artifact_id}.zip"] = payload
+        artifact_sha256 = hashlib.sha256(payload).hexdigest()
         result = {
             "task_id": body.task_id,
             "state": "completed",
             "artifact_id": artifact_id,
             "artifact_url": f"/v1/persistent-sessions/{session_id}/artifacts/{artifact_id}",
             "artifact_bytes": len(payload),
+            "artifact_sha256": artifact_sha256,
             "session_kept_open": True,
             "session_id": session.session_id,
             "storage": "neon-object-storage",
@@ -630,23 +639,21 @@ async def download_persistent_artifact(session_id: str, artifact_id: str, author
     await _authorize(authorization)
     key = _persistent_artifact_key(session_id, artifact_id)
     session = _sessions.get(session_id)
-    payload = session.artifacts.get(f"bundle-{artifact_id}.zip") if session else None
-    if payload is None:
+    try:
+        client = storage_client()
+        response = await run_in_threadpool(client.get_object, Bucket=BUCKET, Key=key)
+        body = response["Body"]
         try:
-            client = storage_client()
-            response = await run_in_threadpool(client.get_object, Bucket=BUCKET, Key=key)
-            body = response["Body"]
-            try:
-                payload = await run_in_threadpool(body.read, MAX_ARTIFACT_BYTES + 1)
-            finally:
-                await run_in_threadpool(body.close)
-            if not payload or len(payload) > MAX_ARTIFACT_BYTES:
-                raise HTTPException(status_code=404, detail="Artifact not found")
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.info("Persistent artifact unavailable for %s/%s: %s", session_id, artifact_id, type(exc).__name__)
-            raise HTTPException(status_code=404, detail="Artifact not found") from exc
+            payload = await run_in_threadpool(body.read, MAX_ARTIFACT_BYTES + 1)
+        finally:
+            await run_in_threadpool(body.close)
+        if not payload or len(payload) > MAX_ARTIFACT_BYTES:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.info("Persistent artifact unavailable for %s/%s: %s", session_id, artifact_id, type(exc).__name__)
+        raise HTTPException(status_code=404, detail="Artifact not found") from exc
     if session is not None:
         _touch(session)
     return StreamingResponse(
