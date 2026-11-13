@@ -47,6 +47,16 @@ Este registro conserva fallos reales del flujo GitHub → Relay → navegador �
 - **Pruebas añadidas:** aceptar un archivo fuente superior a 128 MiB cuando el ZIP resultante queda bajo el límite; rechazar fuentes superiores a 256 MiB; verificar que los ELF se omiten tanto en proyectos raíz como en subcarpetas; conservar la estructura del ZIP y la detección de `project.godot`.
 - **Estado:** parche preparado en la rama indicada; pendiente de CI, revisión y despliegue del Relay. No declarar resuelto hasta repetir la importación E2E y confirmar que Godot abre el proyecto.
 
+## GWI-004 — Godot Project Manager no puede extraer archivos dentro de subcarpetas
+
+- **Detectado:** 2026-11-13, después de desplegar el Relay con el filtrado de binarios nativos.
+- **Ejecución:** [GitHub Actions #43349169921, intento 3](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43349169921).
+- **Síntoma:** el ZIP se descarga, se asigna al control oficial de Godot y pasa la validación CRC, pero Godot informa que falló la extracción de 712 archivos de `addons/`, `assets/` y otras carpetas.
+- **Causa comprobada:** `_select_project_subdirectory` reconstruía el ZIP copiando solo archivos y descartaba las entradas ZIP de tipo directorio. El instalador de Godot 4.7.2 crea los directorios a partir de esas entradas antes de escribir cada archivo; no crea recursivamente todos los directorios padre al abrir cada archivo. Por eso fallaban los archivos anidados aunque el ZIP fuera válido.
+- **Corrección propuesta en `fix/preserve-godot-zip-directories`:** preservar las entradas de directorio de la subcarpeta seleccionada, incluyendo carpetas vacías; mantener la exclusión de ELF solo para archivos y la estructura de raíz actual.
+- **Pruebas añadidas:** verificar que las entradas `game-main/engine/` y `game-main/examples/` sobreviven al empaquetado de proyectos raíz, y que `assets/` y `engine/` sobreviven al empaquetado de proyectos anidados.
+- **Estado:** parche preparado; pendiente de CI, despliegue del Relay y una nueva importación real que confirme que Godot abre el proyecto.
+
 ## Reglas para nuevos casos
 
 - No atribuir un fallo al Relay solo porque Godot muestre el Project Manager vacío: separar respuesta HTTP, contenido ZIP, asignación al input, inicio del motor e identidad del proyecto.
