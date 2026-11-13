@@ -75,11 +75,17 @@ class FakeClient:
         branch = url.split("/refs/heads/", 1)[-1]
         root = "game-" + branch.replace("/", "-")
         entries = {
+            f"{root}/": b"",
             f"{root}/project.godot": b'config/name="Example"',
             f"{root}/README.md": b"root project",
+            f"{root}/engine/": b"",
             f"{root}/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
+            f"{root}/examples/": b"",
+            f"{root}/examples/demo/": b"",
             f"{root}/examples/demo/project.godot": b'config/name="Nested"',
+            f"{root}/examples/demo/assets/": b"",
             f"{root}/examples/demo/assets/icon.svg": b"<svg/>",
+            f"{root}/examples/demo/engine/": b"",
             f"{root}/examples/demo/engine/native_android": bytes((0x7F,)) + b"ELF" + b"\x00" * 32,
         }
         body = make_zip(entries)
@@ -130,6 +136,8 @@ class GitHubArchiveTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
             self.assertIn("game-main/project.godot", archive.namelist())
             self.assertIn("game-main/README.md", archive.namelist())
+            self.assertIn("game-main/engine/", archive.namelist())
+            self.assertIn("game-main/examples/", archive.namelist())
             self.assertNotIn("game-main/engine/native_android", archive.namelist())
         self.assertEqual(response.headers["x-godot-web-excluded-count"], "2")
         self.assertEqual(
@@ -149,6 +157,8 @@ class GitHubArchiveTests(unittest.TestCase):
             names = set(archive.namelist())
             self.assertIn("project.godot", names)
             self.assertIn("assets/icon.svg", names)
+            self.assertIn("assets/", names)
+            self.assertIn("engine/", names)
             self.assertNotIn("README.md", names)
             self.assertNotIn("engine/native_android", names)
             self.assertEqual(archive.read("project.godot"), b'config/name="Nested"')
