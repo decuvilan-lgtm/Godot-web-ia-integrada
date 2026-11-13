@@ -8,7 +8,7 @@ API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm"}
 MAX_TEXT=500
 POLL_SECONDS=5
-ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+Z","Control+Y","Control+S"}
+ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
     data=None if payload is None else json.dumps(payload).encode()
@@ -33,7 +33,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -42,11 +42,11 @@ def _validate(command, session_id, last_seq):
     if not isinstance(seq,int) or isinstance(seq,bool) or seq<=last_seq:
         raise ValueError("Sequence must be a new increasing integer")
     action=command.get("action")
-    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","press_key","stop"}:
+    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","stop"}:
         raise ValueError("Action is not allowlisted")
     text=command.get("text")
     placeholder=command.get("placeholder")
-    if action in {"click_text","assert_text"} and (not isinstance(text,str) or not text or len(text)>MAX_TEXT):
+    if action in {"click_text","assert_text","type_text"} and (not isinstance(text,str) or not text or len(text)>MAX_TEXT):
         raise ValueError("text is required and limited to 500 characters")
     if action=="fill_placeholder" and (not isinstance(placeholder,str) or not placeholder or len(placeholder)>MAX_TEXT or not isinstance(text,str) or len(text)>MAX_TEXT):
         raise ValueError("fill_placeholder needs a bounded placeholder and text")
@@ -55,6 +55,12 @@ def _validate(command, session_id, last_seq):
         raise ValueError("wait seconds must be 0-20")
     if action=="canvas_click" and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
         raise ValueError("canvas_click x and y must be normalized numbers from 0 to 1")
+    if action=="canvas_scroll":
+        if not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
+            raise ValueError("canvas_scroll x and y must be normalized numbers from 0 to 1")
+        delta_x=command.get("delta_x",0); delta_y=command.get("delta_y",0)
+        if any(not isinstance(value,int) or isinstance(value,bool) or not -1200<=value<=1200 for value in (delta_x,delta_y)) or (delta_x==0 and delta_y==0):
+            raise ValueError("canvas_scroll deltas must be integers between -1200 and 1200 and not both zero")
     if action=="canvas_drag":
         points=command.get("points")
         if not isinstance(points,list) or not 2<=len(points)<=64:
@@ -149,9 +155,18 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         finally:
                             page.mouse.up()
                         result={"canvas_index":canvas["index"],"point_count":len(points),"duration_ms":command.get("duration_ms",250)}
+                    elif action=="canvas_scroll":
+                        canvas=_largest_visible_canvas(page)
+                        point=_canvas_coordinates(canvas,command["x"],command["y"])
+                        page.mouse.move(*point)
+                        page.mouse.wheel(command.get("delta_x",0),command.get("delta_y",0))
+                        result={"canvas_index":canvas["index"],"delta_x":command.get("delta_x",0),"delta_y":command.get("delta_y",0)}
                     elif action=="press_key":
                         page.keyboard.press(command["key"])
                         result={"pressed":command["key"]}
+                    elif action=="type_text":
+                        page.keyboard.type(command["text"],delay=5)
+                        result={"typed_characters":len(command["text"])}
                     elif action=="wait":
                         page.wait_for_timeout(command.get("seconds",1)*1000)
                         result={"waited_seconds":command.get("seconds",1)}
