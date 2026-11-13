@@ -105,7 +105,8 @@ def main():
     bundle=OUT/"godot-browser-worker-task.zip"
     with zipfile.ZipFile(bundle,"w",zipfile.ZIP_DEFLATED) as z:
         z.write(OUT/"task-result.json","task-result.json")
-        if shot.exists(): z.write(shot,"artifacts/editor-final.png")
+        for artifact_name in manifest["artifacts"]:
+            z.write(OUT/artifact_name,"artifacts/"+artifact_name)
     payload=bundle.read_bytes()
     if len(payload)>32*1024*1024: raise ValueError("Evidence bundle exceeds 32 MiB")
     digest=hashlib.sha256(payload).hexdigest()
