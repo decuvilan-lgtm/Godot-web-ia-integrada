@@ -43,7 +43,7 @@ El puente efímero `/v1/sessions/*` y `/v1/editor/*` está desactivado por defec
 
 ## Control desde ChatGPT
 
-Las modificaciones permanentes del proyecto se realizan en su repositorio GitHub mediante el flujo autorizado. El editor web conserva su cliente HTTP del Command Center para sincronización y observación; no hay un runtime de ChatGPT conectado directamente a la cola.
+Las modificaciones permanentes del proyecto se realizan en su repositorio GitHub mediante el flujo autorizado. El editor web conserva su cliente HTTP del Command Center para sincronización y observación; no hay un runtime de ChatGPT conectado directamente a la cola. Los comandos específicos para controlar y probar cada juego también pertenecen al repositorio de ese juego, no al Relay ni a GitHub Actions. El Relay solo transporta instrucciones ya validadas por el controlador genérico.
 
 ## Emparejamiento
 
@@ -54,6 +54,14 @@ Las modificaciones permanentes del proyecto se realizan en su repositorio GitHub
 5. Introducir el código en el cliente. El bearer devuelto se mantiene solo en memoria del plugin/cliente.
 
 No generar códigos de pairing anticipadamente ni emparejar Android durante las pruebas del puesto Web.
+
+## Perfiles y comandos por proyecto
+
+Cada repositorio de juego debe llevar sus propias instrucciones de prueba: manifiesto, perfil de controles, secuencias, condiciones previas y resultados esperados. Se recomienda agruparlas en una carpeta como `godot-lab/` dentro del proyecto fuente.
+
+El controlador central solo implementa operaciones genéricas y seguras. GitHub Actions localiza el manifiesto del repositorio seleccionado y coordina su ejecución; no mantiene una biblioteca central de botones, coordenadas o comandos particulares de cada juego. No se reutilizan perfiles entre repositorios.
+
+Los archivos del proyecto se tratan como datos no confiables: se valida su esquema y no se ejecutan comandos de shell arbitrarios ni scripts externos automáticamente. Los perfiles se vinculan al repositorio, ruta y SHA verificado. Los controles no comprobados quedan pendientes; los afectados por cambios de interfaz o entrada deben revalidarse.
 
 ## Sincronización e importación
 
