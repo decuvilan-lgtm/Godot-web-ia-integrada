@@ -54,3 +54,32 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 - No se habilita escritura remota del proyecto aceptado. Cualquier futuro cambio requiere propuestas, diff, snapshot, validación y aprobación explícita.
 - La importación Web acepta archivos fuente de repositorio de hasta 256 MiB y entrega ZIPs de hasta 128 MiB; los ejecutables ELF nativos se omiten solo del paquete temporal Web, nunca del repositorio original. La respuesta informa las exclusiones en `X-Godot-Web-Excluded-*`.
 - Mantener Render en el plan Free.
+
+## Sesiones persistentes de Godot Web
+
+La API `/v1/persistent-sessions` mantiene una pestaña real de Chromium abierta contra el editor Godot Web desplegado. Cada sesión tiene un contexto de navegador aislado y asociado a un repositorio, rama y subcarpeta. Las sesiones no se cierran al terminar una tarea.
+
+- `POST /v1/persistent-sessions`: abre el editor publicado una sola vez para el proyecto elegido.
+- `GET /v1/persistent-sessions/{id}`: consulta el estado y las tareas completadas.
+- `POST /v1/persistent-sessions/{id}/heartbeat`: renueva los 15 minutos mínimos de inactividad.
+- `POST /v1/persistent-sessions/{id}/commands`: `inspect`, `screenshot`, `click_text` y teclas permitidas.
+- `POST /v1/persistent-sessions/{id}/tasks/complete`: empaqueta manifiesto, resultado, eventos y capturas sin cerrar la pestaña.
+- `GET /v1/persistent-sessions/{id}/artifacts/{artifact_id}`: descarga el ZIP de resultados.
+- `DELETE /v1/persistent-sessions/{id}`: cierre explícito.
+
+Todas las rutas requieren `Authorization: Bearer $PERSISTENT_SESSION_TOKEN`. El token se configura como secreto en Render; nunca se incluye en el proyecto importado ni en el navegador.
+
+### Contrato de sesión y entrega
+
+Completar una tarea es una operación distinta de cerrar una sesión. La respuesta de `tasks/complete` incluye `artifact_url`, `artifact_id` y `session_kept_open: true`. Las tareas siguientes deben reutilizar el mismo `session_id`, sin volver a importar el proyecto. Solo `DELETE` o la expiración por inactividad cierran el contexto.
+
+El ZIP incluye `task-result.json`, eventos y capturas producidas durante la sesión. Los artefactos se conservan en memoria mientras vive el proceso; deben descargarse al terminar cada tarea. Un reinicio o suspensión del servicio elimina el estado en memoria.
+
+### Límites operativos actuales
+
+- Mínimo de inactividad configurado: 900 segundos (15 minutos); un heartbeat renueva el plazo.
+- Capacidad inicial: una sesión Chromium simultánea para limitar memoria.
+- Chromium se instala durante el build de Render.
+- La implementación actual usa un único proceso/instancia y memoria local; no promete restaurar una pestaña después de un reinicio o deploy.
+- El plan Free de Render puede suspender el servicio por inactividad. Para garantizar una sesión ininterrumpida en producción, el servicio debe permanecer despierto y recibir heartbeats periódicos; un plan sin suspensión puede requerir coste adicional y no se activa automáticamente.
+- El API solo permite acciones acotadas; no acepta JavaScript arbitrario ni URLs de navegación suministradas por el usuario.
