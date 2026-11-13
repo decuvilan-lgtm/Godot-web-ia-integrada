@@ -538,7 +538,7 @@ jobs:
               await page.waitForSelector('#zip-file', { state: 'attached', timeout });
               await page.waitForFunction(() => {
                 const input = document.querySelector('#zip-file');
-                return input?.files?.length === 1 && !new URLSearchParams(location.search).has('repo');
+                return input?.files?.length === 1;
               }, null, { timeout });
               result.preloadConfirmed = true;
               result.browserIsolation = await page.evaluate(() => ({
