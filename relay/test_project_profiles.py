@@ -41,6 +41,7 @@ class ProjectProfileValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             profiles.validate_manifest({
                 "schema_version": 1,
+                "project": {"name": "Sample", "project_path": "game"},
                 "control_profile": "../secrets.json",
                 "commands": [{"name": "smoke-test", "file": "commands/smoke-test.json"}],
             })
