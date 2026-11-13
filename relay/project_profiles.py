@@ -22,6 +22,7 @@ MAX_STEPS = 40
 MAX_WAIT_MS = 5_000
 MAX_TOTAL_DELAY_MS = 20_000
 MAX_HOLD_MS = 2_000
+MAX_SESSION_ARTIFACT_BYTES = 24 * 1024 * 1024
 KEY_RE = re.compile(r"^(?:[A-Z0-9]|Arrow(?:Left|Right|Up|Down)|Enter|Escape|Space|Tab|Backspace|Delete|Home|End|PageUp|PageDown|F(?:[1-9]|1[0-2]))$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,37}/[A-Za-z0-9][A-Za-z0-9._-]{0,98}$")
@@ -58,8 +59,24 @@ def validate_manifest(data: Any) -> dict[str, Any]:
             raise ValueError("Command files must live under godot-lab/commands/")
         seen.add(name)
         commands.append({"name": name, "file": file_path, "description": str(entry.get("description", ""))[:240]})
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        raise ValueError("Manifest project metadata must be an object")
+    project_name = project.get("name", "")
+    project_path = project.get("project_path")
+    if project_name and (not isinstance(project_name, str) or len(project_name) > 120):
+        raise ValueError("Manifest project name is invalid")
+    if project_path is not None and (
+        not isinstance(project_path, str)
+        or project_path.startswith("/")
+        or project_path.endswith("/")
+        or "\\" in project_path
+        or any(part in {"", ".", ".."} for part in project_path.split("/"))
+    ):
+        raise ValueError("Manifest project_path is invalid")
     return {
         "schema_version": 1,
+        "project": {"name": project_name, "project_path": project_path},
         "control_profile": control_profile,
         "commands": commands,
     }
@@ -233,6 +250,9 @@ async def execute_profile_command(page: Any, profile: dict[str, Any], command_na
             elif op == "screenshot":
                 name = f"profile-{command_name}-{index}-{int(time.time() * 1000)}.png"
                 data = await page.screenshot(full_page=False, timeout=20000)
+                current_size = sum(len(item) for item in artifacts.values())
+                if len(data) > MAX_SESSION_ARTIFACT_BYTES or current_size + len(data) > MAX_SESSION_ARTIFACT_BYTES:
+                    raise HTTPException(status_code=413, detail="Project-owned profile exceeded the session artifact size limit")
                 artifacts[name] = data
                 output = {"artifact": name, "bytes": len(data)}
             elif op == "tap_control":
