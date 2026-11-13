@@ -253,7 +253,6 @@ async def list_persistent_sessions(authorization: str | None = Header(default=No
     }
 
 
-@router.post("")
 def _editor_url_for(repository: str, branch: str, project_path: str, commit_sha: str | None) -> str:
     query = f"?repo={quote(repository, safe='/')}&branch={quote(branch, safe='')}"
     if project_path:
@@ -263,6 +262,7 @@ def _editor_url_for(repository: str, branch: str, project_path: str, commit_sha:
     return EDITOR_URL + query
 
 
+@router.post("")
 async def open_persistent_session(body: OpenSessionRequest, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
     if not REPO_RE.fullmatch(body.repository):
