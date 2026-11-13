@@ -196,7 +196,7 @@ async def resolve_repository_commit_sha(repository: str, branch: str) -> str:
     owner, repo = repository.split("/", 1)
     url = f"https://api.github.com/repos/{owner}/{repo}/branches/{quote(branch, safe='')}"
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers={"Accept": "application/vnd.github+json", "User-Agent": "godot-web-ia-relay"}) as client:
             response = await client.get(url)
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail="GitHub branch was not found")
