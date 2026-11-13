@@ -99,9 +99,9 @@ jobs:
       - name: Validar repositorio, rama y ubicación del proyecto
         id: repo
         env:
-          REPOSITORY_URL: ${{ inputs.repository_url || 'https://github.com/gavilandavid89-pixel/Escondite' }}
-          REQUESTED_BRANCH: ${{ inputs.branch || '' }}
-          PROJECT_PATH: ${{ inputs.project_path || '' }}
+          REPOSITORY_URL: ${{ inputs.repository_url || (github.event_name == 'push' && 'https://github.com/gavilandavid89-pixel/Ajedrez-2c2') || 'https://github.com/gavilandavid89-pixel/Escondite' }}
+          REQUESTED_BRANCH: ${{ inputs.branch || (github.event_name == 'push' && 'main') || '' }}
+          PROJECT_PATH: ${{ inputs.project_path || (github.event_name == 'push' && 'ajedrez_2c2_v161') || '' }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
