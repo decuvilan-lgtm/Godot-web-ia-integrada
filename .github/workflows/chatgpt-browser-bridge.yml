@@ -58,6 +58,9 @@ jobs:
           IMPORT_TIMEOUT_SECONDS: ${{ steps.task.outputs.import_timeout_seconds }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
           EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
+          SESSION_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          BROWSER_COMMAND_WINDOW_SECONDS: '180'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/godot-browser-worker.py
       - name: Upload browser evidence
         if: always() && steps.task.outputs.accepted == 'true'
