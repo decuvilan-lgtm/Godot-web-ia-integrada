@@ -264,7 +264,7 @@ La prueba integral solo se considera aprobada cuando se demuestran todos estos p
 | Error al subir a Neon | Revisar endpoint, región, permisos de la credencial, bucket y logs del Relay |
 | Tarea completada pero ZIP no se recupera | Revisar clave del objeto, permisos de lectura y verificación de integridad |
 
-El último intento histórico `43503528165` abrió el editor, pero el conector seguía en `downloading` tras la espera fija de 45 segundos. No llegó a la finalización de la tarea y no creó un objeto en Neon. El workflow se ha actualizado para esperar el estado real de importación y registrar el último estado observado; hasta que se repita y se verifique la ida y vuelta de Neon, la persistencia integral permanece **pendiente**.
+El intento `43503528165` confirmó que el editor podía abrir, pero también expuso el límite de memoria del Relay: Render terminó la instancia con `OOMKilled` al alcanzar el límite de **512 MiB**, durante la descarga/importación del proyecto. El conector seguía en `downloading`; la tarea no llegó a completarse y no creó un objeto en Neon. El workflow ahora espera el estado real de importación y registra el último estado observado. Además, la sesión persistente usa un viewport inicial de **1024×640** para reducir el coste de las superficies de renderizado sin desactivar la interacción. Esta reducción es una mitigación que debe medirse, no una garantía: si vuelve a ocurrir OOM, el navegador persistente deberá trasladarse a un runtime con más memoria; no se debe ampliar el plan ni generar costes sin autorización. Hasta verificar importación, captura, subida, recuperación e integridad del ZIP, la persistencia integral permanece **pendiente**.
 
 ## Pruebas interactivas y escenarios temporales
 
