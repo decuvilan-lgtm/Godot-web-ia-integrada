@@ -59,15 +59,24 @@ jobs:
           PROJECT_PATH: ${{ inputs.project_path || 'ajedrez_2c2_v161' }}
           WAIT_SECONDS: ${{ inputs.wait_seconds || '45' }}
           RELAY_URL: https://godot-web-ia-relay.onrender.com
+          EDITOR_URL: https://godot-web-ia-integrada-rt2l.onrender.com/
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          relay_ready=false
+          editor_ready=false
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error "$RELAY_URL/openapi.json" -o /tmp/relay-openapi.json && jq -e '.paths["/v1/persistent-sessions"]' /tmp/relay-openapi.json >/dev/null; then
+              relay_ready=true
+            fi
+            if curl --fail --silent --show-error "$EDITOR_URL" -o /tmp/editor-index.html && grep -q 'data-version="commit-pinned-v3"' /tmp/editor-index.html; then
+              editor_ready=true
+            fi
+            if [[ "$relay_ready" == true && "$editor_ready" == true ]]; then
               break
             fi
             if (( attempt == 30 )); then
-              echo "Relay did not publish the persistent-session API after deployment." >&2
+              echo "Relay API or commit-pinned editor did not finish deploying." >&2
               exit 1
             fi
             sleep 10
