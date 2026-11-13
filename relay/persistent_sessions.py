@@ -462,7 +462,7 @@ async def run_project_lab_command(
     session = _get_session(session_id)
     if session.page is None or session.page.is_closed():
         raise HTTPException(status_code=409, detail="Editor page is disconnected")
-    profile = await load_project_profile(session.repository, session.commit_sha or session.branch)
+    profile = await load_project_profile(session.repository, session.commit_sha or session.branch, command_name=command_name)
     if profile is None:
         raise HTTPException(status_code=404, detail="This repository revision has no project-owned lab manifest")
     _assert_profile_matches_session(profile, session)
