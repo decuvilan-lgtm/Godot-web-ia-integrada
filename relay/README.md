@@ -57,7 +57,7 @@ No generar códigos de pairing anticipadamente ni emparejar Android durante las 
 
 ## Sesiones persistentes de Godot Web
 
-El Relay puede abrir una pestaña real de Chromium contra el editor Godot Web publicado y mantenerla reutilizable entre tareas mientras el proceso de Render siga activo. Cada sesión queda asociada a un repositorio, una rama, una ruta de proyecto y un SHA completo e inmutable.
+El navegador ya no se ejecuta en Render. El workflow de GitHub Actions inicia Chromium + Playwright en su runner Linux (16 GB RAM en el runner estándar público), importa el editor Godot Web y ejecuta la inspección desde esa máquina. Render queda como API ligera y pasarela de evidencias; no consume memoria de Chromium. Cada ejecución queda asociada a repositorio, rama, ruta y SHA completo e inmutable.
 
 ### Autenticación
 
@@ -77,7 +77,7 @@ Los valores predeterminados de OIDC corresponden a este repositorio, al workflow
 - `GET /v1/persistent-sessions/{id}/profile`: obtiene el perfil de laboratorio del repositorio en el SHA importado.
 - `POST /v1/persistent-sessions/{id}/profiles/{command}/run`: ejecuta una secuencia JSON validada y limitada, propiedad del repositorio del juego.
 - `POST /v1/persistent-sessions/{id}/commands`: permite `inspect`, `screenshot`, `click_text` y teclas de una lista permitida.
-- `POST /v1/persistent-sessions/{id}/tasks/complete`: crea el paquete de evidencias sin cerrar la pestaña.
+- `POST /v1/persistent-sessions/worker-artifacts/{id}`: recibe un ZIP validado producido por el Browser Worker de GitHub Actions y lo persiste en Neon Object Storage.
 - `GET /v1/persistent-sessions/{id}/artifacts/{artifact_id}`: recupera el paquete persistido.
 - `DELETE /v1/persistent-sessions/{id}`: cierra explícitamente la sesión.
 
@@ -85,7 +85,7 @@ Los valores predeterminados de OIDC corresponden a este repositorio, al workflow
 
 Los paquetes ZIP de tareas se guardan en el bucket privado Neon Object Storage `godot-visual-captures`. Incluyen `task-result.json`, eventos y capturas. El Relay guarda un SHA-256 en los metadatos del objeto y lo comprueba al descargarlo. Los paquetes no se duplican en la memoria de la sesión y pueden recuperarse después de un reinicio del proceso.
 
-Las capturas intermedias se mantienen temporalmente en memoria hasta completar la tarea. Al guardar correctamente el paquete, esa memoria temporal se libera.
+El Browser Worker crea el manifiesto, capturas y eventos en el runner; el Relay valida el ZIP, el SHA-256 y la identidad OIDC antes de guardarlo en Neon Object Storage. Después el worker descarga el mismo paquete y verifica su integridad con SHA-256 y CRC del ZIP.
 
 ### Perfiles propios de cada juego
 
@@ -95,9 +95,9 @@ Si el repositorio no tiene un perfil válido, el laboratorio puede inspeccionar 
 
 ### Límites operativos
 
-- La pestaña de Chromium y el estado de sesión son efímeros: Render Free puede suspender o reiniciar el proceso. Una sesión no se restaura automáticamente después de ese evento.
+- Chromium y su pestaña viven únicamente durante el job de GitHub Actions. Los runners hospedados son efímeros: no se promete conservar el mismo proceso entre jobs. La siguiente ejecución reconstruye el editor desde el mismo SHA exacto y registra esa reconstrucción en `checkpoint`.
 - Los paquetes de evidencias sí son duraderos porque se guardan en Neon Object Storage.
-- El servicio está limitado inicialmente a una instancia y a una sesión simultánea para contener el consumo de memoria.
-- El navegador corre en modo headless dentro del Relay; esto no es una simulación de Godot. La interfaz abierta es el editor Godot Web publicado.
+- Render Free no aloja Chromium ni necesita memoria adicional para el navegador. El worker usa un único navegador/contexto por job y finaliza al terminar el trabajo.
+- El navegador corre en modo headless dentro del runner de GitHub Actions; no es una simulación de Godot. Se carga y utiliza el editor Godot Web publicado.
 - No se deben usar heartbeats, cron ni tráfico sintético para impedir la suspensión del plan Free. Una tarea explícita puede despertar el servicio; después se reconstruye una sesión nueva si la anterior ya no existe.
-- El workflow de GitHub Actions espera a que el Relay y el editor estén disponibles, abre/importa el proyecto, confirma el SHA informado por el conector, recoge evidencias y verifica que el ZIP se pueda recuperar.
+- El workflow instala Playwright/Chromium en el runner (con caché de binarios), abre/importa el proyecto, confirma el SHA informado por el conector, recoge evidencias, las guarda en Neon y verifica la recuperación del ZIP. El navegador se mantiene durante toda la ejecución activa; al terminar el job, GitHub destruye su runner y la próxima tarea reconstruye una sesión nueva.
