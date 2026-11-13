@@ -66,7 +66,7 @@ def validate_manifest(data: Any) -> dict[str, Any]:
     project_path = project.get("project_path")
     if project_name and (not isinstance(project_name, str) or len(project_name) > 120):
         raise ValueError("Manifest project name is invalid")
-    if project_path is not None and (
+    if project_path is not None and project_path != "" and (
         not isinstance(project_path, str)
         or project_path.startswith("/")
         or project_path.endswith("/")
