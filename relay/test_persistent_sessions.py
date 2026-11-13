@@ -139,7 +139,9 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             branch="main",
             project_path="game",
         )
-        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "_get_browser") as get_browser:
+        expected_sha = "a" * 40
+        self.session.commit_sha = expected_sha
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "resolve_repository_commit_sha", return_value=expected_sha), patch.object(sessions, "_get_browser") as get_browser:
             result = await sessions.open_persistent_session(body, "Bearer test-secret")
         self.assertTrue(result["reused"])
         self.assertEqual(result["session_id"], "test-session")
@@ -167,7 +169,7 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             branch="main",
             project_path="another-game",
         )
-        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"), patch.object(sessions, "resolve_repository_commit_sha", return_value="a" * 40):
             with self.assertRaises(Exception) as raised:
                 await sessions.open_persistent_session(body, "Bearer test-secret")
         self.assertEqual(getattr(raised.exception, "status_code", None), 409)
