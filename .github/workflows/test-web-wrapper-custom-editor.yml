@@ -1,0 +1,95 @@
+name: Test Godot Web wrapper with custom editor artifact
+
+on:
+  push:
+    branches:
+      - feature/builtin-web-editor-agent
+    paths:
+      - 'scripts/build-web.sh'
+      - 'scripts/patch-web-shell.py'
+      - 'scripts/test_patch_web_shell.py'
+      - 'scripts/package-bridge-sandbox.py'
+      - '.github/workflows/test-web-wrapper-custom-editor.yml'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful build workflow run ID
+        required: true
+        default: "43561299883"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: godot-web-wrapper-smoke
+  cancel-in-progress: true
+
+jobs:
+  wrapper-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out controller repository
+        uses: actions/checkout@v7
+        with:
+          ref: feature/builtin-web-editor-agent
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Download the selected custom editor artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: godot-web-editor-agent-${{ inputs.run_id || '43561299883' }}
+          run-id: ${{ inputs.run_id || '43561299883' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded
+
+      - name: Verify custom editor and build the wrapper
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP="downloaded/godot.web.editor.wasm32.zip"
+          SUMS="downloaded/SHA256SUMS"
+          META="downloaded/BUILD-METADATA.txt"
+          test -s "$ZIP"
+          test -s "$SUMS"
+          test -s "$META"
+          grep -qx 'project_overlay=false' "$META"
+          EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
+          ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP" GODOT_WEB_EDITOR_SHA256="$EXPECTED" bash scripts/build-web.sh
+          test -s public/index.html
+          test -s public/godot.editor.wasm
+          grep -q 'godot-github-connector' public/index.html
+          echo "Custom editor archive SHA-256: $ACTUAL"
+
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Launch the patched wrapper in Chromium and probe the native agent
+        run: |
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-dir public \
+            --entrypoint 'index.html?manual=1' \
+            --timeout-seconds 600 \
+            --screenshot artifacts/wrapper-browser-smoke.png \
+            --diagnostics artifacts/wrapper-browser-smoke-diagnostics.json
+
+      - name: Upload wrapper output for inspection
+        uses: actions/upload-artifact@v7
+        with:
+          name: godot-web-wrapper-smoke-${{ github.run_id }}
+          path: |
+            public/
+            artifacts/wrapper-browser-smoke.png
+            artifacts/wrapper-browser-smoke-diagnostics.json
+          if-no-files-found: error
+          retention-days: 7

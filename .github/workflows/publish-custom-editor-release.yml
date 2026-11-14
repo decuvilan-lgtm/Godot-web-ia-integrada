@@ -1,0 +1,87 @@
+name: Publish verified custom Godot Web Editor release
+
+on:
+  workflow_run:
+    workflows:
+      - Build Godot Web Editor with Built-in Agent
+    types:
+      - completed
+    branches:
+      - feature/builtin-web-editor-agent
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful build workflow run ID
+        required: true
+        type: string
+      source_sha:
+        description: Full controller repository commit SHA for that build
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-godot-web-agent-${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download the exact successful build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: godot-web-editor-agent-${{ inputs.run_id || github.event.workflow_run.id }}
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded
+
+      - name: Verify artifact and prepare release assets
+        id: prepare
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+          ZIP="downloaded/godot.web.editor.wasm32.zip"
+          SUMS="downloaded/SHA256SUMS"
+          META="downloaded/BUILD-METADATA.txt"
+          test -s "$ZIP"
+          test -s "$SUMS"
+          test -s "$META"
+          grep -qx 'project_overlay=false' "$META"
+          EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
+          ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p release-assets
+          cp "$ZIP" "$SUMS" "$META" release-assets/
+          SHORT_SHA="$(printf '%s' "$SOURCE_SHA" | cut -c1-7)"
+          TAG="godot-web-agent-4.7.2-$SHORT_SHA"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned editor release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.prepare.outputs.tag }}
+          name: Godot Web Agent Editor ${{ steps.prepare.outputs.tag }}
+          target_commitish: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+          draft: false
+          prerelease: false
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/godot.web.editor.wasm32.zip
+            release-assets/SHA256SUMS
+            release-assets/BUILD-METADATA.txt
+          body: |
+            Automatically published only after the custom editor build and real Chromium native-agent smoke test passed.
+
+            Source commit: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+            Editor SHA-256: ${{ steps.prepare.outputs.sha }}
+            Imported-project overlay: false
