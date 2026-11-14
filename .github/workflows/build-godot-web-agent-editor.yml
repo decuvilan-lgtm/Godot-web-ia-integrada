@@ -36,17 +36,17 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Check out controller repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out Godot engine source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: godotengine/godot
           ref: ${{ inputs.godot_ref || '4.7.2-stable' }}
           path: godot
 
       - name: Set up Python and SCons
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install build dependencies
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload custom editor artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: godot-web-editor-agent-${{ github.run_id }}
           path: artifacts/
