@@ -91,8 +91,9 @@ A release workflow is configured to publish a versioned GitHub Release only afte
 - **Implemented:** native C++ adapter, bounded queue, protocol v1, browser extension relay, Python semantic client, anchor-validated patcher, and tests.
 - **Proven:** Godot 4.7.2 Web Editor compiled successfully; the native adapter answered all three read-only commands in Chromium; `editor_available=true`; pending queue returned to zero; the fixture project hash remained unchanged.
 - **Proven:** the custom editor ZIP was consumed by `scripts/build-web.sh`, and the patched wrapper files were produced successfully.
-- **In progress:** launching the patched wrapper's own `index.html` in Chromium and repeating the native-agent probes.
-- **Pending:** inspect the wrapper browser artifact, verify/publish the versioned release asset, and deploy to the existing Render static service.
+- **Proven:** the patched wrapper's own `index.html` launched in Chromium and repeated all three native-agent probes successfully in run `43565341712`. The scene was `NestedRelayFixture`, the queue drained to zero, the source fixture hash remained unchanged, `crossOriginIsolated` was true, `SharedArrayBuffer` was available, and there were no page errors, request failures, or HTTP errors.
+- **Runtime warnings to classify:** Godot logs a wait on a thread that was never started and a TCP server creation error in the browser runtime. They did not block editor use or the adapter probes, but should be understood before deployment.
+- **Pending:** publish the versioned release asset and deploy to the existing Render static service after the release is available from the default branch.
 - **Not changed:** Render services, Neon storage, and any imported game repository.
 
 Do not describe the Render deployment as operational until the wrapper browser acceptance test and deployed-site verification pass.
