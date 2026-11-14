@@ -325,6 +325,7 @@ def main() -> int:
                         };
                     }""")
                     diagnostics["console_errors"] = errors[-50:]
+                    diagnostics["diagnostic_report"] = build_diagnostic_report()
                     diagnostics["page_errors"] = page_errors[-50:]
                     diagnostics["request_failures"] = request_failures[-50:]
                     diagnostics["http_errors"] = http_errors[-50:]
@@ -397,7 +398,6 @@ def main() -> int:
                         diagnostics["failed_command"] = command
                         diagnostics["probe_result"] = probe
                         diagnostics["console_errors"] = errors[-50:]
-                        diagnostics["diagnostic_report"] = build_diagnostic_report()
                         diagnostics["diagnostic_report"] = build_diagnostic_report()
                         diagnostics["page_errors"] = page_errors[-50:]
                         diagnostics["request_failures"] = request_failures[-50:]
