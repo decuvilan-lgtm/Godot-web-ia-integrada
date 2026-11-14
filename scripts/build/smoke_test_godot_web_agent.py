@@ -169,6 +169,28 @@ def main() -> int:
                     ) from exc
                 page.locator("#startButton").click(timeout=30000)
 
+                # Wait for the actual Godot startup cycle, not merely for the HTML shell.
+                page.wait_for_function(
+                    "() => getComputedStyle(document.querySelector('#status-indeterminate')).display !== 'none'",
+                    timeout=30000,
+                )
+                page.wait_for_function(
+                    "() => getComputedStyle(document.querySelector('#status-indeterminate')).display === 'none'",
+                    timeout=args.timeout_seconds * 1000,
+                )
+                if page.locator("#status-notice").is_visible():
+                    notice = page.locator("#status-notice").inner_text()
+                    raise RuntimeError("Godot reported an editor startup error: " + notice)
+                page.wait_for_function(
+                    "() => { const c = document.querySelector('#editor-canvas'); return !!c && c.width > 0 && c.height > 0; }",
+                    timeout=30000,
+                )
+                # The dropped ZIP opens ProjectDialog in Project Manager. Its focused
+                # Project Path LineEdit submits the default valid install path on Enter.
+                page.wait_for_timeout(2500)
+                page.locator("#editor-canvas").focus()
+                page.keyboard.press("Enter")
+
                 try:
                     page.wait_for_function(
                         "() => !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.dispatch === 'function')",
