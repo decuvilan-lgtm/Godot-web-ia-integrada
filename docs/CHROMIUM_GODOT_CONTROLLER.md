@@ -62,6 +62,23 @@ If the adapter cannot identify a target by stable editor identity (scene path, n
 5. Keep visual screenshots/video and browser console collection in the same page/context.
 6. Keep the old coordinate-oriented actions isolated as legacy visual fallbacks. New editor operations must use semantic_command; do not remove the legacy path until visual and canvas-specific workflows have a separate verified replacement.
 
+## Example issue command
+
+The existing trusted issue-comment command loop can now receive a semantic command. The session ID must match the active worker session, and sequence numbers must increase across all commands:
+
+```json
+{
+  "protocol": 1,
+  "session_id": "issue-123",
+  "seq": 1,
+  "action": "semantic_command",
+  "editor_action": "editor.list_capabilities",
+  "args": {}
+}
+```
+
+The example is a capability probe only. Until the Godot-side adapter is installed, the expected structured response is GODOT_ADAPTER_UNAVAILABLE if the extension bridge itself loaded successfully.
+
 ## Security boundaries
 
 - Only the Godot Web origin is matched by the extension.
@@ -93,7 +110,7 @@ If the adapter cannot identify a target by stable editor identity (scene path, n
 - Real editor command tests and structured state read-back.
 - Evidence manifest integration for semantic command logs.
 
-The current worker intentionally remains unchanged until the extension can be loaded and tested without disrupting its existing Chromium lifecycle. This scaffold is not yet a working Godot editor controller.
+The worker has been updated to load the extension in the same Actions Chromium instance and to probe the bridge. This integration has not yet been exercised in a new Actions run, and the missing editor adapter means actual Godot editor operations remain unavailable. Treat the extension as an integrated prototype, not a verified controller.
 
 ## Acceptance gates
 
