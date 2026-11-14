@@ -90,5 +90,6 @@ jobs:
           path: |
             public/
             artifacts/wrapper-browser-smoke.png
-            artifacts/wrapper-browser-smoke-diagnostics.json\n          if-no-files-found: error
+            artifacts/wrapper-browser-smoke-diagnostics.json
+          if-no-files-found: error
           retention-days: 7
