@@ -23,7 +23,7 @@ class SemanticControllerValidationTests(unittest.TestCase):
             _validate("scene.open", {"scene_path": "x" * 501})
 
     def test_panel_names_are_allowlisted(self):
-        _validate("editor.open_panel", {"panel": "inspector"})
+        _validate("editor.open_panel", {"panel": "2D"})
         with self.assertRaises(ValueError):
             _validate("editor.open_panel", {"panel": "terminal"})
 
