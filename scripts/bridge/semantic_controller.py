@@ -8,12 +8,8 @@ CHANNEL = "GODOT_CONTROLLER_BRIDGE_V1"
 ACTIONS = {
     "editor.get_state": set(),
     "editor.list_capabilities": set(),
-    "editor.open_panel": {"panel"},
-    "scene.open": {"scene_path"},
-    "scene.select_node": {"node_path"},
-    "node.get_inspector": {"node_path"},
+    "scene.get_tree": set(),
 }
-PANELS = {"2D", "3D", "Script", "AssetLib"}
 
 
 def _validate(action: str, args: dict[str, Any]) -> None:
@@ -24,10 +20,6 @@ def _validate(action: str, args: dict[str, Any]) -> None:
     for key, value in args.items():
         if not isinstance(value, str) or not value or len(value) > 500:
             raise ValueError(f"{key} must be a non-empty string of at most 500 characters")
-    if action == "editor.open_panel" and args.get("panel") not in PANELS:
-        raise ValueError("Unsupported editor panel")
-
-
 def execute_semantic_command(page: Any, action: str, args: dict[str, Any] | None = None,
                              timeout_ms: int = 10000) -> dict[str, Any]:
     """Send one allowlisted semantic command through the extension in this Actions tab.
