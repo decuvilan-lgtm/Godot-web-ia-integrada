@@ -23,6 +23,7 @@ BRIDGE_BLOCK = r'''
 // Built-in browser agent bridge. Requests are queued and consumed from _process(),
 // so editor APIs are only touched on Godot's main thread.
 #include "core/io/json.h"
+#include "core/templates/vector.h"
 #include "editor/editor_interface.h"
 #include "scene/main/node.h"
 
@@ -116,6 +117,7 @@ static Dictionary godot_web_agent_node_to_dict(Node *p_node, int &r_count, int p
 
 PROCESS_BLOCK = r'''
 void WebToolsEditorPlugin::_process(double p_delta) {
+	UNUSED(p_delta);
 \tif (godot_web_agent_requests.is_empty()) return;
 \tVector<String> requests = godot_web_agent_requests;
 \tgodot_web_agent_requests.clear();
