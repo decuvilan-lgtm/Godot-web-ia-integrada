@@ -62,6 +62,16 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertNotIn("GDScript", source)
         self.assertNotIn("execute_string", source)
 
+    def test_web_compatibility_avoids_unstartable_threads_and_tcp_listener(self):
+        project_list = """\tscan_data->thread->start(_scan_thread, scan_data);
+\tscan_data->thread->wait_to_finish();"""
+        debugger = """\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);"""
+        patched_projects, patched_debugger = PATCHER.patch_web_compatibility(project_list, debugger)
+        self.assertIn("#if defined(WEB_ENABLED)", patched_projects)
+        self.assertIn("_scan_thread(scan_data);", patched_projects)
+        self.assertIn("if (scan_data->thread->is_started())", patched_projects)
+        self.assertIn("#if !defined(WEB_ENABLED)", patched_debugger)
+
     def test_patch_fails_closed_when_upstream_anchor_changes(self):
         with self.assertRaises(ValueError):
             PATCHER.patch(HEADER.replace("_download_zip", "_download_project"), SOURCE)
