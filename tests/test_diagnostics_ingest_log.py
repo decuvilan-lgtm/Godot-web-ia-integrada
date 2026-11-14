@@ -41,6 +41,26 @@ class BuildLogIngestionTests(unittest.TestCase):
             self.assertNotIn("private-value", persisted)
             self.assertIn("[REDACTED]", persisted)
 
+    def test_gettext_fallback_is_a_warning_not_an_unknown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "build.log"
+            output = root / "report.json"
+            source.write_text("msgfmt not found, using .po files instead of .mo\n", encoding="utf-8")
+            report = ingest_log(source, output, "build_log", "test")
+            self.assertEqual(report["classification"]["severity_counts"]["warning"], 1)
+            self.assertEqual(report["health_status"], "warnings")
+
+    def test_warning_and_unknown_are_both_visible_in_health_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "build.log"
+            output = root / "report.json"
+            source.write_text("compiler.cpp: warning: fallback used\nunsupported configuration detail\n", encoding="utf-8")
+            report = ingest_log(source, output, "build_log", "test")
+            self.assertEqual(report["health_status"], "warnings_and_unclassified")
+            self.assertEqual(report["classification"]["unknown_events"], 1)
+
     def test_missing_log_is_reported_without_fabricating_events(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
