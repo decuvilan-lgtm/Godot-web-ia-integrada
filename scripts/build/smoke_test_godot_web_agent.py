@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from diagnostics.classifier import classify_event, summarize_events
+from diagnostics.classifier import classify_event, redact_sensitive_payload, summarize_events
 from bridge.semantic_controller import execute_semantic_command
 
 
@@ -340,6 +340,8 @@ def main() -> int:
                         diagnostics["screenshot"] = str(args.screenshot)
                     except Exception as screenshot_error:
                         diagnostics["screenshot_error"] = str(screenshot_error)
+                    diagnostics, report_redactions = redact_sensitive_payload(diagnostics)
+                    diagnostics["report_redactions_applied"] = report_redactions
                     args.diagnostics.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
                     print("BROWSER_SMOKE_DIAGNOSTICS=" + json.dumps(diagnostics, indent=2), flush=True)
                     raise RuntimeError(
@@ -412,6 +414,8 @@ def main() -> int:
                             diagnostics["screenshot"] = str(args.screenshot)
                         except Exception as screenshot_error:
                             diagnostics["screenshot_error"] = str(screenshot_error)
+                        diagnostics, report_redactions = redact_sensitive_payload(diagnostics)
+                        diagnostics["report_redactions_applied"] = report_redactions
                         args.diagnostics.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
                         print("BROWSER_SMOKE_DIAGNOSTICS=" + json.dumps(diagnostics, indent=2), flush=True)
                         raise RuntimeError(
@@ -453,6 +457,8 @@ def main() -> int:
                     "workers": worker_urls[-20:],
                     "note": "The built editor imported a clean project, exposed the native read-only adapter, and answered through the Chromium extension relay. This does not yet validate the deployed Render wrapper.",
                 }
+                result, report_redactions = redact_sensitive_payload(result)
+                result["report_redactions_applied"] = report_redactions
                 print(json.dumps(result, indent=2))
                 args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
                 args.diagnostics.write_text(json.dumps(result, indent=2), encoding="utf-8")
