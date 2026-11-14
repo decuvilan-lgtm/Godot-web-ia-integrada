@@ -42,9 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/outer artifacts/editor
-          OUTER_ZIP="$(find downloaded-artifact -maxdepth 2 -type f -name '*.zip' -print -quit)"
-          test -n "$OUTER_ZIP"
-          unzip -q "$OUTER_ZIP" -d artifacts/outer
+          cp -a downloaded-artifact/. artifacts/outer/
           (cd artifacts/outer && sha256sum -c SHA256SUMS)
           INNER_ZIP="$(find artifacts/outer -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
           test -n "$INNER_ZIP"
