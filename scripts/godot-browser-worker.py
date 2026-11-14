@@ -233,6 +233,11 @@ def main():
                     "status":"probe_exception",
                     "error":f"{type(exc).__name__}: {str(exc)[:300]}",
                 }
+            probe_result=inspection.get("semantic_controller_probe",{}).get("result",{})
+            if not overlay_reports or not overlay_reports[-1].get("applied"):
+                failure=failure or "Temporary controller overlay was not confirmed in the imported project"
+            elif not probe_result.get("ok"):
+                failure=failure or "Godot editor semantic adapter did not pass its capability probe"
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
             command_session=run_command_loop(
