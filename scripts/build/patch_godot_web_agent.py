@@ -45,7 +45,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tdispatch(request) {
 \t\t\treturn new Promise((resolve, reject) => {
 \t\t\t\tif (!request || typeof request.id !== "string" || !request.id || request.id.length > 128 ||
-\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64) {
+\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64 || (request.args != null && (typeof request.args !== "object" || Array.isArray(request.args) || Object.keys(request.args).length > 0))) {
 \t\t\t\t\treject(new Error("Invalid agent request"));
 \t\t\t\t\treturn;
 \t\t\t\t}
@@ -56,7 +56,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\t\t\tconst payload = JSON.stringify({
 \t\t\t\t\tid: request.id,
 \t\t\t\t\tcommand: request.command,
-\t\t\t\t\targs: request.args && typeof request.args === "object" ? request.args : {}
+\t\t\t\t\targs: {}
 \t\t\t\t});
 \t\t\t\tif (payload.length > 16384) { reject(new Error("Agent request exceeds the 16 KiB limit")); return; }
 				const bytes = new TextEncoder().encode(payload);
