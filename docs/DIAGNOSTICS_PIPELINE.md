@@ -61,7 +61,9 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 Unknown values are valid data. They are not silently discarded and do not get
 promoted to warnings or errors without evidence. Credential-like assignments,
 Bearer values, and URL query strings are redacted before diagnostic reports
-are persisted; `redactions_applied` makes that transformation visible.
+are persisted; `redactions_applied` records message-level changes and
+`report_redactions_applied` counts additional recursive redactions across the
+complete browser report, including URLs and nested runtime metadata.
 
 ## Current browser capture coverage
 
