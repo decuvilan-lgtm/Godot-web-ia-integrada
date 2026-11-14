@@ -19,6 +19,7 @@ _COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
 _COMPILER_ERROR = re.compile(r"(?:^|\s)error:", re.IGNORECASE)
 _SECRET_ASSIGNMENT = re.compile(r"(?i)(\b(?:access[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|auth[_-]?token|refresh[_-]?token|signature)\s*[=:]\s*)([^\s&,;]+)")
 _BEARER_TOKEN = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
+_AUTHORIZATION_HEADER = re.compile(r"(?i)(\bauthorization\s*[=:]\s*)(?:Bearer\s+)?[^\s&,;]+")
 _URL_QUERY = re.compile(r"(https?://[^\s?#]+)\?[^\s#]+")
 
 
@@ -33,7 +34,6 @@ def redact_sensitive_text(value: str) -> tuple[str, int]:
     text, n = _BEARER_TOKEN.subn(lambda match: match.group(1) + "[REDACTED]", text)
     count += n
     text, n = _SECRET_ASSIGNMENT.subn(lambda match: match.group(1) + "[REDACTED]", text)
-    count += n
     count += n
     text, n = _URL_QUERY.subn(lambda match: match.group(1) + "?[REDACTED_QUERY]", text)
     count += n
