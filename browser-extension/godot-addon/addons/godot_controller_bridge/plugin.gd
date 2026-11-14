@@ -58,8 +58,8 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
-	if _bridge_installed and _window != null:
-		JavaScriptBridge.eval("""
+	if _bridge_installed and _window != null and _js_bridge != null:
+		_js_bridge.eval("""
 		if (window.__godotEditorAgent) {
 			delete window.__godotEditorAgent;
 			delete window.__godotEditorAgentResolve;
