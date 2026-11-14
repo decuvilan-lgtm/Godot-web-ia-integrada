@@ -103,6 +103,9 @@ jobs:
               visual_status: validation.status || null,
               resource_errors: validation.project_resource_errors || [],
               gameplay_verified: validation.gameplay_verified === true,
+              controller_overlay: inspection.controller_project_overlay || [],
+              semantic_controller_probe: inspection.semantic_controller_probe || null,
+              controller_runtime: inspection.controller_runtime || null,
               evidence_artifact: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             };
             if (result.error) summary.validation_error = result.error;
