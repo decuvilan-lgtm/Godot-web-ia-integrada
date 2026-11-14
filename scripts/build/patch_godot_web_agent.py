@@ -189,7 +189,7 @@ def patch(header: str, source: str) -> tuple[str, str]:
     source = source.replace(EXTERN_ANCHOR, EXTERN_ANCHOR + "\n" + BRIDGE_BLOCK.replace("\\t", "\t"), 1)
     source = source.replace(
         CTOR_ANCHOR,
-        CTOR_ANCHOR[:-1] + "\n\tTimer *agent_timer = memnew(Timer);\n\tagent_timer->set_wait_time(0.05);\n\tagent_timer->set_one_shot(false);\n\tagent_timer->connect(\"timeout\", callable_mp(this, &WebToolsEditorPlugin::_process_requests));\n\tagent_timer->set_autostart(true);\n\tadd_child(agent_timer);\n\tgodot_web_agent_install();\n}",
+        CTOR_ANCHOR[:-1] + "\n\t// Autostart defers Timer::start() until NOTIFICATION_READY, after this plugin enters the scene tree.\n\tTimer *agent_timer = memnew(Timer);\n\tagent_timer->set_wait_time(0.05);\n\tagent_timer->set_one_shot(false);\n\tagent_timer->connect(\"timeout\", callable_mp(this, &WebToolsEditorPlugin::_process_requests));\n\tagent_timer->set_autostart(true);\n\tadd_child(agent_timer);\n\tgodot_web_agent_install();\n}",
         1,
     )
     source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t").rstrip(), 1)

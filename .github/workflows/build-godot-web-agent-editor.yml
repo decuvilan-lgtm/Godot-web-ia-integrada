@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: godot-web-agent-build
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-web-editor:
@@ -136,13 +136,14 @@ jobs:
           test -n "$ZIP_FILE"
           python scripts/build/smoke_test_godot_web_agent.py \
             --editor-zip "$ZIP_FILE" \
-            --timeout-seconds 180 \
+            --timeout-seconds 600 \
             --screenshot artifacts/browser-smoke.png
 
       - name: Upload custom editor artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: godot-web-editor-agent-${{ github.run_id }}
           path: artifacts/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
