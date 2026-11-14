@@ -53,7 +53,7 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("r_count < 256", source)
         self.assertIn("p_depth < 16", source)
         self.assertIn("payload.length > 16384", source)
-        self.assertNotIn(r"\\tif", source)
+        self.assertNotIn(chr(92) + "tif", source)
         self.assertNotIn("GDScript", source)
         self.assertNotIn("execute_string", source)
 
