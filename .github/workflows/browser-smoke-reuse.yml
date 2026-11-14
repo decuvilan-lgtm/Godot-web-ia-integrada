@@ -6,6 +6,8 @@ on:
       - feature/builtin-web-editor-agent
     paths:
       - 'scripts/build/smoke_test_godot_web_agent.py'
+      - 'scripts/diagnostics/classifier.py'
+      - 'tests/test_diagnostics_classifier.py'
       - '.github/workflows/browser-smoke-reuse.yml'
   workflow_dispatch:
 
