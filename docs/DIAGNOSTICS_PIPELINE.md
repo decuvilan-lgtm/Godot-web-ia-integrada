@@ -47,8 +47,10 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `source_hint` | Source supplied by the capture adapter |
 | `source_identification` | exact_prefix, caller_declared, heuristic, or unknown |
 | `transport_type` | Original transport-level event type |
-| `declared_severity` | error, warning, notice, debug, or unknown |
+| `declared_severity` | fatal, error, warning, notice, debug, or unknown |
 | `severity_basis` | Evidence used to assign severity |
+| `classification_rule` | Stable rule identifier that explains the deterministic decision |
+| `redactions_applied` | Number of credential/query redactions applied before persistence |
 | `category` | Broad technical nature, not a diagnosis |
 | `context` | Workflow phase or subsystem context |
 | `timestamp` | Capture timestamp |
@@ -57,7 +59,9 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `fingerprint` | Stable grouping key that includes source and location |
 
 Unknown values are valid data. They are not silently discarded and do not get
-promoted to warnings or errors without evidence.
+promoted to warnings or errors without evidence. Credential-like assignments,
+Bearer values, and URL query strings are redacted before diagnostic reports
+are persisted; `redactions_applied` makes that transformation visible.
 
 ## Current browser capture coverage
 
