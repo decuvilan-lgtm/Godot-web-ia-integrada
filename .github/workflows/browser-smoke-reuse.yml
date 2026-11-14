@@ -33,8 +33,8 @@ jobs:
       - name: Download previously compiled editor artifact
         uses: actions/download-artifact@v4
         with:
-          name: godot-web-editor-agent-43546004745
-          run-id: 43546004745
+          name: godot-web-editor-agent-43561299883
+          run-id: 43561299883
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: downloaded-artifact
 
