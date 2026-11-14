@@ -44,8 +44,10 @@ void WebToolsEditorPlugin::_download_zip() {
 class WebAgentPatcherTests(unittest.TestCase):
     def test_patches_engine_plugin_and_exposes_only_read_only_commands(self):
         header, source = PATCHER.patch(HEADER, SOURCE)
-        self.assertIn("void _process(double p_delta) override;", header)
+        self.assertIn("void _process_requests();", header)
         self.assertIn("godot_web_agent_install();", source)
+        self.assertIn("agent_timer->connect", source)
+        self.assertIn("WebToolsEditorPlugin::_process_requests", source)
         self.assertIn("godot_web_agent_submit", source)
         self.assertIn("editor.list_capabilities", source)
         self.assertIn("editor.get_state", source)
