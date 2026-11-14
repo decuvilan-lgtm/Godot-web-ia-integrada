@@ -49,7 +49,7 @@ Commands are JSON objects with a protocol version, request ID, action name and b
 - scene.select_node
 - node.get_inspector
 
-The editor-side prototype is supplied as a Godot EditorPlugin under `browser-extension/godot-addon/`. It uses Godot's documented `JavaScriptBridge` to publish `window.__godotEditorAgent` and `EditorInterface` for scene and selection operations. The adapter must validate every field and return a structured object:
+The editor-side prototype is supplied as a Godot EditorPlugin under `browser-extension/godot-addon/`. The Actions worker overlays these files into the ZIP response in memory and enables the plugin in the temporary browser import. The selected GitHub archive and game repository remain unchanged. The plugin uses Godot's documented `JavaScriptBridge` to publish `window.__godotEditorAgent` and `EditorInterface` for scene and selection operations. The adapter must validate every field and return a structured object:
 
 - ok: boolean
 - action: action name
@@ -89,7 +89,7 @@ The existing trusted issue-comment command loop can now receive a semantic comma
 }
 ```
 
-The example is a capability probe only. The add-on must be present and enabled in the imported project before the Godot-side adapter becomes available.
+The example is a capability probe only. The worker supplies the add-on in the temporary imported ZIP; it is not committed to the selected game repository.
 
 ## Security boundaries
 
@@ -117,14 +117,15 @@ The example is a capability probe only. The add-on must be present and enabled i
 - Unit tests for command and argument validation in tests/test_semantic_controller.py.
 - Documentation separating this controller from Godot Linux Headless and from the visual Chromium station.
 
-### Not yet implemented or verified
+### Implemented scaffold; runtime verification pending
 
-- Automatic, temporary bootstrap of the add-on into the Actions editor's browser-backed project filesystem, without committing changes to the selected game repository.
-- Successful extension load and message round-trip in an actual GitHub Actions run using the pinned Playwright 1.52.0 environment.
-- Real editor command tests and structured state read-back.
-- Evidence manifest integration for semantic command logs.
+- Temporary ZIP overlay in `scripts/bridge/project_overlay.py`: adds the lab-owned EditorPlugin and enables it in the project copy consumed by Godot Web. It does not write to the source repository or local project archive.
+- The worker intercepts only the GitHub archive request in the existing Actions page and fails closed if the overlay cannot be applied.
+- The bridge sandbox source no longer contains the controller add-on; the current Actions test is intended to verify that the temporary overlay makes it available.
+- Unit tests for ZIP layout, plugin activation, idempotency, unsafe paths and conflict handling are now part of the browser workflow.
+- Successful Actions import with the overlay, real editor state read-back, scene navigation and node inspection are still pending confirmation.
 
-The worker has been updated to load the extension in the same Actions Chromium instance and to probe the bridge. This integration has not yet been exercised in a new Actions run, but actual editor operations still require the add-on to be bootstrapped and enabled in the imported project. Treat the extension as an integrated prototype, not a verified controller.
+The worker loads the extension in the same Actions Chromium instance and temporarily injects the editor adapter into the ZIP before Godot imports it. The test in issue #50 is the first end-to-end validation of this no-project-modification path. Until it completes, treat the overlay as implemented but not yet runtime-verified.
 
 ## Acceptance gates
 
