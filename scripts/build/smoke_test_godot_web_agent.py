@@ -110,18 +110,22 @@ def main() -> int:
 
     def record_diagnostic(message: str, transport_type: str, source_hint: str, location=None) -> None:
         nonlocal current_diagnostic_context
-        if "PROJECT_DIAG_BEGIN" in message:
-            current_diagnostic_context = "godot_project_runtime"
-        raw_diagnostic_events.append({
-            "message": message,
-            "transport_type": transport_type,
-            "source_hint": source_hint,
-            "timestamp_ns": time.time_ns(),
-            "location": location,
-            "context": current_diagnostic_context,
-        })
-        if "PROJECT_DIAG_END" in message:
-            current_diagnostic_context = "godot_web_editor_runtime"
+        # Browser console APIs may deliver a multiline Godot stack trace as one
+        # message. Split it into ordered records so each "at:" frame is classified
+        # and linked to the preceding root error.
+        for line in str(message).splitlines() or [str(message)]:
+            if "PROJECT_DIAG_BEGIN" in line:
+                current_diagnostic_context = "godot_project_runtime"
+            raw_diagnostic_events.append({
+                "message": line,
+                "transport_type": transport_type,
+                "source_hint": source_hint,
+                "timestamp_ns": time.time_ns(),
+                "location": location,
+                "context": current_diagnostic_context,
+            })
+            if "PROJECT_DIAG_END" in line:
+                current_diagnostic_context = "godot_web_editor_runtime"
 
     def build_diagnostic_report() -> dict[str, object]:
         classified = [
@@ -503,14 +507,15 @@ def main() -> int:
                     for location in event.get("godot_source_locations", [])
                 ]
                 if len(classified_project_errors) != 1 or not any(
-                    location.get("path") == "res://main.gd" and location.get("line") == 5
+                    location.get("path") == "res://main.gd" and location.get("line") == 6
                     for location in project_source_locations
                 ):
                     raise RuntimeError(
-                        "Project runtime error was not correlated to res://main.gd:5: "
+                        "Project runtime error was not correlated to res://main.gd:6: "
                         + json.dumps({
                             "classified_errors": classified_project_errors,
                             "source_locations": project_source_locations,
+                            "raw_project_events": [event for event in raw_diagnostic_events if event.get("context") == "godot_project_runtime"],
                         })
                     )
                 denied_write_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
