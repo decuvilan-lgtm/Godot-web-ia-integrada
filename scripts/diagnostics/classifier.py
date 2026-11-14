@@ -73,7 +73,7 @@ def classify_event(
         elif "node:" in lowered_full or "deprecationwarning" in lowered_full:
             source = "node"
 
-    category = "unknown"
+    category = "network" if source in {"network", "http"} else "unknown"
     lowered = body.lower()
     category_rules = (
         ("threads", ("thread", "wait_to_finish", "pthread")),
