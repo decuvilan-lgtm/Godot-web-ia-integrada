@@ -4,7 +4,8 @@ from __future__ import annotations
 import base64, hashlib, io, json, os, re, tempfile, time, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-from bridge.browser_command_loop import run_command_loop\nfrom bridge.semantic_controller import execute_semantic_command
+from bridge.browser_command_loop import run_command_loop
+from bridge.semantic_controller import execute_semantic_command
 
 RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
 EDITOR_URL=os.environ.get("EDITOR_URL","https://godot-web-ia-integrada-rt2l.onrender.com/")
