@@ -6,7 +6,7 @@ import tempfile
 import unittest
 import zipfile
 
-from bridge.project_overlay import apply_controller_overlay, PLUGIN_RES_PATH
+from scripts.bridge.project_overlay import apply_controller_overlay, PLUGIN_RES_PATH
 
 
 class ProjectOverlayTests(unittest.TestCase):
