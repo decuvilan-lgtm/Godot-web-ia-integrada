@@ -195,14 +195,43 @@ def patch(header: str, source: str) -> tuple[str, str]:
     source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t").rstrip(), 1)
     return header, source
 
+def patch_web_compatibility(project_list: str, debugger_server: str) -> tuple[str, str]:
+    """Keep unsupported native thread/socket services out of the Web editor path."""
+    scan_start = "\tscan_data->thread->start(_scan_thread, scan_data);"
+    scan_replacement = """#if defined(WEB_ENABLED)
+\t// Web builds may expose Thread as a non-startable stub. Run the bounded
+\t// Project Manager scan synchronously rather than waiting on a thread that
+\t// cannot exist in the browser runtime.
+\t_scan_thread(scan_data);
+#else
+\tscan_data->thread->start(_scan_thread, scan_data);
+#endif"""
+    finish_wait = "\tscan_data->thread->wait_to_finish();"
+    finish_replacement = """if (scan_data->thread->is_started()) {
+\t\tscan_data->thread->wait_to_finish();
+\t}"""
+    tcp_register = '\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);'
+    tcp_replacement = """#if !defined(WEB_ENABLED)
+\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);
+#endif"""
+    if project_list.count(scan_start) != 1 or project_list.count(finish_wait) != 1:
+        raise ValueError("Unexpected ProjectList thread lifecycle anchors")
+    if debugger_server.count(tcp_register) != 1:
+        raise ValueError("Unexpected EditorDebuggerServer TCP registration anchor")
+    project_list = project_list.replace(scan_start, scan_replacement, 1)
+    project_list = project_list.replace(finish_wait, finish_replacement, 1)
+    debugger_server = debugger_server.replace(tcp_register, tcp_replacement, 1)
+    return project_list, debugger_server
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--godot-source", required=True, type=Path)
     args = parser.parse_args()
     root = args.godot_source.resolve()
     header_path = root / "platform/web/editor/web_tools_editor_plugin.h"
-    source_path = root / "platform/web/editor/web_tools_editor_plugin.cpp"
-    if not header_path.is_file() or not source_path.is_file():
+    source_path = root / "platform/web/editor/web_tools_editor_plugin.cpp"\n    project_list_path = root / "editor/project_manager/project_list.cpp"\n    debugger_path = root / "editor/debugger/editor_debugger_server.cpp"
+    if not header_path.is_file() or not source_path.is_file() or not project_list_path.is_file() or not debugger_path.is_file():
         raise SystemExit("Not a Godot source checkout: WebToolsEditorPlugin files are missing")
     header, source = patch(header_path.read_text(), source_path.read_text())
     header_path.write_text(header)
