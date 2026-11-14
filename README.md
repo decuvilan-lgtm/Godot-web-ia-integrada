@@ -203,3 +203,16 @@ En cada tarea, informar:
 - [Pruebas interactivas](docs/INTERACTIVE_GAMEPLAY_TESTING.md)
 
 **Regla principal:** ChatGPT desarrolla y experimenta en Linux con Godot Headless; publica en el repositorio del juego solo lo definitivo; después utiliza Actions y Chromium para cargar la versión más reciente, jugarla, inspeccionar toda la interfaz y recuperar vídeo, capturas, Output y Debugger disponible desde un Artifact o Neon.
+
+### 3.1 Control semántico del editor: Chromium Controller Bridge
+
+Se añade una herramienta separada para enviar órdenes semánticas al editor Godot que ya está abierto dentro del Chromium de GitHub Actions. Su objetivo es evitar coordenadas, clics a ciegas y automatización de ratón para operaciones normales del editor.
+
+**No es Godot Headless.** No ejecuta el motor, no crea otro navegador y no reemplaza el Chromium de Actions. Es un puente ligero: el worker envía una orden identificada, la extensión la entrega al adaptador del editor y devuelve un resultado estructurado. Chromium sigue siendo el puesto visual para capturas, vídeo, consola y revisión.
+
+- Extensión Chromium Manifest V3: `browser-extension/`.
+- Contrato y límites: `docs/CHROMIUM_GODOT_CONTROLLER.md`.
+- Cliente Python sin coordenadas: `scripts/bridge/semantic_controller.py`.
+- Pruebas de validación del contrato: `tests/test_semantic_controller.py`.
+
+**Estado:** scaffold de extensión, allowlist de acciones y cliente Python creados. El adaptador dentro de la build Godot Web todavía no existe; por tanto, el control real de escenas/nodos aún no funciona. La integración en el worker Actions está deliberadamente pendiente hasta validar que la versión fijada de Playwright/Chromium pueda cargar la extensión en la misma sesión. Mientras tanto, se conserva intacto el flujo visual existente. No se debe afirmar que el controlador ya opera Godot hasta superar las pruebas de aceptación.
