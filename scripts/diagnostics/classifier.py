@@ -222,6 +222,34 @@ def classify_event(
     return event
 
 
+def link_continuation_events(
+    events: Iterable[dict[str, Any]], *, max_gap_ns: int = 1_000_000_000
+) -> list[dict[str, Any]]:
+    """Link stack/context lines to the nearest preceding root diagnostic."""
+    linked: list[dict[str, Any]] = []
+    previous_root_index: int | None = None
+    previous_root_timestamp: int | None = None
+    for index, source_event in enumerate(events):
+        event = dict(source_event)
+        event["event_index"] = index
+        try:
+            timestamp_ns = int(event.get("timestamp") or "")
+        except (TypeError, ValueError):
+            timestamp_ns = None
+
+        if event.get("event_role") == "continuation":
+            if timestamp_ns is not None and previous_root_timestamp is not None:
+                delta = timestamp_ns - previous_root_timestamp
+                if 0 <= delta <= max_gap_ns and previous_root_index is not None:
+                    event["related_event_index"] = previous_root_index
+                    event["relation"] = "stack_trace_for"
+        elif event.get("declared_severity") in {"fatal", "error", "warning"}:
+            previous_root_index = index
+            previous_root_timestamp = timestamp_ns
+        linked.append(event)
+    return linked
+
+
 def summarize_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate counts while retaining every event occurrence."""
     materialized = list(events)
