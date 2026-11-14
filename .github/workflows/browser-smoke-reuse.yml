@@ -43,9 +43,14 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/outer artifacts/editor
           cp -a downloaded-artifact/. artifacts/outer/
-          (cd artifacts/outer && sha256sum -c SHA256SUMS)
           INNER_ZIP="$(find artifacts/outer -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
           test -n "$INNER_ZIP"
+          EXPECTED_SHA="$(awk '{print $1}' artifacts/outer/SHA256SUMS)"
+          ACTUAL_SHA="$(sha256sum "$INNER_ZIP" | awk '{print $1}')"
+          test "$EXPECTED_SHA" = "$ACTUAL_SHA" || {
+            echo "Cached editor archive checksum mismatch."
+            exit 1
+          }
           unzip -q "$INNER_ZIP" -d artifacts/editor
           test -s artifacts/editor/godot.editor.wasm
           cp artifacts/outer/BUILD-METADATA.txt artifacts/
