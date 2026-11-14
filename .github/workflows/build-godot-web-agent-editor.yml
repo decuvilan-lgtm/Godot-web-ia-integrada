@@ -1,0 +1,103 @@
+name: Build Godot Web Editor with Built-in Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      godot_ref:
+        description: Godot source ref (must remain compatible with the patcher)
+        required: true
+        default: 4.7.2-stable
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-web-agent-build
+  cancel-in-progress: false
+
+jobs:
+  build-web-editor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out controller repository
+        uses: actions/checkout@v4
+
+      - name: Check out Godot engine source
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ${{ inputs.godot_ref }}
+          path: godot
+
+      - name: Set up Python and SCons
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install scons==4.8.1
+          if [ -f godot/requirements.txt ]; then
+            python -m pip install -r godot/requirements.txt
+          fi
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.0
+          actions-cache-folder: emsdk-cache
+
+      - name: Verify source revision and patch only engine-owned files
+        run: |
+          test "$(git -C godot describe --tags --exact-match 2>/dev/null || true)" = "${{ inputs.godot_ref }}" || {
+            git -C godot rev-parse HEAD
+            echo "The checked out ref is not an exact tag; continuing with the resolved commit."
+          }
+          python -m py_compile scripts/build/patch_godot_web_agent.py
+          python scripts/build/patch_godot_web_agent.py --godot-source godot
+          git -C godot diff --check
+          git -C godot status --short
+          python -m unittest tests.test_web_agent_patcher -v
+
+      - name: Verify toolchain
+        run: |
+          emcc --version
+          scons --version
+          python --version
+
+      - name: Build single-threaded Web Editor
+        working-directory: godot
+        run: |
+          scons platform=web target=editor arch=wasm32 threads=no proxy_to_pthread=no -j2
+
+      - name: Verify and fingerprint Web Editor output
+        run: |
+          mkdir -p artifacts
+          find godot/bin -maxdepth 1 -type f -print | sort
+          ZIP_FILE="$(find godot/bin -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          test -n "$ZIP_FILE" || {
+            echo "No Web Editor template ZIP was produced."
+            exit 1
+          }
+          cp "$ZIP_FILE" artifacts/
+          sha256sum artifacts/* > artifacts/SHA256SUMS
+          {
+            echo "godot_ref=${{ inputs.godot_ref }}"
+            echo "godot_commit=$(git -C godot rev-parse HEAD)"
+            echo "emscripten=$(emcc --version | head -n 1)"
+            echo "scons=$(scons --version | tail -n 1)"
+            echo "build_command=scons platform=web target=editor arch=wasm32 threads=no proxy_to_pthread=no -j2"
+            echo "project_overlay=false"
+            echo "deployment=not_performed"
+          } > artifacts/BUILD-METADATA.txt
+
+      - name: Upload custom editor artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-web-editor-agent-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
