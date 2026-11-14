@@ -25,6 +25,18 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(event["declared_severity"], "error")
         self.assertEqual(event["category"], "threads")
 
+    def test_godot_script_error_has_project_script_classification(self):
+        event = classify_event(
+            "SCRIPT ERROR: Parse Error: Identifier not declared",
+            transport_type="error",
+            context="godot_project_runtime",
+        )
+        self.assertEqual(event["source"], "godot_script")
+        self.assertEqual(event["declared_severity"], "error")
+        self.assertEqual(event["category"], "scripts")
+        self.assertEqual(event["classification_rule"], "godot.script_error")
+        self.assertEqual(event["context"], "godot_project_runtime")
+
     def test_compiler_warning_and_error_are_distinguished(self):
         warning = classify_event("foo.cpp:12: warning: unused variable", source_hint="compiler")
         error = classify_event("foo.cpp:13: error: unknown type", source_hint="compiler")
@@ -143,6 +155,24 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(linked[1]["related_event_index"], 0)
         self.assertEqual(linked[1]["relation"], "stack_trace_for")
         self.assertEqual(report["severity_counts"]["error"], 1)
+
+    def test_project_stack_frame_adds_script_path_and_line_to_root(self):
+        root = classify_event(
+            "SCRIPT ERROR: Invalid call",
+            timestamp="1000",
+            context="godot_project_runtime",
+        )
+        frame = classify_event(
+            "   at: _ready (res://scripts/player.gd:27)",
+            source_hint="browser_console",
+            timestamp="1200",
+        )
+        linked = link_continuation_events([root, frame])
+        self.assertEqual(linked[1]["related_event_index"], 0)
+        self.assertEqual(
+            linked[0]["godot_source_locations"],
+            [{"path": "res://scripts/player.gd", "line": 27, "frame": "at: _ready (res://scripts/player.gd:27)"}],
+        )
 
     def test_continuation_outside_correlation_window_is_not_attached(self):
         root = classify_event("ERROR: worker failed", timestamp="1000")
