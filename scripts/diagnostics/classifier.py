@@ -7,6 +7,7 @@ WARNING prefix). Unknown messages are retained and classified as unknown.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections import Counter
 from typing import Any, Iterable
@@ -17,7 +18,7 @@ _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IG
 _COMPILER_ERROR = re.compile(r"(?:^|\s)(?:fatal )?error:", re.IGNORECASE)
 
 
-def _fingerprint(source: str, severity: str, message: str, context: str = "") -> str:
+def _fingerprint(source: str, severity: str, message: str, context: str = "", location: dict[str, Any] | None = None) -> str:
     # Source and context are part of identity: equal text from different
     # subsystems is not necessarily the same event or root cause.
     normalized = re.sub(r"\s+", " ", message).strip()
@@ -39,10 +40,14 @@ def classify_event(
     text = original.rstrip("\r\n")
     source = source_hint or "unknown"
     declared_severity = "unknown"
+    severity_basis = "unknown"
+    source_identification = "caller_declared" if source != "unknown" else "unknown"
     body = text
     match = _GODOT_PREFIX.match(text)
     if match:
         source = "godot"
+        source_identification = "exact_prefix"
+        severity_basis = "exact_prefix"
         token = match.group(1).upper()
         declared_severity = {
             "ERROR": "error", "WARNING": "warning", "WARN": "warning",
@@ -50,32 +55,47 @@ def classify_event(
         }[token]
         body = match.group(2)
     elif _COMPILER_ERROR.search(text):
-        source = source if source != "unknown" else "compiler"
+        if source == "unknown":
+            source = "compiler"
+            source_identification = "heuristic"
         declared_severity = "error"
+        severity_basis = "tool_pattern"
     elif _COMPILER_WARNING.search(text):
-        source = source if source != "unknown" else "compiler"
+        if source == "unknown":
+            source = "compiler"
+            source_identification = "heuristic"
         declared_severity = "warning"
+        severity_basis = "tool_pattern"
     elif source == "javascript" and transport_type == "error":
         declared_severity = "error"
+        severity_basis = "transport_fallback"
     elif source == "javascript" and transport_type == "warning":
         declared_severity = "warning"
+        severity_basis = "transport_fallback"
     elif transport_type == "warning":
         declared_severity = "warning"
+        severity_basis = "transport_fallback"
     elif transport_type in {"log", "info"}:
         declared_severity = "notice"
+        severity_basis = "transport_fallback"
     elif transport_type == "debug":
         declared_severity = "debug"
+        severity_basis = "transport_fallback"
     elif transport_type == "error":
         declared_severity = "error"
+        severity_basis = "transport_fallback"
 
     if source == "unknown":
         lowered_full = text.lower()
         if "emscripten" in lowered_full or "emcc" in lowered_full:
             source = "emscripten"
+            source_identification = "heuristic"
         elif "github actions" in lowered_full or "##[error]" in lowered_full:
             source = "github_actions"
+            source_identification = "heuristic"
         elif "node:" in lowered_full or "deprecationwarning" in lowered_full:
             source = "node"
+            source_identification = "heuristic"
 
     category = "network" if source in {"network", "http"} else "unknown"
     lowered = body.lower()
@@ -101,13 +121,15 @@ def classify_event(
         "source_hint": source_hint,
         "transport_type": transport_type,
         "declared_severity": declared_severity,
+        "severity_basis": severity_basis,
+        "source_identification": source_identification,
         "category": category,
         "context": context,
         "timestamp": timestamp,
         "location": location,
         "classification_status": "classified" if source != "unknown" and declared_severity != "unknown" else "unknown",
     }
-    event["fingerprint"] = _fingerprint(source, declared_severity, body, context)
+    event["fingerprint"] = _fingerprint(source, declared_severity, body, context, location)
     return event
 
 
