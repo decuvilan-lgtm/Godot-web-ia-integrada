@@ -15,6 +15,9 @@ on:
       - '.github/workflows/test-web-wrapper-custom-editor.yml'
       - 'README.md'
       - 'docs/**'
+      - 'scripts/diagnostics/**'
+      - 'tests/test_diagnostics_classifier.py'
+      - 'tests/test_diagnostics_ingest_log.py'
   workflow_dispatch:
     inputs:
       godot_ref:
@@ -76,6 +79,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
           python -m unittest discover -s tests -p 'test_native_bridge_contract.py' -v
           PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_classifier.py' -v
+          PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_ingest_log.py' -v
           python -m compileall -q scripts tests
           node --check browser-extension/page-bridge.js
           node --check browser-extension/content.js
@@ -96,7 +100,27 @@ jobs:
       - name: Build threaded Web Editor
         working-directory: godot
         run: |
-          scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2
+          mkdir -p ../artifacts
+          set -o pipefail
+          scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2 2>&1 | tee ../build-console.log
+
+      - name: Classify build diagnostics (audit only)
+        if: always()
+        run: |
+          if [ -f build-console.log ]; then
+            PYTHONPATH=scripts python scripts/diagnostics/ingest_log.py \
+              --input build-console.log \
+              --output artifacts/build-log-diagnostics.json \
+              --source build_log \
+              --context godot_web_editor_build
+            rm -f build-console.log
+          else
+            PYTHONPATH=scripts python scripts/diagnostics/ingest_log.py \
+              --input build-console.log \
+              --output artifacts/build-log-diagnostics.json \
+              --source build_log \
+              --context godot_web_editor_build
+          fi
 
       - name: Verify and fingerprint Web Editor output
         run: |
