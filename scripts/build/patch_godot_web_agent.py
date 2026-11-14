@@ -216,9 +216,10 @@ def patch_web_compatibility(
 \t\tscan_data->thread->wait_to_finish();
 \t}"""
     tcp_register = '\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);'
-    tcp_replacement = """#if !defined(WEB_ENABLED)
-\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);
-#endif"""
+    # Keep the TCP protocol factory registered on Web builds as well. The
+    # Web TCP backend can reject listen() gracefully, but removing the factory
+    # makes EditorDebuggerServer::create("tcp://") dereference a null function.
+    tcp_replacement = tcp_register
     audio_start = """void AudioDriverWorklet::start(float *p_out_buf, int p_out_buf_size, float *p_in_buf, int p_in_buf_size) {
 \tgodot_audio_worklet_start(p_in_buf, p_in_buf_size, p_out_buf, p_out_buf_size, state);
 \tthread.start(_audio_thread_func, this);
