@@ -71,7 +71,7 @@ jobs:
       - name: Build single-threaded Web Editor
         working-directory: godot
         run: |
-          scons platform=web target=editor arch=wasm32 threads=no proxy_to_pthread=no -j2
+          scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2
 
       - name: Verify and fingerprint Web Editor output
         run: |
@@ -83,13 +83,27 @@ jobs:
             exit 1
           }
           cp "$ZIP_FILE" artifacts/
+          python - "$ZIP_FILE" <<'PY'
+          import sys, zipfile
+          path = sys.argv[1]
+          with zipfile.ZipFile(path) as archive:
+              names = set(archive.namelist())
+              required = {"godot.editor.html", "godot.editor.js", "godot.editor.wasm", "service.worker.js"}
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit("Editor package is incomplete; missing: " + ", ".join(missing))
+              bad = archive.testzip()
+              if bad:
+                  raise SystemExit("Corrupt ZIP member: " + bad)
+              print("Verified full Web Editor package:", path)
+          PY
           sha256sum artifacts/* > artifacts/SHA256SUMS
           {
             echo "godot_ref=${{ inputs.godot_ref }}"
             echo "godot_commit=$(git -C godot rev-parse HEAD)"
             echo "emscripten=$(emcc --version | head -n 1)"
             echo "scons=$(scons --version | tail -n 1)"
-            echo "build_command=scons platform=web target=editor arch=wasm32 threads=no proxy_to_pthread=no -j2"
+            echo "build_command=scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2"
             echo "project_overlay=false"
             echo "deployment=not_performed"
           } > artifacts/BUILD-METADATA.txt
