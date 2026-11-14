@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1", pending=new Map(); let sequence=0;
+const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1", pending=new Map();
 function injectPageBridge(){
  if(document.documentElement?.dataset.godotControllerBridge==="loaded") return;
  const script=document.createElement("script"); script.src=chrome.runtime.getURL("page-bridge.js"); script.async=false;
@@ -9,17 +9,22 @@ function injectPageBridge(){
 }
 window.addEventListener("message",event=>{
  if(event.source!==window||event.origin!==location.origin) return;
- const data=event.data; if(!data||data.channel!==CHANNEL||data.direction!=="response") return;
- const resolve=pending.get(data.request_id); if(!resolve) return; pending.delete(data.request_id); resolve(data.result);
-});
-chrome.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
- if(!message||message.channel!==CHANNEL||message.type!=="execute") return false;
- const requestId="ext-"+Date.now()+"-"+(++sequence);
- const timeout=setTimeout(()=>{pending.delete(requestId);sendResponse({ok:false,error:"BRIDGE_TIMEOUT",message:"The editor adapter did not respond."});},10000);
- pending.set(requestId,result=>{clearTimeout(timeout);sendResponse(result);});
- window.postMessage({channel:CHANNEL,direction:"request",request_id:requestId,command:message.command},location.origin);
- return true;
+ const data=event.data; if(!data||data.channel!==CHANNEL) return;
+ if(data.direction==="host-command"){
+  if(typeof data.request_id!=="string"||data.request_id.length>100||pending.has(data.request_id)) return;
+  const timeout=setTimeout(()=>{
+   pending.delete(data.request_id);
+   window.postMessage({channel:CHANNEL,direction:"host-response",request_id:data.request_id,result:{ok:false,error:"BRIDGE_TIMEOUT",message:"The editor adapter did not respond."}},location.origin);
+  },10000);
+  pending.set(data.request_id,{timeout});
+  window.postMessage({channel:CHANNEL,direction:"request",request_id:data.request_id,command:data.command},location.origin);
+  return;
+ }
+ if(data.direction==="response"){
+  const item=pending.get(data.request_id); if(!item) return;
+  clearTimeout(item.timeout); pending.delete(data.request_id);
+  window.postMessage({channel:CHANNEL,direction:"host-response",request_id:data.request_id,result:data.result},location.origin);
+ }
 });
 injectPageBridge(); window.addEventListener("DOMContentLoaded",injectPageBridge,{once:true});
-chrome.runtime.sendMessage({channel:CHANNEL,type:"bridge-ready",href:location.href});
 })();
