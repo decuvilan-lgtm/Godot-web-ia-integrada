@@ -105,6 +105,34 @@ def main() -> int:
     request_failures: list[str] = []
     http_errors: list[str] = []
     worker_urls: list[str] = []
+    raw_diagnostic_events: list[dict[str, object]] = []
+
+    def record_diagnostic(message: str, transport_type: str, source_hint: str, location=None) -> None:
+        raw_diagnostic_events.append({
+            "message": message,
+            "transport_type": transport_type,
+            "source_hint": source_hint,
+            "timestamp_ns": time.time_ns(),
+            "location": location,
+        })
+
+    def build_diagnostic_report() -> dict[str, object]:
+        classified = [
+            classify_event(
+                str(event["message"]),
+                transport_type=str(event["transport_type"]),
+                source_hint=str(event["source_hint"]),
+                context="godot_web_editor_runtime",
+                timestamp=str(event["timestamp_ns"]),
+                location=event["location"] if isinstance(event["location"], dict) else None,
+            )
+            for event in raw_diagnostic_events
+        ]
+        return {
+            "raw_events": raw_diagnostic_events,
+            "classification": summarize_events(classified),
+        }
+
     result: dict[str, object] = {}
 
     with tempfile.TemporaryDirectory(prefix="godot-agent-browser-") as temp:
@@ -165,13 +193,31 @@ def main() -> int:
                         "timestamp_ns": time.time_ns(),
                     }
                     console_events.append(entry)
+                    record_diagnostic(msg.text, msg.type, "browser_console", msg.location)
                     if msg.type == "error":
                         errors.append(msg.text[:1000])
 
                 page.on("console", record_console_message)
-                page.on("pageerror", lambda error: page_errors.append(str(error)[:1000]))
-                page.on("requestfailed", lambda request: request_failures.append(f"{request.method} {request.url}: {request.failure}"))
-                page.on("response", lambda response: http_errors.append(f"{response.status} {response.url}") if response.status >= 400 else None)
+
+                def record_page_error(error) -> None:
+                    message = str(error)
+                    page_errors.append(message[:1000])
+                    record_diagnostic(message, "error", "javascript")
+
+                def record_request_failure(request) -> None:
+                    message = f"{request.method} {request.url}: {request.failure}"
+                    request_failures.append(message)
+                    record_diagnostic(message, "error", "network", {"url": request.url})
+
+                def record_http_response(response) -> None:
+                    if response.status >= 400:
+                        message = f"HTTP {response.status} {response.url}"
+                        http_errors.append(message)
+                        record_diagnostic(message, "error", "http", {"url": response.url, "status": response.status})
+
+                page.on("pageerror", record_page_error)
+                page.on("requestfailed", record_request_failure)
+                page.on("response", record_http_response)
                 page.on("worker", lambda worker: worker_urls.append(worker.url))
 
                 response = page.goto(origin + "/" + args.entrypoint, wait_until="domcontentloaded", timeout=90000)
@@ -340,6 +386,8 @@ def main() -> int:
                         diagnostics["failed_command"] = command
                         diagnostics["probe_result"] = probe
                         diagnostics["console_errors"] = errors[-50:]
+                        diagnostics["diagnostic_report"] = build_diagnostic_report()
+                        diagnostics["diagnostic_report"] = build_diagnostic_report()
                         diagnostics["page_errors"] = page_errors[-50:]
                         diagnostics["request_failures"] = request_failures[-50:]
                         diagnostics["http_errors"] = http_errors[-50:]
@@ -372,18 +420,7 @@ def main() -> int:
 
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(args.screenshot), full_page=False)
-                classified_console_events = [
-                    classify_event(
-                        str(event["text"]),
-                        transport_type=str(event["transport_type"]),
-                        source_hint="browser_console",
-                        context="godot_web_editor_runtime",
-                        timestamp=str(event["timestamp_ns"]),
-                        location=event["location"] if isinstance(event["location"], dict) else None,
-                    )
-                    for event in console_events
-                ]
-                diagnostic_report = summarize_events(classified_console_events)
+                diagnostic_report = build_diagnostic_report()
                 result = {
                     "ok": True,
                     "editor_url": origin + "/" + args.entrypoint,
