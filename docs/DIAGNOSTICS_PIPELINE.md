@@ -47,7 +47,7 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `source_hint` | Source supplied by the capture adapter |
 | `source_identification` | exact_prefix, caller_declared, heuristic, or unknown |
 | `transport_type` | Original transport-level event type |
-| `declared_severity` | fatal, error, warning, notice, debug, or unknown (current rules emit the supported subset) |
+| `declared_severity` | error, warning, notice, debug, or unknown |
 | `severity_basis` | Evidence used to assign severity |
 | `category` | Broad technical nature, not a diagnosis |
 | `context` | Workflow phase or subsystem context |
