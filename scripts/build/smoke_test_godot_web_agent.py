@@ -75,12 +75,13 @@ def main() -> int:
     parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "tests/fixtures/nested-godot-project")
     parser.add_argument("--timeout-seconds", type=int, default=180)
     parser.add_argument("--screenshot", type=Path, default=Path("artifacts/browser-smoke.png"))
+    parser.add_argument("--diagnostics", type=Path, default=Path("artifacts/browser-smoke-diagnostics.json"))
     args = parser.parse_args()
 
     if not args.editor_zip.is_file():
         raise SystemExit(f"Editor archive does not exist: {args.editor_zip}")
-    if not 30 <= args.timeout_seconds <= 300:
-        raise SystemExit("--timeout-seconds must be 30-300")
+    if not 30 <= args.timeout_seconds <= 900:
+        raise SystemExit("--timeout-seconds must be 30-900")
     project_dir = args.project_dir.resolve()
     if not project_dir.is_dir():
         raise SystemExit(f"Project directory does not exist: {project_dir}")
@@ -88,6 +89,9 @@ def main() -> int:
     original_digest = project_digest(project_dir)
     errors: list[str] = []
     page_errors: list[str] = []
+    request_failures: list[str] = []
+    http_errors: list[str] = []
+    worker_urls: list[str] = []
     result: dict[str, object] = {}
 
     with tempfile.TemporaryDirectory(prefix="godot-agent-browser-") as temp:
@@ -138,6 +142,9 @@ def main() -> int:
                 page = context.new_page()
                 page.on("console", lambda msg: errors.append(msg.text[:1000]) if msg.type == "error" else None)
                 page.on("pageerror", lambda error: page_errors.append(str(error)[:1000]))
+                page.on("requestfailed", lambda request: request_failures.append(f"{request.method} {request.url}: {request.failure}"))
+                page.on("response", lambda response: http_errors.append(f"{response.status} {response.url}") if response.status >= 400 else None)
+                page.on("worker", lambda worker: worker_urls.append(worker.url))
 
                 response = page.goto(origin + "/godot.editor.html", wait_until="domcontentloaded", timeout=90000)
                 if response is None or response.status != 200:
@@ -162,10 +169,73 @@ def main() -> int:
                     ) from exc
                 page.locator("#startButton").click(timeout=30000)
 
-                page.wait_for_function(
-                    "() => !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.dispatch === 'function')",
-                    timeout=args.timeout_seconds * 1000,
-                )
+                try:
+                    page.wait_for_function(
+                        "() => !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.dispatch === 'function')",
+                        timeout=args.timeout_seconds * 1000,
+                    )
+                except Exception as exc:
+                    diagnostics = page.evaluate("""() => {
+                        const visible = (selector) => {
+                            const element = document.querySelector(selector);
+                            if (!element) return null;
+                            const rect = element.getBoundingClientRect();
+                            const style = getComputedStyle(element);
+                            return {
+                                text: (element.innerText || element.textContent || "").slice(0, 5000),
+                                display: style.display,
+                                visibility: style.visibility,
+                                disabled: "disabled" in element ? element.disabled : null,
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            };
+                        };
+                        return {
+                            url: location.href,
+                            ready_state: document.readyState,
+                            title: document.title,
+                            body_text: (document.body?.innerText || "").slice(0, 12000),
+                            cross_origin_isolated: self.crossOriginIsolated,
+                            shared_array_buffer: typeof SharedArrayBuffer,
+                            engine_constructor: typeof Engine,
+                            adapter_present: !!window.__godotEditorAgent,
+                            canvases: [...document.querySelectorAll("canvas")].map(c => ({
+                                id: c.id, width: c.width, height: c.height,
+                                visible_width: Math.round(c.getBoundingClientRect().width),
+                                visible_height: Math.round(c.getBoundingClientRect().height)
+                            })),
+                            start_button: visible("#startButton"),
+                            status_notice: visible("#status-notice"),
+                            status_progress: visible("#status-progress"),
+                            status_indeterminate: visible("#status-indeterminate"),
+                            editor_tab: visible("#btn-tab-editor"),
+                            loader_tab: visible("#btn-tab-loader"),
+                            tabs: visible("#tabs-buttons"),
+                            service_worker_controller: !!navigator.serviceWorker?.controller,
+                            performance_resources: performance.getEntriesByType("resource")
+                                .filter(r => /wasm|worker|\.js(?:$|\?)/i.test(r.name))
+                                .slice(-30).map(r => ({name: r.name, duration: Math.round(r.duration), transfer_size: r.transferSize}))
+                        };
+                    }""")
+                    diagnostics["console_errors"] = errors[-50:]
+                    diagnostics["page_errors"] = page_errors[-50:]
+                    diagnostics["request_failures"] = request_failures[-50:]
+                    diagnostics["http_errors"] = http_errors[-50:]
+                    diagnostics["workers"] = worker_urls[-30:]
+                    diagnostics["wait_error"] = str(exc)
+                    args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        page.screenshot(path=str(args.screenshot), full_page=False, timeout=30000)
+                        diagnostics["screenshot"] = str(args.screenshot)
+                    except Exception as screenshot_error:
+                        diagnostics["screenshot_error"] = str(screenshot_error)
+                    args.diagnostics.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
+                    print("BROWSER_SMOKE_DIAGNOSTICS=" + json.dumps(diagnostics, indent=2), flush=True)
+                    raise RuntimeError(
+                        "Native adapter did not appear within "
+                        f"{args.timeout_seconds}s. Browser diagnostics were saved to {args.diagnostics}"
+                    ) from exc
                 page.locator("#btn-tab-editor").wait_for(state="visible", timeout=30000)
                 if page.locator("#btn-tab-editor").is_enabled():
                     page.locator("#btn-tab-editor").click(timeout=10000)
@@ -224,9 +294,14 @@ def main() -> int:
                     "pending_requests_after_probes": pending,
                     "console_errors": errors[-30:],
                     "page_errors": page_errors[-30:],
+                    "request_failures": request_failures[-30:],
+                    "http_errors": http_errors[-30:],
+                    "workers": worker_urls[-20:],
                     "note": "The built editor imported a clean project, exposed the native read-only adapter, and answered through the Chromium extension relay. This does not yet validate the deployed Render wrapper.",
                 }
                 print(json.dumps(result, indent=2))
+                args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+                args.diagnostics.write_text(json.dumps(result, indent=2), encoding="utf-8")
                 context.close()
         finally:
             server.shutdown()
