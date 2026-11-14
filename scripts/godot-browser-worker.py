@@ -142,7 +142,7 @@ def main():
                     content_type="application/json",
                     body=json.dumps({"detail":"Temporary Godot Controller overlay failed; original project was not modified."}),
                 )
-        page.route(re.compile(r".*/v1/github/[^/]+/[^/]+/archive(?:\\?.*)?$"),overlay_project_archive)
+        page.route(re.compile(r".*/v1/github/[^/]+/[^/]+/archive(?:\?.*)?$"),overlay_project_archive)
         page.on("console",lambda m: errors.append(m.text[:2000]) if m.type=="error" else None)
         page.on("pageerror",lambda e: page_errors.append(str(e)[:2000]))
         page.on("requestfailed",lambda r: failed.append({"url":r.url[:500],"error":str(r.failure)[:500]}))
