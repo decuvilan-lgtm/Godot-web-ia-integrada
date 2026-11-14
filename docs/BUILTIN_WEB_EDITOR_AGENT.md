@@ -40,10 +40,12 @@ The bridge must queue commands and execute editor operations on the Godot main/e
 
 ## Initial allowlisted command scope
 
-Read-only first:
+Read-only first implementation (implemented by the patcher):
 - `editor.list_capabilities`
 - `editor.get_state`
-- `scene.get_tree`
+- `scene.get_tree` (bounded to 256 nodes and 16 levels)
+
+Next read-only additions, after compile and browser acceptance:
 - `scene.get_selection`
 - `node.get_inspector`
 
@@ -79,4 +81,4 @@ The existing prebuilt download path must remain available as a rollback until th
 
 ## Current status
 
-The upstream hook and API surface have been verified against Godot 4.7.2-stable source. The custom engine patch, reproducible Emscripten build, deployment, and live acceptance test are not yet implemented. Do not describe the adapter as operational until those checks pass.
+The upstream hook and API surface have been verified against Godot 4.7.2-stable source. The anchor-validated engine patcher, initial read-only adapter, unit tests, and manual build workflow are now present on the feature branch. The Emscripten build, deployment, and live browser acceptance test are not yet verified. Do not describe the adapter as operational until those checks pass.
