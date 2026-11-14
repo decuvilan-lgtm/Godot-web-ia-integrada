@@ -16,10 +16,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from diagnostics.classifier import classify_event, summarize_events
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from diagnostics.classifier import classify_event, summarize_events
 from bridge.semantic_controller import execute_semantic_command
 
 
