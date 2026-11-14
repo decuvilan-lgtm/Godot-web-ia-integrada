@@ -76,6 +76,8 @@ It writes the raw diagnostic events and their classified interpretation into
 the smoke diagnostics JSON. Existing convenience arrays remain available for
 backward compatibility.
 
+The SCons build step also saves its output temporarily, runs the diagnostic ingester, and publishes a redacted build-log report with source line numbers. The temporary unredacted build-log file is removed before artifacts are uploaded. Known gettext fallback messages are treated as warnings; ambiguous messages remain unclassified.
+
 The capture is currently **audit-only**. It does not change engine behavior,
 suppress messages, or alter the smoke test's pass/fail policy. CI runs focused
 classifier regression tests. A later policy change must be based on measured
