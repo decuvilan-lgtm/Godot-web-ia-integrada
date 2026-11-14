@@ -230,13 +230,20 @@ def main() -> int:
     args = parser.parse_args()
     root = args.godot_source.resolve()
     header_path = root / "platform/web/editor/web_tools_editor_plugin.h"
-    source_path = root / "platform/web/editor/web_tools_editor_plugin.cpp"\n    project_list_path = root / "editor/project_manager/project_list.cpp"\n    debugger_path = root / "editor/debugger/editor_debugger_server.cpp"
+    source_path = root / "platform/web/editor/web_tools_editor_plugin.cpp"
+    project_list_path = root / "editor/project_manager/project_list.cpp"
+    debugger_path = root / "editor/debugger/editor_debugger_server.cpp"
     if not header_path.is_file() or not source_path.is_file() or not project_list_path.is_file() or not debugger_path.is_file():
         raise SystemExit("Not a Godot source checkout: WebToolsEditorPlugin files are missing")
     header, source = patch(header_path.read_text(), source_path.read_text())
+    project_list, debugger_server = patch_web_compatibility(
+        project_list_path.read_text(), debugger_path.read_text()
+    )
     header_path.write_text(header)
     source_path.write_text(source)
-    print("Applied built-in read-only Web Editor Agent patch to engine sources.")
+    project_list_path.write_text(project_list)
+    debugger_path.write_text(debugger_server)
+    print("Applied built-in read-only Web Editor Agent and Web compatibility patches to engine sources.")
     print("No imported project files were accessed.")
     return 0
 
