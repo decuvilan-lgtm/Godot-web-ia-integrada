@@ -44,8 +44,8 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\t},
 \t\tdispatch(request) {
 \t\t\treturn new Promise((resolve, reject) => {
-\t\t\t\tif (!request || typeof request.id !== "string" || request.id.length > 128 ||
-\t\t\t\t\ttypeof request.command !== "string" || !request.command) {
+\t\t\t\tif (!request || typeof request.id !== "string" || !request.id || request.id.length > 128 ||
+\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64) {
 \t\t\t\t\treject(new Error("Invalid agent request"));
 \t\t\t\t\treturn;
 \t\t\t\t}
@@ -58,7 +58,9 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\t\t\t\tcommand: request.command,
 \t\t\t\t\targs: request.args && typeof request.args === "object" ? request.args : {}
 \t\t\t\t});
-\t\t\t\tconst bytes = new TextEncoder().encode(payload);
+\t\t\t\tif (payload.length > 16384) { reject(new Error("Agent request exceeds the 16 KiB limit")); return; }
+				const bytes = new TextEncoder().encode(payload);
+				if (bytes.length > 16384) { reject(new Error("Agent request exceeds the 16 KiB limit")); return; }
 \t\t\t\tconst ptr = Module._malloc(bytes.length + 1);
 \t\t\t\tif (!ptr) {
 \t\t\t\t\treject(new Error("Unable to allocate request buffer"));
@@ -91,7 +93,8 @@ EMSCRIPTEN_KEEPALIVE void godot_web_agent_submit(const char *p_json) {
 \tif (p_json == nullptr) return;
 \tString request = String::utf8(p_json);
 \tif (request.length() > 16384) return;
-\tgodot_web_agent_requests.push_back(request);
+\tif (godot_web_agent_requests.size() >= 64) return;
+	godot_web_agent_requests.push_back(request);
 }
 }
 
@@ -102,9 +105,9 @@ static Dictionary godot_web_agent_node_to_dict(Node *p_node, int &r_count, int p
 \tresult["path"] = p_node->get_path();
 \tArray children;
 \tif (p_depth < 16 && r_count < 256) {
-\t\tconst int child_count = MIN(p_node->get_child_count(), 256 - r_count);
+\t\tconst int child_count = MIN(p_node->get_child_count(false), 256 - r_count);
 \t\tfor (int i = 0; i < child_count; i++) {
-\t\t\tNode *child = p_node->get_child(i);
+\t\t\tNode *child = p_node->get_child(i, false);
 \t\t\tif (child == nullptr) continue;
 \t\t\tr_count++;
 \t\t\tchildren.push_back(godot_web_agent_node_to_dict(child, r_count, p_depth + 1));
