@@ -35,7 +35,6 @@ Commands are JSON objects with a protocol version, request ID, action name and b
 - editor.open_panel
 - scene.open
 - scene.select_node
-- scene.save
 - node.get_inspector
 
 The adapter must validate every field and return a structured object:
@@ -46,7 +45,7 @@ The adapter must validate every field and return a structured object:
 - error: stable machine-readable code when unsuccessful
 - message: short diagnostic safe for logs
 
-The first milestone is read-only state/capability inspection plus scene navigation and node selection. Save is a later mutating action and must be enabled only after explicit idempotency, dirty-state handling, and recovery tests. No arbitrary file writes, shell, process execution, arbitrary scripts, arbitrary URLs, or unrestricted editor commands.
+The first milestone is read-only state/capability inspection plus scene navigation and node selection. Mutating operations such as saving are deliberately excluded until explicit idempotency, dirty-state handling, and recovery tests exist. No arbitrary file writes, shell, process execution, arbitrary scripts, arbitrary URLs, or unrestricted editor commands.
 
 ## No-coordinate rule
 
