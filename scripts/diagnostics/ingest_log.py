@@ -10,9 +10,9 @@ from pathlib import Path
 from diagnostics.classifier import classify_event, summarize_events
 
 _CANDIDATE = re.compile(
-    r"(?:^|\\s)(?:fatal error:|error:|warning:)|"
-    r"\\b(?:FATAL|ERROR|WARNING|WARN):|"
-    r"##\\[(?:error|warning)\\]|"
+    r"(?:^|\s)(?:fatal error:|error:|warning:)|"
+    r"\b(?:FATAL|ERROR|WARNING|WARN):|"
+    r"##\[(?:error|warning)\]|"
     r"DeprecationWarning|not found|unsupported|not available|"
     r"Blocking on the main thread|ERR_CANT_CREATE|wait_to_finish",
     re.IGNORECASE,
@@ -29,7 +29,7 @@ def infer_source(line: str, default_source: str) -> tuple[str, str]:
         return "gettext", "build_dependency"
     if "scons:" in lowered or "scons " in lowered:
         return "scons", "build_orchestrator"
-    if re.search(r"(?:fatal error:|error:|warning:|\\[-W[^]]+\\])", line, re.IGNORECASE):
+    if re.search(r"(?:fatal error:|error:|warning:|\[-W[^]]+\])", line, re.IGNORECASE):
         return "compiler", "native_compilation"
     return default_source, "build_output"
 
