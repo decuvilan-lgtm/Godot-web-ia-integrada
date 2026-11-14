@@ -126,6 +126,7 @@ def main() -> int:
                         "--no-sandbox",
                         "--disable-dev-shm-usage",
                         "--enable-webgl",
+                        "--enable-unsafe-swiftshader",
                         "--use-gl=angle",
                         "--use-angle=swiftshader",
                         "--disable-extensions-except=" + str(extension_dir),
