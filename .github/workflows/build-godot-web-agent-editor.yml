@@ -1,9 +1,9 @@
 name: Build Godot Web Editor with Built-in Agent
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/builtin-web-editor-agent
+      - main
     paths-ignore:
       - 'scripts/build/smoke_test_godot_web_agent.py'
       - 'scripts/build-web.sh'
