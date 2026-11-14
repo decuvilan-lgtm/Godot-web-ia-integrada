@@ -69,10 +69,23 @@ jobs:
           grep -q 'godot-github-connector' public/index.html
           echo "Custom editor archive SHA-256: $ACTUAL"
 
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Launch the patched wrapper in Chromium and probe the native agent
+        run: |
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-dir public \
+            --entrypoint 'index.html?manual=1' \
+            --timeout-seconds 600 \
+            --screenshot artifacts/wrapper-browser-smoke.png \
+            --diagnostics artifacts/wrapper-browser-smoke-diagnostics.json
+
       - name: Upload wrapper output for inspection
         uses: actions/upload-artifact@v4
         with:
           name: godot-web-wrapper-smoke-${{ github.run_id }}
-          path: public/
-          if-no-files-found: error
+          path: |\n            public/\n            artifacts/wrapper-browser-smoke.png\n            artifacts/wrapper-browser-smoke-diagnostics.json\n          if-no-files-found: error
           retention-days: 7
