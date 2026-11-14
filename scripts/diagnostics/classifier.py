@@ -13,9 +13,26 @@ from collections import Counter
 from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
-_GODOT_PREFIX = re.compile(r"^\s*(ERROR|WARNING|WARN|INFO|DEBUG|VERBOSE):\s*(.*)$", re.IGNORECASE)
+_GODOT_PREFIX = re.compile(r"^\s*(FATAL|CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG|VERBOSE):\s*(.*)$", re.IGNORECASE)
 _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IGNORECASE)
-_COMPILER_ERROR = re.compile(r"(?:^|\s)(?:fatal )?error:", re.IGNORECASE)
+_COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
+_COMPILER_ERROR = re.compile(r"(?:^|\s)error:", re.IGNORECASE)
+_SECRET_ASSIGNMENT = re.compile(r"(?i)(\b(?:access[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|authorization|auth[_-]?token|refresh[_-]?token|signature)\s*[=:]\s*)([^\s&,;]+)")
+_BEARER_TOKEN = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
+_URL_QUERY = re.compile(r"(https?://[^\s?#]+)\?[^\s#]+")
+
+
+def redact_sensitive_text(value: str) -> tuple[str, int]:
+    """Redact credential-like values and URL query strings before reports persist."""
+    text = str(value)
+    count = 0
+    text, n = _SECRET_ASSIGNMENT.subn(r"\\1[REDACTED]", text)
+    count += n
+    text, n = _BEARER_TOKEN.subn(r"\\1[REDACTED]", text)
+    count += n
+    text, n = _URL_QUERY.subn(r"\\1?[REDACTED_QUERY]", text)
+    count += n
+    return text, count
 
 
 def _fingerprint(source: str, severity: str, message: str, context: str = "", location: dict[str, Any] | None = None) -> str:
@@ -37,11 +54,13 @@ def classify_event(
     location: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return one event without discarding original text or transport data."""
-    original = str(message)
+    captured = str(message)
+    original, redactions_applied = redact_sensitive_text(captured)
     text = original.rstrip("\r\n")
     source = source_hint or "unknown"
     declared_severity = "unknown"
     severity_basis = "unknown"
+    classification_rule = "fallback.unknown"
     source_identification = "caller_declared" if source != "unknown" else "unknown"
     body = text
     match = _GODOT_PREFIX.match(text)
@@ -51,40 +70,57 @@ def classify_event(
         severity_basis = "exact_prefix"
         token = match.group(1).upper()
         declared_severity = {
-            "ERROR": "error", "WARNING": "warning", "WARN": "warning",
-            "INFO": "notice", "DEBUG": "debug", "VERBOSE": "debug",
+            "FATAL": "fatal", "CRITICAL": "fatal", "ERROR": "error",
+            "WARNING": "warning", "WARN": "warning", "INFO": "notice",
+            "DEBUG": "debug", "VERBOSE": "debug",
         }[token]
+        classification_rule = f"godot.prefix.{declared_severity}"
         body = match.group(2)
+    elif _COMPILER_FATAL.search(text):
+        if source == "unknown":
+            source = "compiler"
+            source_identification = "heuristic"
+        declared_severity = "fatal"
+        severity_basis = "tool_pattern"
+        classification_rule = "compiler.fatal_error"
     elif _COMPILER_ERROR.search(text):
         if source == "unknown":
             source = "compiler"
             source_identification = "heuristic"
         declared_severity = "error"
         severity_basis = "tool_pattern"
+        classification_rule = "compiler.error"
     elif _COMPILER_WARNING.search(text):
         if source == "unknown":
             source = "compiler"
             source_identification = "heuristic"
         declared_severity = "warning"
         severity_basis = "tool_pattern"
+        classification_rule = "compiler.warning"
     elif source == "javascript" and transport_type == "error":
         declared_severity = "error"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.javascript.error"
     elif source == "javascript" and transport_type == "warning":
         declared_severity = "warning"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.javascript.warning"
     elif transport_type == "warning":
         declared_severity = "warning"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.warning"
     elif transport_type in {"log", "info"}:
         declared_severity = "notice"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.notice"
     elif transport_type == "debug":
         declared_severity = "debug"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.debug"
     elif transport_type == "error":
         declared_severity = "error"
         severity_basis = "transport_fallback"
+        classification_rule = "transport.error"
 
     if source == "unknown":
         lowered_full = text.lower()
@@ -123,6 +159,8 @@ def classify_event(
         "transport_type": transport_type,
         "declared_severity": declared_severity,
         "severity_basis": severity_basis,
+        "classification_rule": classification_rule,
+        "redactions_applied": redactions_applied,
         "source_identification": source_identification,
         "category": category,
         "context": context,
