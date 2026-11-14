@@ -128,9 +128,20 @@ def main() -> int:
             )
             for event in raw_diagnostic_events
         ]
+        summary = summarize_events(classified)
+        severities = summary["severity_counts"]
+        if severities.get("error", 0):
+            health_status = "degraded"
+        elif severities.get("warning", 0):
+            health_status = "warnings"
+        elif summary["unknown_events"]:
+            health_status = "unclassified"
+        else:
+            health_status = "clean"
         return {
+            "health_status": health_status,
             "raw_events": raw_diagnostic_events,
-            "classification": summarize_events(classified),
+            "classification": summary,
         }
 
     result: dict[str, object] = {}
