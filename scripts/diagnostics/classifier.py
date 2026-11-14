@@ -111,17 +111,17 @@ def classify_event(
     else:
         match = _GODOT_PREFIX.match(text)
     if event_role == "diagnostic" and match:
-            source = "godot"
-            source_identification = "exact_prefix"
-            severity_basis = "exact_prefix"
-            token = match.group(1).upper()
-            declared_severity = {
-                "FATAL": "fatal", "CRITICAL": "fatal", "ERROR": "error",
-                "WARNING": "warning", "WARN": "warning", "INFO": "notice",
-                "DEBUG": "debug", "VERBOSE": "debug",
-            }[token]
-            classification_rule = f"godot.prefix.{declared_severity}"
-            body = match.group(2)
+        source = "godot"
+        source_identification = "exact_prefix"
+        severity_basis = "exact_prefix"
+        token = match.group(1).upper()
+        declared_severity = {
+            "FATAL": "fatal", "CRITICAL": "fatal", "ERROR": "error",
+            "WARNING": "warning", "WARN": "warning", "INFO": "notice",
+            "DEBUG": "debug", "VERBOSE": "debug",
+        }[token]
+        classification_rule = f"godot.prefix.{declared_severity}"
+        body = match.group(2)
 
     elif _COMPILER_FATAL.search(text):
         if source == "unknown":
