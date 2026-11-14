@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - feature/builtin-web-editor-agent
+    paths-ignore:
+      - 'scripts/build/smoke_test_godot_web_agent.py'
+      - '.github/workflows/browser-smoke-reuse.yml'
+      - '.github/workflows/build-godot-web-agent-editor.yml'
   workflow_dispatch:
     inputs:
       godot_ref:
