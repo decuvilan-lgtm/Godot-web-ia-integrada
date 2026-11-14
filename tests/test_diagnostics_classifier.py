@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from diagnostics.classifier import classify_event, summarize_events
+from diagnostics.classifier import classify_event, redact_sensitive_payload, summarize_events
 
 
 class DiagnosticsClassifierTests(unittest.TestCase):
@@ -97,6 +97,17 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertNotIn("key-123", event["original_message"])
         self.assertIn("[REDACTED_QUERY]", event["original_message"])
         self.assertGreaterEqual(event["redactions_applied"], 3)
+
+    def test_nested_report_payloads_are_redacted_recursively(self):
+        payload = {
+            "console_events": [{"text": "GET https://example.invalid/?token=secret"}],
+            "runtime": {"resource_url": "https://example.invalid/app.js?api_key=private"},
+        }
+        safe, count = redact_sensitive_payload(payload)
+        serialized = str(safe)
+        self.assertNotIn("secret", serialized)
+        self.assertNotIn("private", serialized)
+        self.assertEqual(count, 2)
 
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
