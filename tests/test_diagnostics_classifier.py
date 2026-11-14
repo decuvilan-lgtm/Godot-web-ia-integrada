@@ -64,6 +64,17 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(event["category"], "network")
         self.assertEqual(event["declared_severity"], "error")
 
+    def test_severity_basis_explains_why_a_level_was_assigned(self):
+        engine = classify_event("WARNING: expected fallback", transport_type="error")
+        browser = classify_event("uncaught exception", transport_type="error", source_hint="javascript")
+        self.assertEqual(engine["severity_basis"], "exact_prefix")
+        self.assertEqual(browser["severity_basis"], "transport_fallback")
+
+    def test_different_locations_do_not_share_a_fingerprint(self):
+        first = classify_event("ERROR: operation failed", location={"url": "engine.cpp", "lineNumber": 10})
+        second = classify_event("ERROR: operation failed", location={"url": "engine.cpp", "lineNumber": 20})
+        self.assertNotEqual(first["fingerprint"], second["fingerprint"])
+
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
         self.assertEqual(event["category"], "network")
