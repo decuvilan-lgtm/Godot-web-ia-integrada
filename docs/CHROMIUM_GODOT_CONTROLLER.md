@@ -13,7 +13,19 @@ This component is deliberately distinct from the Linux Godot Headless runtime:
 | Chromium in GitHub Actions | Existing browser session that hosts the editor and remains the visual inspection station |
 | Godot editor adapter | Editor-specific implementation that translates semantic commands into supported Godot EditorInterface operations |
 
-The extension must attach to the existing Actions Chromium session. It must not launch a separate browser or replace screenshots, video, console collection, or existing visual evidence.
+The extension is loaded into the existing Actions Chromium session. It must not launch a separate browser or replace screenshots, video, console collection, or existing visual evidence.
+
+## Session lifecycle — one Actions browser, renewed when needed
+
+The controller is part of this repository and runs inside the existing GitHub Actions browser worker. It is not a separate repository, hosted website, or second Chromium instance.
+
+- Opening a trusted `[CHATGPT-BROWSER]` issue starts one Actions workflow, which opens one Godot Web editor tab in one Chromium process.
+- While that workflow is alive, the same page and editor stay open. Semantic commands are posted as JSON issue comments and consumed by the worker's command loop; visual inspection uses that same page.
+- The current interactive command window is bounded to 600 seconds, and the workflow itself has a 25-minute job limit. A session ending means the hosted job ended; it is not a persistent browser daemon.
+- If the window or job expires, start a new `[CHATGPT-BROWSER]` issue. The worker opens a fresh Actions Chromium session, imports the requested exact project SHA, and continues there. No separate web service or repository is needed.
+- The next session must re-import the project snapshot. Unsaved in-browser changes from an expired session are not assumed to survive; save/export and verify project changes before renewal.
+
+The existing Actions Chromium remains the visual station. The semantic controller only sends structured editor operations; it does not replace screenshots, video, console collection, or visual review.
 
 ## Why an extension alone is not enough
 
