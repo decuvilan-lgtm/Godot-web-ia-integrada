@@ -156,6 +156,23 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(linked[1]["relation"], "stack_trace_for")
         self.assertEqual(report["severity_counts"]["error"], 1)
 
+    def test_project_stack_frame_without_leading_whitespace_is_classified(self):
+        root = classify_event(
+            "ERROR: PROJECT_DIAG_FIXTURE: intentional runtime error",
+            timestamp="1000",
+            context="godot_project_runtime",
+        )
+        frame = classify_event(
+            "at: _ready (res://main.gd:5)",
+            source_hint="browser_console",
+            timestamp="1200",
+        )
+        self.assertEqual(frame["event_role"], "continuation")
+        linked = link_continuation_events([root, frame])
+        self.assertEqual(linked[1]["related_event_index"], 0)
+        self.assertEqual(linked[0]["godot_source_locations"][0]["path"], "res://main.gd")
+        self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 5)
+
     def test_project_stack_frame_adds_script_path_and_line_to_root(self):
         root = classify_event(
             "SCRIPT ERROR: Invalid call",
