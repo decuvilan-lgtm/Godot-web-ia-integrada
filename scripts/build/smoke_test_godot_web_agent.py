@@ -71,15 +71,22 @@ def prepare_extension(source_dir: Path, target_dir: Path, origin: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--editor-zip", required=True, type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--editor-zip", type=Path)
+    source.add_argument("--editor-dir", type=Path)
+    parser.add_argument("--entrypoint", default="godot.editor.html")
     parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "tests/fixtures/nested-godot-project")
     parser.add_argument("--timeout-seconds", type=int, default=180)
     parser.add_argument("--screenshot", type=Path, default=Path("artifacts/browser-smoke.png"))
     parser.add_argument("--diagnostics", type=Path, default=Path("artifacts/browser-smoke-diagnostics.json"))
     args = parser.parse_args()
 
-    if not args.editor_zip.is_file():
+    if args.editor_zip and not args.editor_zip.is_file():
         raise SystemExit(f"Editor archive does not exist: {args.editor_zip}")
+    if args.editor_dir and not args.editor_dir.is_dir():
+        raise SystemExit(f"Editor directory does not exist: {args.editor_dir}")
+    if args.entrypoint.startswith("/") or ".." in Path(args.entrypoint.split("?", 1)[0]).parts:
+        raise SystemExit("--entrypoint must be a relative path inside the editor directory")
     if not 30 <= args.timeout_seconds <= 900:
         raise SystemExit("--timeout-seconds must be 30-900")
     project_dir = args.project_dir.resolve()
@@ -96,13 +103,16 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="godot-agent-browser-") as temp:
         root = Path(temp)
-        editor_root = root / "editor"
-        editor_root.mkdir()
-        with zipfile.ZipFile(args.editor_zip) as archive:
-            bad = archive.testzip()
-            if bad:
-                raise RuntimeError(f"Corrupt editor ZIP member: {bad}")
-            archive.extractall(editor_root)
+        if args.editor_dir:
+            editor_root = args.editor_dir.resolve()
+        else:
+            editor_root = root / "editor"
+            editor_root.mkdir()
+            with zipfile.ZipFile(args.editor_zip) as archive:
+                bad = archive.testzip()
+                if bad:
+                    raise RuntimeError(f"Corrupt editor ZIP member: {bad}")
+                archive.extractall(editor_root)
 
         required = ("godot.editor.html", "godot.editor.js", "godot.editor.wasm", "service.worker.js")
         missing = [name for name in required if not (editor_root / name).is_file()]
@@ -146,7 +156,7 @@ def main() -> int:
                 page.on("response", lambda response: http_errors.append(f"{response.status} {response.url}") if response.status >= 400 else None)
                 page.on("worker", lambda worker: worker_urls.append(worker.url))
 
-                response = page.goto(origin + "/godot.editor.html", wait_until="domcontentloaded", timeout=90000)
+                response = page.goto(origin + "/" + args.entrypoint, wait_until="domcontentloaded", timeout=90000)
                 if response is None or response.status != 200:
                     raise RuntimeError(f"Editor HTML failed to load: {response.status if response else 'no response'}")
 
@@ -346,7 +356,7 @@ def main() -> int:
                 page.screenshot(path=str(args.screenshot), full_page=False)
                 result = {
                     "ok": True,
-                    "editor_url": origin + "/godot.editor.html",
+                    "editor_url": origin + "/" + args.entrypoint,
                     "project": str(project_dir.relative_to(REPO_ROOT)),
                     "source_project_sha256_before": original_digest,
                     "source_project_sha256_after": final_digest,
