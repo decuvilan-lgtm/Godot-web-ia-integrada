@@ -66,11 +66,34 @@ class WebAgentPatcherTests(unittest.TestCase):
         project_list = """\tscan_data->thread->start(_scan_thread, scan_data);
 \tscan_data->thread->wait_to_finish();"""
         debugger = """\tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);"""
-        patched_projects, patched_debugger = PATCHER.patch_web_compatibility(project_list, debugger)
+        audio = """void AudioDriverWorklet::start(float *p_out_buf, int p_out_buf_size, float *p_in_buf, int p_in_buf_size) {
+\tgodot_audio_worklet_start(p_in_buf, p_in_buf_size, p_out_buf, p_out_buf_size, state);
+\tthread.start(_audio_thread_func, this);
+}
+void AudioDriverWorklet::finish_driver() {
+\tquit = true; // Ask thread to quit.
+\tthread.wait_to_finish();
+}"""
+        dap = """void DebugAdapterServer::start() {
+\tremote_port = (DebugAdapterServer::port_override > -1) ? DebugAdapterServer::port_override : (int)_EDITOR_GET("network/debug_adapter/remote_port");
+\tconst Error status = protocol.start(remote_port, IPAddress("127.0.0.1"));
+\tif (status != OK) {
+\t\tEditorNode::get_log()->add_message("--- Failed to start Debug adapter server on port " + itos(remote_port) + ": " + error_names[status] + " ---", EditorLog::MSG_TYPE_EDITOR);
+\t\treturn;
+\t}
+\tEditorNode::get_log()->add_message("--- Debug adapter server started on port " + itos(remote_port) + " ---", EditorLog::MSG_TYPE_EDITOR);
+\tset_process_internal(true);
+\tstarted = true;
+}"""
+        patched_projects, patched_debugger, patched_audio, patched_dap = PATCHER.patch_web_compatibility(project_list, debugger, audio, dap)
         self.assertIn("#if defined(WEB_ENABLED)", patched_projects)
         self.assertIn("_scan_thread(scan_data);", patched_projects)
         self.assertIn("if (scan_data->thread->is_started())", patched_projects)
         self.assertIn("#if !defined(WEB_ENABLED)", patched_debugger)
+        self.assertIn("quit = false;", patched_audio)
+        self.assertIn("if (thread.is_started())", patched_audio)
+        self.assertIn("#ifdef WEB_ENABLED", patched_dap)
+        self.assertIn("native TCP sockets", patched_dap)
 
     def test_patch_fails_closed_when_upstream_anchor_changes(self):
         with self.assertRaises(ValueError):
