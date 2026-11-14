@@ -3,7 +3,10 @@
 from __future__ import annotations
 import json, os, re, time, urllib.request
 from pathlib import Path
-from bridge.semantic_controller import execute_semantic_command
+try:
+    from .semantic_controller import execute_semantic_command
+except ImportError:  # Support unittest discovery with scripts/bridge as the start directory.
+    from semantic_controller import execute_semantic_command
 
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm"}
