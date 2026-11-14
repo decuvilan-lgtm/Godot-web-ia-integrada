@@ -60,7 +60,7 @@ jobs:
       - name: Launch cached editor in Chromium and probe the native agent
         run: |
           python scripts/build/smoke_test_godot_web_agent.py \
-            --editor-zip "$(find artifacts/editor -maxdepth 1 -type f -name '*.zip' -print -quit || true)" \
+            --editor-zip "$(find artifacts/outer -maxdepth 1 -type f -name '*.zip' -print -quit || true)" \
             --timeout-seconds 600 \
             --screenshot artifacts/browser-smoke.png \
             --diagnostics artifacts/browser-smoke-diagnostics.json
