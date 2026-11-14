@@ -22,7 +22,8 @@ def _fingerprint(source: str, severity: str, message: str, context: str = "", lo
     # Source and context are part of identity: equal text from different
     # subsystems is not necessarily the same event or root cause.
     normalized = re.sub(r"\s+", " ", message).strip()
-    payload = "\0".join((source, severity, context, normalized))
+    location_key = json.dumps(location or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    payload = "\0".join((source, severity, context, location_key, normalized))
     return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()
 
 
