@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Real Godot Web browser worker running only inside a GitHub Actions job."""
 from __future__ import annotations
-import base64, hashlib, io, json, os, re, time, urllib.parse, urllib.request, zipfile
+import base64, hashlib, io, json, os, re, tempfile, time, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-from bridge.browser_command_loop import run_command_loop
+from bridge.browser_command_loop import run_command_loop\nfrom bridge.semantic_controller import execute_semantic_command
 
 RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
 EDITOR_URL=os.environ.get("EDITOR_URL","https://godot-web-ia-integrada-rt2l.onrender.com/")
@@ -91,8 +91,25 @@ def main():
     # Keep the browser process alive through evidence upload; the runner owns its lifetime.
     p = sync_playwright().start()
     if True:
-        browser=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage","--disable-gpu","--disable-extensions","--disable-background-networking","--disable-default-apps","--disable-sync","--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter"])
-        context=browser.new_context(viewport={"width":1365,"height":768},device_scale_factor=1,accept_downloads=True)
+        extension_dir=Path(__file__).resolve().parent.parent/"browser-extension"
+        if not (extension_dir/"manifest.json").is_file():
+            raise FileNotFoundError("Godot Controller extension manifest is missing")
+        profile_dir=tempfile.mkdtemp(prefix="godot-actions-chromium-")
+        context=p.chromium.launch_persistent_context(
+            profile_dir,
+            channel="chromium",
+            headless=True,
+            args=[
+                "--no-sandbox","--disable-dev-shm-usage","--disable-gpu",
+                "--disable-extensions-except="+str(extension_dir),
+                "--load-extension="+str(extension_dir),
+                "--disable-background-networking","--disable-default-apps","--disable-sync",
+                "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter",
+            ],
+            viewport={"width":1365,"height":768},
+            device_scale_factor=1,
+            accept_downloads=True,
+        )
         page=context.new_page()
         page.on("console",lambda m: errors.append(m.text[:2000]) if m.type=="error" else None)
         page.on("pageerror",lambda e: page_errors.append(str(e)[:2000]))
