@@ -163,7 +163,7 @@ func _serialize_tree(root: Node) -> Array:
 		var children := node.get_children()
 		for index in range(children.size() - 1, -1, -1):
 			var child: Node = children[index]
-			var child_path := NodePath(str(path).path_join(str(child.name)))
+			var child_path := NodePath(str(child.name) if str(path) == "." else str(path).path_join(str(child.name)))
 			stack.append({"node": child, "path": child_path})
 	return output
 
