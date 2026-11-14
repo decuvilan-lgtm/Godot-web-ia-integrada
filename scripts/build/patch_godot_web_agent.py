@@ -195,7 +195,12 @@ def patch(header: str, source: str) -> tuple[str, str]:
     source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t").rstrip(), 1)
     return header, source
 
-def patch_web_compatibility(project_list: str, debugger_server: str) -> tuple[str, str]:
+def patch_web_compatibility(
+    project_list: str,
+    debugger_server: str,
+    audio_driver: str,
+    debug_adapter_server: str,
+) -> tuple[str, str, str, str]:
     """Keep unsupported native thread/socket services out of the Web editor path."""
     scan_start = "\tscan_data->thread->start(_scan_thread, scan_data);"
     scan_replacement = """#if defined(WEB_ENABLED)
@@ -214,14 +219,65 @@ def patch_web_compatibility(project_list: str, debugger_server: str) -> tuple[st
     tcp_replacement = """#if !defined(WEB_ENABLED)
 \tregister_protocol_handler("tcp://", EditorDebuggerServerTCP::create);
 #endif"""
-    if project_list.count(scan_start) != 1 or project_list.count(finish_wait) != 1:
-        raise ValueError("Unexpected ProjectList thread lifecycle anchors")
-    if debugger_server.count(tcp_register) != 1:
-        raise ValueError("Unexpected EditorDebuggerServer TCP registration anchor")
+    audio_start = """void AudioDriverWorklet::start(float *p_out_buf, int p_out_buf_size, float *p_in_buf, int p_in_buf_size) {
+\tgodot_audio_worklet_start(p_in_buf, p_in_buf_size, p_out_buf, p_out_buf_size, state);
+\tthread.start(_audio_thread_func, this);
+}"""
+    audio_start_replacement = """void AudioDriverWorklet::start(float *p_out_buf, int p_out_buf_size, float *p_in_buf, int p_in_buf_size) {
+\t// A previous failed initialization may have called finish() before a worker existed.
+\tquit = false;
+\tgodot_audio_worklet_start(p_in_buf, p_in_buf_size, p_out_buf, p_out_buf_size, state);
+\tthread.start(_audio_thread_func, this);
+}"""
+    audio_finish = """\tquit = true; // Ask thread to quit.
+\tthread.wait_to_finish();"""
+    audio_finish_replacement = """\tquit = true; // Ask thread to quit.
+\tif (thread.is_started()) {
+\t\tthread.wait_to_finish();
+\t}"""
+    dap_start = """void DebugAdapterServer::start() {
+\tremote_port = (DebugAdapterServer::port_override > -1) ? DebugAdapterServer::port_override : (int)_EDITOR_GET("network/debug_adapter/remote_port");
+\tconst Error status = protocol.start(remote_port, IPAddress("127.0.0.1"));
+\tif (status != OK) {
+\t\tEditorNode::get_log()->add_message("--- Failed to start Debug adapter server on port " + itos(remote_port) + ": " + error_names[status] + " ---", EditorLog::MSG_TYPE_EDITOR);
+\t\treturn;
+\t}
+\tEditorNode::get_log()->add_message("--- Debug adapter server started on port " + itos(remote_port) + " ---", EditorLog::MSG_TYPE_EDITOR);
+\tset_process_internal(true);
+\tstarted = true;
+}"""
+    dap_start_replacement = """void DebugAdapterServer::start() {
+\tremote_port = (DebugAdapterServer::port_override > -1) ? DebugAdapterServer::port_override : (int)_EDITOR_GET("network/debug_adapter/remote_port");
+#ifdef WEB_ENABLED
+\tEditorNode::get_log()->add_message("--- External Debug Adapter is unavailable in Web builds because browser builds do not support native TCP sockets. ---", EditorLog::MSG_TYPE_EDITOR);
+\treturn;
+#else
+\tconst Error status = protocol.start(remote_port, IPAddress("127.0.0.1"));
+\tif (status != OK) {
+\t\tEditorNode::get_log()->add_message("--- Failed to start Debug adapter server on port " + itos(remote_port) + ": " + error_names[status] + " ---", EditorLog::MSG_TYPE_EDITOR);
+\t\treturn;
+\t}
+\tEditorNode::get_log()->add_message("--- Debug adapter server started on port " + itos(remote_port) + " ---", EditorLog::MSG_TYPE_EDITOR);
+\tset_process_internal(true);
+\tstarted = true;
+#endif
+}"""
+    checks = (
+        (project_list, scan_start, finish_wait, "ProjectList thread lifecycle"),
+        (debugger_server, tcp_register, None, "debugger TCP registration"),
+        (audio_driver, audio_start, audio_finish, "AudioWorklet thread lifecycle"),
+        (debug_adapter_server, dap_start, None, "Debug Adapter startup"),
+    )
+    for source, first, second, label in checks:
+        if source.count(first) != 1 or (second and source.count(second) != 1):
+            raise ValueError(f"Unexpected {label} anchors")
     project_list = project_list.replace(scan_start, scan_replacement, 1)
     project_list = project_list.replace(finish_wait, finish_replacement, 1)
     debugger_server = debugger_server.replace(tcp_register, tcp_replacement, 1)
-    return project_list, debugger_server
+    audio_driver = audio_driver.replace(audio_start, audio_start_replacement, 1)
+    audio_driver = audio_driver.replace(audio_finish, audio_finish_replacement, 1)
+    debug_adapter_server = debug_adapter_server.replace(dap_start, dap_start_replacement, 1)
+    return project_list, debugger_server, audio_driver, debug_adapter_server
 
 
 def main() -> int:
@@ -233,16 +289,24 @@ def main() -> int:
     source_path = root / "platform/web/editor/web_tools_editor_plugin.cpp"
     project_list_path = root / "editor/project_manager/project_list.cpp"
     debugger_path = root / "editor/debugger/editor_debugger_server.cpp"
-    if not header_path.is_file() or not source_path.is_file() or not project_list_path.is_file() or not debugger_path.is_file():
-        raise SystemExit("Not a Godot source checkout: WebToolsEditorPlugin files are missing")
+    audio_path = root / "platform/web/audio_driver_web.cpp"
+    debug_adapter_path = root / "editor/debugger/debug_adapter/debug_adapter_server.cpp"
+    required_paths = (header_path, source_path, project_list_path, debugger_path, audio_path, debug_adapter_path)
+    if not all(path.is_file() for path in required_paths):
+        raise SystemExit("Not a Godot source checkout: one or more Web Editor patch targets are missing")
     header, source = patch(header_path.read_text(), source_path.read_text())
-    project_list, debugger_server = patch_web_compatibility(
-        project_list_path.read_text(), debugger_path.read_text()
+    project_list, debugger_server, audio_driver, debug_adapter_server = patch_web_compatibility(
+        project_list_path.read_text(),
+        debugger_path.read_text(),
+        audio_path.read_text(),
+        debug_adapter_path.read_text(),
     )
     header_path.write_text(header)
     source_path.write_text(source)
     project_list_path.write_text(project_list)
     debugger_path.write_text(debugger_server)
+    audio_path.write_text(audio_driver)
+    debug_adapter_path.write_text(debug_adapter_server)
     print("Applied built-in read-only Web Editor Agent and Web compatibility patches to engine sources.")
     print("No imported project files were accessed.")
     return 0
