@@ -233,6 +233,13 @@ def main():
                     "status":"probe_exception",
                     "error":f"{type(exc).__name__}: {str(exc)[:300]}",
                 }
+            inspection["controller_runtime"]=page.evaluate("""() => ({
+                adapter_present: !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.execute === "function"),
+                adapter_protocol: window.__godotEditorAgent ? window.__godotEditorAgent.protocol ?? null : null,
+                adapter_version: window.__godotEditorAgent ? window.__godotEditorAgent.version ?? null : null,
+                dispatch_present: typeof window.__godotEditorAgentDispatch === "function",
+                resolve_present: typeof window.__godotEditorAgentResolve === "function"
+            })""")
             probe_result=inspection.get("semantic_controller_probe",{}).get("result",{})
             if not overlay_reports or not overlay_reports[-1].get("applied"):
                 failure=failure or "Temporary controller overlay was not confirmed in the imported project"
