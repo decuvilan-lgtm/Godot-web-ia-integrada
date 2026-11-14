@@ -86,6 +86,26 @@ backward compatibility.
 
 The SCons build step also saves its output temporarily, runs the diagnostic ingester, and publishes a redacted build-log report with source line numbers. The temporary unredacted build-log file is removed before artifacts are uploaded. Known gettext fallback messages are treated as warnings; ambiguous messages remain unclassified.
 
+### Project runtime diagnostics
+
+The browser smoke test also opens a dedicated, isolated Godot fixture and runs
+its main scene with the editor's Run Current Scene command. The fixture emits
+one deliberately identifiable `push_error()` message between
+`PROJECT_DIAG_BEGIN` and `PROJECT_DIAG_END` markers. The capture adapter uses
+those markers to assign the resulting event and its Godot stack continuation
+to `godot_project_runtime`, while editor startup messages remain in
+`godot_web_editor_runtime`. The smoke test asserts that exactly one expected
+project error is captured; the expected error is retained as an error in the
+artifact, not hidden or downgraded.
+
+This proves the browser capture path can observe at least one real GDScript
+runtime error from an executing project and keep its context separate from
+editor diagnostics. It does **not** yet claim complete project diagnostics:
+static GDScript parse coverage, resource/import failures, scene-load failures,
+signals, shader errors, and performance telemetry need dedicated probes and
+source-aware correlation. The current project runtime probe is intentionally
+small and deterministic.
+
 The capture is currently **audit-only**. It does not change engine behavior,
 suppress messages, or alter the smoke test's pass/fail policy. CI runs focused
 classifier regression tests. A later policy change must be based on measured
