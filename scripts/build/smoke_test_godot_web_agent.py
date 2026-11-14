@@ -130,8 +130,10 @@ def main() -> int:
         ]
         summary = summarize_events(classified)
         severities = summary["severity_counts"]
-        if severities.get("error", 0):
+        if severities.get("fatal", 0) or severities.get("error", 0):
             health_status = "degraded"
+        elif severities.get("warning", 0) and summary["unknown_events"]:
+            health_status = "warnings_and_unclassified"
         elif severities.get("warning", 0):
             health_status = "warnings"
         elif summary["unknown_events"]:
