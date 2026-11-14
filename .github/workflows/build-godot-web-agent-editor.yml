@@ -11,7 +11,6 @@ on:
       - 'scripts/test_patch_web_shell.py'
       - 'scripts/package-bridge-sandbox.py'
       - '.github/workflows/browser-smoke-reuse.yml'
-      - '.github/workflows/build-godot-web-agent-editor.yml'
       - '.github/workflows/publish-custom-editor-release.yml'
       - '.github/workflows/test-web-wrapper-custom-editor.yml'
       - 'README.md'
