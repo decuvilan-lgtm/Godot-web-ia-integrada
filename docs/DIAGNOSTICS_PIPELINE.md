@@ -41,8 +41,8 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | Field | Meaning |
 |---|---|
 | `schema_version` | Version of this event contract |
-| `original_message` | Exact text captured before interpretation |
-| `message` | Interpreted message body; original remains intact |
+| `original_message` | Captured text after credential/query redaction; all non-sensitive text is preserved |
+| `message` | Interpreted message body derived from the safely retained original |
 | `source` | Godot, compiler, JavaScript, network, HTTP, Node, Emscripten, etc. |
 | `source_hint` | Source supplied by the capture adapter |
 | `source_identification` | exact_prefix, caller_declared, heuristic, or unknown |
