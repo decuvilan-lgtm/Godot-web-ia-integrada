@@ -12,6 +12,14 @@ Esta sección registra la dirección acordada para el flujo de desarrollo asisti
 
 Flujo: Headless clona y registra el SHA base → desarrolla y prueba → verifica que `main` no haya avanzado externamente → publica en `main` → Godot Web actualiza el proyecto asociado → se verifica visualmente el mismo SHA. Si la inspección detecta defectos, se corrigen desde Headless y se publica otro commit en `main`.
 
+### Control semántico del editor Chromium
+
+El puesto visual de Godot Web continúa siendo el Chromium de GitHub Actions. Se incorpora una extensión ligera que recibe órdenes semánticas del worker y las entrega a un adaptador del editor; no es otro Godot Headless, no abre un segundo navegador y no sustituye la inspección visual.
+
+El worker usa un contexto persistente de Playwright con el canal Chromium que admite extensiones en modo headless. La extensión y el cliente Python se encuentran documentados en [Chromium Godot Controller](CHROMIUM_GODOT_CONTROLLER.md). Las órdenes nuevas deben identificar escenas, nodos y paneles mediante nombres/rutas estables, nunca mediante coordenadas o clics simulados.
+
+La extensión y el despacho semántico están integrados en el worker, pero el adaptador window.__godotEditorAgent dentro de la build Godot Web todavía no está implementado ni probado en Actions. Hasta que ese adaptador exista, el puente debe responder explícitamente que no está disponible. Las capturas, vídeo, consola y evidencias siguen perteneciendo al Chromium existente.
+
 ### Project Manager y entrada automática
 
 La distribución oficial 4.7.2 presenta una página inicial con el botón **Start Godot Editor**. Ese botón llama a `startEditor()`, que crea el motor web y lo inicia con los argumentos `--project-manager --single-window`. Por tanto, el Project Manager nativo ya está incluido: el paso extra es iniciar el motor.
