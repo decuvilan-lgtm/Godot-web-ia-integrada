@@ -29,15 +29,15 @@ def redact_sensitive_text(value: str) -> tuple[str, int]:
     """Redact credential-like values and URL query strings before reports persist."""
     text = str(value)
     count = 0
-    # Redact Bearer credentials before the broader key=value rule so the
-    # word "Bearer" cannot be mistaken for the credential value.
+    # Remove URL queries first so each URL is counted once, then redact
+    # standalone credentials and Authorization/Bearer headers.
+    text, n = _URL_QUERY.subn(lambda match: match.group(1) + "?[REDACTED_QUERY]", text)
+    count += n
     text, n = _AUTHORIZATION_HEADER.subn(lambda match: match.group(1) + "[REDACTED]", text)
     count += n
     text, n = _BEARER_TOKEN.subn(lambda match: match.group(1) + "[REDACTED]", text)
     count += n
     text, n = _SECRET_ASSIGNMENT.subn(lambda match: match.group(1) + "[REDACTED]", text)
-    count += n
-    text, n = _URL_QUERY.subn(lambda match: match.group(1) + "?[REDACTED_QUERY]", text)
     count += n
     return text, count
 
@@ -111,7 +111,7 @@ def classify_event(
         classification_rule = "emscripten.blocking_main_thread.warning"
     else:
         match = _GODOT_PREFIX.match(text)
-    if event_role == "diagnostic" and match:
+    if event_role == "diagnostic" and severity_basis == "unknown" and match:
         source = "godot"
         source_identification = "exact_prefix"
         severity_basis = "exact_prefix"
@@ -124,48 +124,48 @@ def classify_event(
         classification_rule = f"godot.prefix.{declared_severity}"
         body = match.group(2)
 
-    elif _COMPILER_FATAL.search(text):
+    elif event_role == "diagnostic" and severity_basis == "unknown" and _COMPILER_FATAL.search(text):
         if source == "unknown":
             source = "compiler"
             source_identification = "heuristic"
         declared_severity = "fatal"
         severity_basis = "tool_pattern"
         classification_rule = "compiler.fatal_error"
-    elif _COMPILER_ERROR.search(text):
+    elif event_role == "diagnostic" and severity_basis == "unknown" and _COMPILER_ERROR.search(text):
         if source == "unknown":
             source = "compiler"
             source_identification = "heuristic"
         declared_severity = "error"
         severity_basis = "tool_pattern"
         classification_rule = "compiler.error"
-    elif _COMPILER_WARNING.search(text):
+    elif event_role == "diagnostic" and severity_basis == "unknown" and _COMPILER_WARNING.search(text):
         if source == "unknown":
             source = "compiler"
             source_identification = "heuristic"
         declared_severity = "warning"
         severity_basis = "tool_pattern"
         classification_rule = "compiler.warning"
-    elif source == "javascript" and transport_type == "error":
+    elif event_role == "diagnostic" and severity_basis == "unknown" and source == "javascript" and transport_type == "error":
         declared_severity = "error"
         severity_basis = "transport_fallback"
         classification_rule = "transport.javascript.error"
-    elif source == "javascript" and transport_type == "warning":
+    elif event_role == "diagnostic" and severity_basis == "unknown" and source == "javascript" and transport_type == "warning":
         declared_severity = "warning"
         severity_basis = "transport_fallback"
         classification_rule = "transport.javascript.warning"
-    elif transport_type == "warning":
+    elif event_role == "diagnostic" and severity_basis == "unknown" and transport_type == "warning":
         declared_severity = "warning"
         severity_basis = "transport_fallback"
         classification_rule = "transport.warning"
-    elif transport_type in {"log", "info"}:
+    elif event_role == "diagnostic" and severity_basis == "unknown" and transport_type in {"log", "info"}:
         declared_severity = "notice"
         severity_basis = "transport_fallback"
         classification_rule = "transport.notice"
-    elif transport_type == "debug":
+    elif event_role == "diagnostic" and severity_basis == "unknown" and transport_type == "debug":
         declared_severity = "debug"
         severity_basis = "transport_fallback"
         classification_rule = "transport.debug"
-    elif transport_type == "error":
+    elif event_role == "diagnostic" and severity_basis == "unknown" and transport_type == "error":
         declared_severity = "error"
         severity_basis = "transport_fallback"
         classification_rule = "transport.error"
