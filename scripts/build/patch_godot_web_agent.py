@@ -17,7 +17,7 @@ CPP_END_ANCHOR = 'DirAccess::remove_file_or_error(output_path);\n}'
 
 HEADER_INSERT = """private:
 \tvoid _download_zip();
-\tvoid _process(double p_delta) override;"""
+\tvoid _process_requests();"""
 
 BRIDGE_BLOCK = r'''
 // Built-in browser agent bridge. Requests are queued and consumed from _process(),
@@ -26,6 +26,7 @@ BRIDGE_BLOCK = r'''
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
 #include "scene/main/node.h"
+#include "scene/main/timer.h"
 
 static Vector<String> godot_web_agent_requests;
 
@@ -119,8 +120,7 @@ static Dictionary godot_web_agent_node_to_dict(Node *p_node, int &r_count, int p
 '''
 
 PROCESS_BLOCK = r'''
-void WebToolsEditorPlugin::_process(double p_delta) {
-	UNUSED(p_delta);
+void WebToolsEditorPlugin::_process_requests() {
 \tif (godot_web_agent_requests.is_empty()) return;
 \tVector<String> requests = godot_web_agent_requests;
 \tgodot_web_agent_requests.clear();
@@ -189,7 +189,12 @@ def patch(header: str, source: str) -> tuple[str, str]:
     source = source.replace(EXTERN_ANCHOR, EXTERN_ANCHOR + "\n" + BRIDGE_BLOCK.replace("\\t", "\t"), 1)
     source = source.replace(
         CTOR_ANCHOR,
-        CTOR_ANCHOR[:-1] + "\n\tset_process(true);\n\tgodot_web_agent_install();\n}",
+        CTOR_ANCHOR[:-1] + "\n\tTimer *agent_timer = memnew(Timer);
+	agent_timer->set_wait_time(0.05);
+	agent_timer->set_one_shot(false);
+	add_child(agent_timer);
+	agent_timer->connect("timeout", callable_mp(this, &WebToolsEditorPlugin::_process_requests));
+	agent_timer->start();\n\tgodot_web_agent_install();\n}",
         1,
     )
     source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t").rstrip(), 1)
