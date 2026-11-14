@@ -35,7 +35,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -61,6 +60,16 @@ jobs:
           git -C godot diff --check
           git -C godot status --short
           python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
+          python -m compileall -q scripts tests
+          node --check browser-extension/page-bridge.js
+          node --check browser-extension/content.js
+          changed="$(git -C godot diff --name-only | sort)"
+          expected="$(printf '%s\n' platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
+          test "$changed" = "$expected" || {
+            echo "Patch touched unexpected engine files:"
+            printf '%s\n' "$changed"
+            exit 1
+          }
 
       - name: Verify toolchain
         run: |
