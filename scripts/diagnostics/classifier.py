@@ -14,6 +14,8 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
 _GODOT_PREFIX = re.compile(r"^\s*(FATAL|CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG|VERBOSE):\s*(.*)$", re.IGNORECASE)
+_GODOT_STACK_TRACE = re.compile(r"^\s+at:\s+.*\([^)]*:\d+\)\s*$")
+_EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerous", re.IGNORECASE)
 _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IGNORECASE)
 _COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
 _COMPILER_ERROR = re.compile(r"(?:^|\s)error:", re.IGNORECASE)
@@ -89,21 +91,38 @@ def classify_event(
     declared_severity = "unknown"
     severity_basis = "unknown"
     classification_rule = "fallback.unknown"
+    event_role = "diagnostic"
     source_identification = "caller_declared" if source != "unknown" else "unknown"
     body = text
-    match = _GODOT_PREFIX.match(text)
-    if match:
-        source = "godot"
-        source_identification = "exact_prefix"
-        severity_basis = "exact_prefix"
-        token = match.group(1).upper()
-        declared_severity = {
-            "FATAL": "fatal", "CRITICAL": "fatal", "ERROR": "error",
-            "WARNING": "warning", "WARN": "warning", "INFO": "notice",
-            "DEBUG": "debug", "VERBOSE": "debug",
-        }[token]
-        classification_rule = f"godot.prefix.{declared_severity}"
-        body = match.group(2)
+    if _GODOT_STACK_TRACE.match(text):
+        source = "godot_stack_trace"
+        source_identification = "exact_pattern"
+        declared_severity = "notice"
+        severity_basis = "structural_pattern"
+        classification_rule = "godot.stack_trace.continuation"
+        event_role = "continuation"
+        body = text.strip()
+    elif _EMSCRIPTEN_BLOCKING.search(text):
+        source = "emscripten"
+        source_identification = "exact_pattern"
+        declared_severity = "warning"
+        severity_basis = "tool_pattern"
+        classification_rule = "emscripten.blocking_main_thread.warning"
+    else:
+        match = _GODOT_PREFIX.match(text)
+    if event_role == "diagnostic" and match:
+            source = "godot"
+            source_identification = "exact_prefix"
+            severity_basis = "exact_prefix"
+            token = match.group(1).upper()
+            declared_severity = {
+                "FATAL": "fatal", "CRITICAL": "fatal", "ERROR": "error",
+                "WARNING": "warning", "WARN": "warning", "INFO": "notice",
+                "DEBUG": "debug", "VERBOSE": "debug",
+            }[token]
+            classification_rule = f"godot.prefix.{declared_severity}"
+            body = match.group(2)
+
     elif _COMPILER_FATAL.search(text):
         if source == "unknown":
             source = "compiler"
@@ -162,7 +181,7 @@ def classify_event(
             source = "node"
             source_identification = "heuristic"
 
-    category = "network" if source in {"network", "http"} else "unknown"
+    category = "diagnostic_context" if event_role == "continuation" else ("network" if source in {"network", "http"} else "unknown")
     lowered = body.lower()
     category_rules = (
         ("threads", ("thread", "wait_to_finish", "pthread")),
@@ -173,10 +192,11 @@ def classify_event(
         ("performance", ("blocking on the main thread", "slow", "performance")),
         ("build_configuration", ("-w", "scons", "compiler flag", "warning: unknown")),
     )
-    for candidate, needles in category_rules:
-        if any(needle in lowered for needle in needles):
-            category = candidate
-            break
+    if event_role != "continuation":
+        for candidate, needles in category_rules:
+            if any(needle in lowered for needle in needles):
+                category = candidate
+                break
 
     event = {
         "schema_version": SCHEMA_VERSION,
@@ -188,6 +208,7 @@ def classify_event(
         "declared_severity": declared_severity,
         "severity_basis": severity_basis,
         "classification_rule": classification_rule,
+        "event_role": event_role,
         "redactions_applied": redactions_applied,
         "source_identification": source_identification,
         "category": category,
