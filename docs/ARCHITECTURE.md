@@ -18,7 +18,7 @@ El puesto visual de Godot Web continúa siendo el Chromium de GitHub Actions. Se
 
 El worker usa un contexto persistente de Playwright con el canal Chromium que admite extensiones en modo headless. La extensión y el cliente Python se encuentran documentados en [Chromium Godot Controller](CHROMIUM_GODOT_CONTROLLER.md). Las órdenes nuevas deben identificar escenas, nodos y paneles mediante nombres/rutas estables, nunca mediante coordenadas o clics simulados.
 
-La extensión y el despacho semántico están integrados en el worker, pero el adaptador window.__godotEditorAgent dentro de la build Godot Web todavía no está implementado ni probado en Actions. Hasta que ese adaptador exista, el puente debe responder explícitamente que no está disponible. Las capturas, vídeo, consola y evidencias siguen perteneciendo al Chromium existente.
+La extensión y el despacho semántico están integrados en el worker. El adaptador EditorPlugin, propiedad de este laboratorio, se inyecta temporalmente en el ZIP seleccionado en memoria antes de que Godot lo importe; ni el ZIP de origen ni el repositorio del juego se modifican. El overlay ya está implementado y la issue #50 valida la primera ejecución de Actions sin el complemento en el sandbox de origen. Hasta que esa ejecución confirme la respuesta del adaptador, el control del editor sigue siendo experimental. Las capturas, vídeo, consola y evidencias siguen perteneciendo al Chromium existente.
 
 ### Project Manager y entrada automática
 
