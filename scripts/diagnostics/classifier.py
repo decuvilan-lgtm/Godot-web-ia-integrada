@@ -61,6 +61,10 @@ def classify_event(
         declared_severity = "warning"
     elif transport_type == "warning":
         declared_severity = "warning"
+    elif transport_type in {"log", "info"}:
+        declared_severity = "notice"
+    elif transport_type == "debug":
+        declared_severity = "debug"
     elif transport_type == "error":
         declared_severity = "error"
 
