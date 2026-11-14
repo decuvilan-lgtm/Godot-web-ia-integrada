@@ -81,4 +81,4 @@ The existing prebuilt download path must remain available as a rollback until th
 
 ## Current status
 
-The upstream hook and API surface have been verified against Godot 4.7.2-stable source. The anchor-validated engine patcher, initial read-only adapter, unit tests, and manual build workflow are now present on the feature branch. The Emscripten build, deployment, and live browser acceptance test are not yet verified. Do not describe the adapter as operational until those checks pass.
+The upstream hook and API surface have been verified against Godot 4.7.2-stable source. The anchor-validated engine patcher, initial read-only adapter, unit tests, and manual build workflow are now present on the feature branch. The native patch now passes whitespace validation in the build workflow; the Emscripten build, deployment, and live browser acceptance test remain unverified. Do not describe the adapter as operational until those checks pass.
