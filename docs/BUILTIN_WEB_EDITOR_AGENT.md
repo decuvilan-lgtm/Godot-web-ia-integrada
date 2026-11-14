@@ -93,7 +93,7 @@ A release workflow is configured to publish a versioned GitHub Release only afte
 - **Proven:** the custom editor ZIP was consumed by `scripts/build-web.sh`, and the patched wrapper files were produced successfully.
 - **Proven:** the patched wrapper's own `index.html` launched in Chromium and repeated all three native-agent probes successfully in run `43565341712`. The scene was `NestedRelayFixture`, the queue drained to zero, the source fixture hash remained unchanged, `crossOriginIsolated` was true, `SharedArrayBuffer` was available, and there were no page errors, request failures, or HTTP errors.
 - **Runtime warnings to classify:** Godot logs a wait on a thread that was never started and a TCP server creation error in the browser runtime. They did not block editor use or the adapter probes, but should be understood before deployment.
-- **Implemented, not yet executed:** `.github/workflows/release-godot-web-agent.yml` publishes a versioned GitHub Release only after verifying the selected build artifact's metadata, no-overlay marker, and SHA-256. It must be run from the default branch after the PR is integrated.
+- **Implemented, not yet executed:** `.github/workflows/publish-custom-editor-release.yml` publishes a versioned GitHub Release only after verifying the selected build artifact's metadata, no-overlay marker, and SHA-256. Its automatic `workflow_run` trigger requires the workflow to exist on the default branch; it also supports manual dispatch with the successful build run ID and source commit SHA.
 - **Pending:** execute and verify the versioned release, then deploy to the existing Render static service with rollback.
 - **Not changed:** Render services, Neon storage, and any imported game repository.
 
