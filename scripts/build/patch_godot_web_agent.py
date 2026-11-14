@@ -192,7 +192,7 @@ def patch(header: str, source: str) -> tuple[str, str]:
         CTOR_ANCHOR[:-1] + "\n\tset_process(true);\n\tgodot_web_agent_install();\n}",
         1,
     )
-    source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t"), 1)
+    source = source.replace(CPP_END_ANCHOR, CPP_END_ANCHOR + "\n" + PROCESS_BLOCK.replace("\\t", "\t").rstrip(), 1)
     return header, source
 
 def main() -> int:
