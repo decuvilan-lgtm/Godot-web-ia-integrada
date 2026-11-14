@@ -60,6 +60,7 @@ jobs:
           git -C godot diff --check
           git -C godot status --short
           python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
+          python -m unittest discover -s tests -p 'test_native_bridge_contract.py' -v
           python -m compileall -q scripts tests
           node --check browser-extension/page-bridge.js
           node --check browser-extension/content.js
