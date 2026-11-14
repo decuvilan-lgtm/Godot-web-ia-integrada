@@ -245,7 +245,7 @@ def main() -> int:
                             tabs: visible("#tabs-buttons"),
                             service_worker_controller: !!navigator.serviceWorker?.controller,
                             performance_resources: performance.getEntriesByType("resource")
-                                .filter(r => /wasm|worker|\.js(?:$|\?)/i.test(r.name))
+                                .filter(r => /wasm|worker|[.]js(?:$|[?])/i.test(r.name))
                                 .slice(-30).map(r => ({name: r.name, duration: Math.round(r.duration), transfer_size: r.transferSize}))
                         };
                     }""")
