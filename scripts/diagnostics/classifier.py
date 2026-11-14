@@ -15,6 +15,8 @@ from typing import Any, Iterable
 SCHEMA_VERSION = 1
 _GODOT_PREFIX = re.compile(r"^\s*(FATAL|CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG|VERBOSE):\s*(.*)$", re.IGNORECASE)
 _GODOT_STACK_TRACE = re.compile(r"^\s+at:\s+.*\([^)]*:\d+\)\s*$")
+_GODOT_SCRIPT_ERROR = re.compile(r"^\s*SCRIPT ERROR:\s*(.*)$", re.IGNORECASE)
+_GODOT_PROJECT_LOCATION = re.compile(r"\((res://[^)]+):(\d+)\)")
 _EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerous", re.IGNORECASE)
 _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IGNORECASE)
 _COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
@@ -109,6 +111,14 @@ def classify_event(
         declared_severity = "warning"
         severity_basis = "tool_pattern"
         classification_rule = "emscripten.blocking_main_thread.warning"
+    elif _GODOT_SCRIPT_ERROR.match(text):
+        script_match = _GODOT_SCRIPT_ERROR.match(text)
+        source = "godot_script"
+        source_identification = "exact_prefix"
+        declared_severity = "error"
+        severity_basis = "exact_prefix"
+        classification_rule = "godot.script_error"
+        body = script_match.group(1)
     else:
         match = _GODOT_PREFIX.match(text)
     if event_role == "diagnostic" and severity_basis == "unknown" and match:
@@ -182,7 +192,12 @@ def classify_event(
             source = "node"
             source_identification = "heuristic"
 
-    category = "diagnostic_context" if event_role == "continuation" else ("network" if source in {"network", "http"} else "unknown")
+    category = (
+        "diagnostic_context" if event_role == "continuation"
+        else "scripts" if source == "godot_script"
+        else "network" if source in {"network", "http"}
+        else "unknown"
+    )
     lowered = body.lower()
     category_rules = (
         ("threads", ("thread", "wait_to_finish", "pthread")),
@@ -243,6 +258,17 @@ def link_continuation_events(
                 if 0 <= delta <= max_gap_ns and previous_root_index is not None:
                     event["related_event_index"] = previous_root_index
                     event["relation"] = "stack_trace_for"
+                    frame_text = str(event.get("original_message") or event.get("message") or "")
+                    source_match = _GODOT_PROJECT_LOCATION.search(frame_text)
+                    if source_match:
+                        root_event = linked[previous_root_index]
+                        locations = list(root_event.get("godot_source_locations", []))
+                        locations.append({
+                            "path": source_match.group(1),
+                            "line": int(source_match.group(2)),
+                            "frame": frame_text.strip(),
+                        })
+                        root_event["godot_source_locations"] = locations
         elif event.get("declared_severity") in {"fatal", "error", "warning"}:
             previous_root_index = index
             previous_root_timestamp = timestamp_ns
