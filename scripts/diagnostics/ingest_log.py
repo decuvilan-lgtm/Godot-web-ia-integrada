@@ -55,7 +55,7 @@ def ingest_log(input_path: Path, output_path: Path, default_source: str, context
             continue
         source, phase = infer_source(line, default_source)
         lowered = line.lower()
-        transport_type = "warning" if "deprecationwarning" in lowered else "unknown"
+        transport_type = "warning" if ("deprecationwarning" in lowered or "msgfmt not found" in lowered) else "unknown"
         event = classify_event(
             line,
             transport_type=transport_type,
@@ -74,6 +74,8 @@ def ingest_log(input_path: Path, output_path: Path, default_source: str, context
     unknown = summary["unknown_events"]
     if severities.get("fatal", 0) or severities.get("error", 0):
         health_status = "degraded"
+    elif severities.get("warning", 0) and unknown:
+        health_status = "warnings_and_unclassified"
     elif severities.get("warning", 0) and unknown:
         health_status = "warnings_and_unclassified"
     elif severities.get("warning", 0):
