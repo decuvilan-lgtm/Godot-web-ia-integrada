@@ -203,12 +203,11 @@ def main():
                     "error":f"{type(exc).__name__}: {str(exc)[:300]}",
                 }
             inspection["controller_runtime"]=page.evaluate("""() => ({
-                adapter_present: !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.execute === "function"),
+                adapter_present: !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.dispatch === "function"),
                 adapter_protocol: window.__godotEditorAgent ? window.__godotEditorAgent.protocol ?? null : null,
                 adapter_version: window.__godotEditorAgent ? window.__godotEditorAgent.version ?? null : null,
                 capabilities_present: !!(window.__godotEditorAgent && typeof window.__godotEditorAgent.getCapabilities === "function"),
-                dispatch_present: typeof window.__godotEditorAgentDispatch === "function",
-                resolve_present: typeof window.__godotEditorAgentResolve === "function"
+                pending_requests: window.__godotEditorAgentPending ? window.__godotEditorAgentPending.size : null
             })""")
             probe_result=inspection.get("semantic_controller_probe",{}).get("result",{})
             if not probe_result.get("ok"):
