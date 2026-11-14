@@ -72,7 +72,7 @@ def prepare_extension(source_dir: Path, target_dir: Path, origin: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--editor-zip", required=True, type=Path)
-    parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "examples/bridge-sandbox")
+    parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "tests/fixtures/nested-godot-project")
     parser.add_argument("--timeout-seconds", type=int, default=180)
     parser.add_argument("--screenshot", type=Path, default=Path("artifacts/browser-smoke.png"))
     args = parser.parse_args()
