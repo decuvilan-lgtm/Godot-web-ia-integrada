@@ -6,8 +6,9 @@ const MAX_TREE_NODES := 500
 const MAX_PROPERTIES := 120
 const MAIN_SCREENS := ["2D", "3D", "Script", "AssetLib"]
 
-var _dispatch_callback: JavaScriptObject
-var _window: JavaScriptObject
+var _dispatch_callback: Variant
+var _window: Variant
+var _js_bridge: Variant
 var _bridge_installed := false
 
 
@@ -15,13 +16,17 @@ func _enter_tree() -> void:
 	if not OS.has_feature("web"):
 		push_warning("Godot Controller Bridge only activates inside the Godot Web editor.")
 		return
-	_window = JavaScriptBridge.get_interface("window")
+	if not Engine.has_singleton("JavaScriptBridge"):
+		push_warning("JavaScriptBridge is not available in this Godot build.")
+		return
+	_js_bridge = Engine.get_singleton("JavaScriptBridge")
+	_window = _js_bridge.get_interface("window")
 	if _window == null:
 		push_warning("Godot Controller Bridge could not access the browser window.")
 		return
-	_dispatch_callback = JavaScriptBridge.create_callback(_on_dispatch)
+	_dispatch_callback = _js_bridge.create_callback(_on_dispatch)
 	_window.__godotEditorAgentDispatch = _dispatch_callback
-	JavaScriptBridge.eval("""
+	_js_bridge.eval("""
 	(() => {
 		const pending = new Map();
 		window.__godotEditorAgentResolve = (id, json) => {
@@ -64,6 +69,7 @@ func _exit_tree() -> void:
 	_bridge_installed = false
 	_dispatch_callback = null
 	_window = null
+	_js_bridge = null
 
 
 func _on_dispatch(args: Array) -> void:
