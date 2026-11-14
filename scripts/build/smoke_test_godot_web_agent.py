@@ -8,12 +8,15 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 import threading
 import zipfile
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+
+from diagnostics.classifier import classify_event, summarize_events
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -94,6 +97,10 @@ def main() -> int:
         raise SystemExit(f"Project directory does not exist: {project_dir}")
 
     original_digest = project_digest(project_dir)
+    # Preserve every browser console event, including log/warning messages.
+    # Chromium's message type is transport metadata, not necessarily the
+    # originating engine's severity (Godot prefixes its own severity).
+    console_events: list[dict[str, object]] = []
     errors: list[str] = []
     page_errors: list[str] = []
     request_failures: list[str] = []
@@ -150,7 +157,19 @@ def main() -> int:
                     device_scale_factor=1,
                 )
                 page = context.new_page()
-                page.on("console", lambda msg: errors.append(msg.text[:1000]) if msg.type == "error" else None)
+
+                def record_console_message(msg) -> None:
+                    entry = {
+                        "transport_type": msg.type,
+                        "text": msg.text,
+                        "location": msg.location,
+                        "timestamp_ns": time.time_ns(),
+                    }
+                    console_events.append(entry)
+                    if msg.type == "error":
+                        errors.append(msg.text[:1000])
+
+                page.on("console", record_console_message)
                 page.on("pageerror", lambda error: page_errors.append(str(error)[:1000]))
                 page.on("requestfailed", lambda request: request_failures.append(f"{request.method} {request.url}: {request.failure}"))
                 page.on("response", lambda response: http_errors.append(f"{response.status} {response.url}") if response.status >= 400 else None)
@@ -354,6 +373,18 @@ def main() -> int:
 
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(args.screenshot), full_page=False)
+                classified_console_events = [
+                    classify_event(
+                        str(event["text"]),
+                        transport_type=str(event["transport_type"]),
+                        source_hint="browser_console",
+                        context="godot_web_editor_runtime",
+                        timestamp=str(event["timestamp_ns"]),
+                        location=event["location"] if isinstance(event["location"], dict) else None,
+                    )
+                    for event in console_events
+                ]
+                diagnostic_report = summarize_events(classified_console_events)
                 result = {
                     "ok": True,
                     "editor_url": origin + "/" + args.entrypoint,
@@ -365,6 +396,8 @@ def main() -> int:
                     "semantic_probes": probes,
                     "pending_requests_after_probes": pending,
                     "console_errors": errors[-30:],
+                    "console_events_raw": console_events,
+                    "diagnostics": diagnostic_report,
                     "page_errors": page_errors[-30:],
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
