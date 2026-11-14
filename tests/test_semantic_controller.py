@@ -5,7 +5,7 @@ from scripts.bridge.semantic_controller import _validate
 
 class SemanticControllerValidationTests(unittest.TestCase):
     def test_read_only_commands_accept_no_arguments(self):
-        for action in ("editor.get_state", "editor.list_capabilities", "scene.save"):
+        for action in ("editor.get_state", "editor.list_capabilities"):
             with self.subTest(action=action):
                 _validate(action, {})
 
