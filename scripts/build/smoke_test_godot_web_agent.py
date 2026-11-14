@@ -144,6 +144,21 @@ def main() -> int:
 
                 page.locator("#zip-file").set_input_files(str(project_zip))
                 page.locator("#startButton").wait_for(state="visible", timeout=30000)
+                welcome_dismiss = page.locator("#welcome-modal-dismiss")
+                if welcome_dismiss.is_visible():
+                    welcome_dismiss.click(timeout=10000)
+                try:
+                    page.wait_for_function(
+                        "() => !!document.querySelector('#startButton') && !document.querySelector('#startButton').disabled",
+                        timeout=30000,
+                    )
+                except Exception as exc:
+                    missing = page.locator("#welcome-modal-missing-list").inner_text() if page.locator("#welcome-modal-missing-list").count() else ""
+                    isolation = page.evaluate("() => ({isolated: self.crossOriginIsolated, sharedArrayBuffer: typeof SharedArrayBuffer})")
+                    raise RuntimeError(
+                        "Godot disabled Start because required browser features are missing: "
+                        + json.dumps({"missing": missing, **isolation})
+                    ) from exc
                 page.locator("#startButton").click(timeout=30000)
 
                 page.wait_for_function(
