@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: godotengine/godot
-          ref: ${{ inputs.godot_ref }}
+          ref: ${{ inputs.godot_ref || '4.7.2-stable' }}
           path: godot
 
       - name: Set up Python and SCons
@@ -54,7 +54,7 @@ jobs:
 
       - name: Verify source revision and patch only engine-owned files
         run: |
-          test "$(git -C godot describe --tags --exact-match 2>/dev/null || true)" = "${{ inputs.godot_ref }}" || {
+          test "$(git -C godot describe --tags --exact-match 2>/dev/null || true)" = "${{ inputs.godot_ref || '4.7.2-stable' }}" || {
             git -C godot rev-parse HEAD
             echo "The checked out ref is not an exact tag; continuing with the resolved commit."
           }
@@ -112,7 +112,7 @@ jobs:
           PY
           sha256sum artifacts/* > artifacts/SHA256SUMS
           {
-            echo "godot_ref=${{ inputs.godot_ref }}"
+            echo "godot_ref=${{ inputs.godot_ref || '4.7.2-stable' }}"
             echo "godot_commit=$(git -C godot rev-parse HEAD)"
             echo "emscripten=$(emcc --version | head -n 1)"
             echo "scons=$(scons --version | tail -n 1)"
