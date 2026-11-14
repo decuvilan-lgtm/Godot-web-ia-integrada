@@ -38,9 +38,14 @@ class ProjectOverlayTests(unittest.TestCase):
         result, report = apply_controller_overlay(original, self.addon)
         files = self.inspect_zip(result)
         project = files["project.godot"].decode()
+        with zipfile.ZipFile(BytesIO(result)) as archive:
+            names = set(archive.namelist())
         self.assertIn(PLUGIN_RES_PATH, project)
+        self.assertIn("addons/", names)
+        self.assertIn("addons/godot_controller_bridge/", names)
         self.assertIn("addons/godot_controller_bridge/plugin.gd", files)
         self.assertEqual(report["source_repository_modified"], False)
+        self.assertIn("addons/godot_controller_bridge/", report["added_directories"])
         self.assertEqual(report["source_archive_sha256"], __import__("hashlib").sha256(original).hexdigest())
         self.assertNotIn("addons/godot_controller_bridge/plugin.gd", self.inspect_zip(original))
 
@@ -51,6 +56,10 @@ class ProjectOverlayTests(unittest.TestCase):
         })
         result, _ = apply_controller_overlay(original, self.addon)
         files = self.inspect_zip(result)
+        with zipfile.ZipFile(BytesIO(result)) as archive:
+            names = set(archive.namelist())
+        self.assertIn("repo/addons/", names)
+        self.assertIn("repo/addons/godot_controller_bridge/", names)
         self.assertIn("repo/addons/godot_controller_bridge/plugin.cfg", files)
         self.assertIn(PLUGIN_RES_PATH, files["repo/project.godot"].decode())
         self.assertIn("res://addons/other/plugin.cfg", files["repo/project.godot"].decode())
