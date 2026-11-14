@@ -439,6 +439,22 @@ def main() -> int:
                 if pending != 0:
                     raise RuntimeError(f"Native agent leaked pending requests: {pending}")
 
+                # Fail fast if any of the previously observed Web editor startup regressions return.
+                startup_regressions = [
+                    str(event.get("text", ""))
+                    for event in console_events
+                    if (
+                        'Parameter "create_fn" is null' in str(event.get("text", ""))
+                        or "Attempt of waiting to finish on a thread that was never started." in str(event.get("text", ""))
+                        or (
+                            "ERR_CANT_CREATE" in str(event.get("text", ""))
+                            and ("DebugAdapter" in str(event.get("text", "")) or "TCPServer" in str(event.get("text", "")))
+                        )
+                    )
+                ]
+                if startup_regressions:
+                    raise RuntimeError("Known Godot Web startup regressions returned: " + json.dumps(startup_regressions))
+
                 # Run a dedicated fixture that emits one deliberate project-runtime
                 # error. This verifies that game diagnostics are captured separately
                 # from editor startup and browser transport failures.
@@ -476,6 +492,34 @@ def main() -> int:
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(args.screenshot), full_page=False)
                 diagnostic_report = build_diagnostic_report()
+                classified_project_errors = [
+                    event for event in diagnostic_report["classification"]["events"]
+                    if event.get("context") == "godot_project_runtime"
+                    and "PROJECT_DIAG_FIXTURE" in str(event.get("original_message", ""))
+                ]
+                project_source_locations = [
+                    location
+                    for event in classified_project_errors
+                    for location in event.get("godot_source_locations", [])
+                ]
+                if len(classified_project_errors) != 1 or not any(
+                    location.get("path") == "res://main.gd" and location.get("line") == 5
+                    for location in project_source_locations
+                ):
+                    raise RuntimeError(
+                        "Project runtime error was not correlated to res://main.gd:5: "
+                        + json.dumps({
+                            "classified_errors": classified_project_errors,
+                            "source_locations": project_source_locations,
+                        })
+                    )
+                denied_write_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
+                    id: "smoke-read-only-deny",
+                    command: "editor.execute_script",
+                    args: {}
+                })""")
+                if denied_write_probe.get("ok") is not False or denied_write_probe.get("error") != "COMMAND_NOT_ALLOWED":
+                    raise RuntimeError("The built-in agent did not reject a non-allowlisted write command: " + json.dumps(denied_write_probe))
                 result = {
                     "ok": True,
                     "editor_url": origin + "/" + args.entrypoint,
@@ -486,6 +530,8 @@ def main() -> int:
                     "runtime": runtime,
                     "semantic_probes": probes,
                     "pending_requests_after_probes": pending,
+                    "read_only_rejection_probe": denied_write_probe,
+                    "startup_regressions": startup_regressions,
                     "project_runtime_probe": {
                         "ok": True,
                         "intentional_error_count": len(project_error_events),
