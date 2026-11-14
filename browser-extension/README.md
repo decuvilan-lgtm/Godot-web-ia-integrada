@@ -18,8 +18,10 @@ Chromium Manifest V3 extension for semantic control of the Godot Web editor alre
 - The Actions worker loads this extension in its existing Chromium instance through a persistent Playwright context.
 - The trusted issue command loop accepts semantic_command and routes it through the extension.
 
-## Current limitation
+## Temporary editor adapter
 
-Actual Godot editor operations require window.__godotEditorAgent in the Godot Web build. That editor-side adapter is not implemented yet. Requests therefore return GODOT_ADAPTER_UNAVAILABLE when the extension bridge is reached; they must never fall back to coordinate automation.
+The lab-owned Godot EditorPlugin lives under godot-addon/. The Actions worker injects it into the GitHub ZIP response in memory and enables it only in the temporary Godot Web import. The selected project repository and its source ZIP are not changed. The sandbox project intentionally does not ship this add-on.
+
+The archive overlay and its unit tests are implemented; the first Actions end-to-end test is pending. Until the editor responds successfully, unsupported operations must return an explicit error and must never fall back to coordinate automation.
 
 See ../docs/CHROMIUM_GODOT_CONTROLLER.md for the protocol, security boundaries, and acceptance tests.
