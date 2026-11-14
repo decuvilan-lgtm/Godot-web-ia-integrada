@@ -13,7 +13,7 @@ ACTIONS = {
     "scene.select_node": {"node_path"},
     "node.get_inspector": {"node_path"},
 }
-PANELS = {"scene", "filesystem", "inspector", "output", "debugger", "history", "import"}
+PANELS = {"2D", "3D", "Script", "AssetLib"}
 
 
 def _validate(action: str, args: dict[str, Any]) -> None:
