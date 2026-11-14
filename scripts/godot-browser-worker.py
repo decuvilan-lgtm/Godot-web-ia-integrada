@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
 from bridge.semantic_controller import execute_semantic_command
+from bridge.project_overlay import apply_controller_overlay
 
 RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
 EDITOR_URL=os.environ.get("EDITOR_URL","https://godot-web-ia-integrada-rt2l.onrender.com/")
@@ -87,7 +88,7 @@ def main():
     bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
     oidc_preflight=relay_oidc_preflight()
     url=EDITOR_URL.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
-    errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None
+    errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; overlay_reports=[]; readiness={"phase":"not_started","canvas_count":0}; failure=None
     shot=OUT/"editor-final.png"; started=time.time()
     # Keep the browser process alive through evidence upload; the runner owns its lifetime.
     p = sync_playwright().start()
@@ -112,6 +113,36 @@ def main():
             accept_downloads=True,
         )
         page=context.new_page()
+        def overlay_project_archive(route):
+            try:
+                response=route.fetch(timeout=120000)
+                if not response.ok:
+                    route.fulfill(response=response)
+                    return
+                original=response.body()
+                transformed, report=apply_controller_overlay(
+                    original,
+                    extension_dir/"godot-addon"/"addons"/"godot_controller_bridge",
+                )
+                overlay_reports.append(report)
+                headers=dict(response.headers)
+                for key in ("content-length","content-encoding","transfer-encoding","content-md5"):
+                    headers.pop(key,None)
+                headers["content-length"]=str(len(transformed))
+                headers["x-godot-controller-overlay"]="applied"
+                route.fulfill(response=response,body=transformed,headers=headers)
+            except Exception as exc:
+                overlay_reports.append({
+                    "applied":False,
+                    "error":f"{type(exc).__name__}: {str(exc)[:300]}",
+                    "source_repository_modified":False,
+                })
+                route.fulfill(
+                    status=422,
+                    content_type="application/json",
+                    body=json.dumps({"detail":"Temporary Godot Controller overlay failed; original project was not modified."}),
+                )
+        page.route(re.compile(r".*/v1/github/[^/]+/[^/]+/archive(?:\\?.*)?$"),overlay_project_archive)
         page.on("console",lambda m: errors.append(m.text[:2000]) if m.type=="error" else None)
         page.on("pageerror",lambda e: page_errors.append(str(e)[:2000]))
         page.on("requestfailed",lambda r: failed.append({"url":r.url[:500],"error":str(r.failure)[:500]}))
@@ -126,7 +157,7 @@ def main():
                 events.append({"type":"import.poll",**readiness})
                 if readiness["phase"]=="started" and readiness["imported_sha"]==sha and canvases>=1: break
                 page.wait_for_timeout(5000)
-            inspection={"url":page.url,"title":page.title(),"visible_text":page.locator("body").inner_text(timeout=20000)[:12000],"canvas_count":page.locator("canvas").count(),"connector_status":page.evaluate("() => window.__godotGithubConnectorStatus || null")}
+            inspection={"url":page.url,"title":page.title(),"visible_text":page.locator("body").inner_text(timeout=20000)[:12000],"canvas_count":page.locator("canvas").count(),"connector_status":page.evaluate("() => window.__godotGithubConnectorStatus || null"),"controller_project_overlay":overlay_reports}
             if not(readiness["phase"]=="started" and readiness["imported_sha"]==sha and readiness["canvas_count"]>=1):
                 failure="Exact project SHA was not confirmed before import timeout"
             else:
