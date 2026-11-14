@@ -57,10 +57,10 @@ If the adapter cannot identify a target by stable editor identity (scene path, n
 
 1. Keep the existing Godot Browser Worker, Actions session lifecycle, issue dispatch, evidence capture and Neon/Artifact persistence.
 2. Package this extension in the lab repository and load it into the same Actions-owned Chromium process.
-3. Verify extension support with the pinned Playwright and Chromium versions before changing the worker launch mode. Extension loading may require a persistent browser context; do not assume the current launch(headless=True) path supports it.
-4. Add a small Python client in the worker to send semantic commands through the extension bridge and await structured responses.
-5. Keep visual screenshots/video and browser console collection in the existing page/context.
-6. Keep the current coordinate-oriented browser command loop isolated and legacy. Do not delete it until the semantic bridge passes end-to-end acceptance; do not route ordinary editor commands through it.
+3. Playwright's documented extension path uses a persistent context and the chromium channel for extension-capable headless mode. The worker now uses launch_persistent_context(channel=\"chromium\") with the extension loaded in that same browser process.
+4. A Python client sends semantic commands through the extension bridge and awaits structured responses. The existing issue command loop now accepts the semantic_command action.
+5. Keep visual screenshots/video and browser console collection in the same page/context.
+6. Keep the old coordinate-oriented actions isolated as legacy visual fallbacks. New editor operations must use semantic_command; do not remove the legacy path until visual and canvas-specific workflows have a separate verified replacement.
 
 ## Security boundaries
 
@@ -78,18 +78,18 @@ If the adapter cannot identify a target by stable editor identity (scene path, n
 
 ### Implemented scaffold
 
-- Manifest V3 extension directory and origin-scoped content script.
-- Page-world bridge with an explicit semantic allowlist.
+- Manifest V3 extension directory with a MAIN-world page adapter dispatcher and an isolated content-script relay, scoped to the Godot Web origin.
+- Page-world bridge with an explicit semantic allowlist and explicit failure when the editor-side adapter is missing.
 - Python client in scripts/bridge/semantic_controller.py that sends bounded semantic requests through the extension without mouse or coordinate operations.
+- The Actions worker now loads the extension in the same Chromium instance using a persistent Playwright context and the chromium channel.
+- The existing issue command loop accepts semantic_command and routes it through the extension; the older coordinate actions remain isolated for legacy workflows.
 - Unit tests for command and argument validation in tests/test_semantic_controller.py.
-- Explicit failure when the editor-side adapter is missing.
 - Documentation separating this controller from Godot Linux Headless and from the visual Chromium station.
 
 ### Not yet implemented or verified
 
 - Editor-side window.__godotEditorAgent adapter in the Godot Web build.
-- Robust worker-to-extension request/response transport and timeout/reconnect verification.
-- Extension loading in the exact GitHub Actions Chromium/Playwright configuration.
+- Successful extension load and message round-trip in an actual GitHub Actions run using the pinned Playwright 1.52.0 environment.
 - Real editor command tests and structured state read-back.
 - Evidence manifest integration for semantic command logs.
 
