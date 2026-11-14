@@ -240,11 +240,14 @@ def main():
                 failure=failure or "Godot editor semantic adapter did not pass its capability probe"
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
-            command_session=run_command_loop(
-                page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
-                os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
-                duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
-            )
+            if failure is None:
+                command_session=run_command_loop(
+                    page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
+                    os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
+                    duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
+                )
+            else:
+                command_session={"status":"skipped","reason":"Import or semantic adapter acceptance check failed"}
             inspection["command_session"]=command_session
         except Exception as exc:
             failure=f"{type(exc).__name__}: {str(exc)[:1000]}"
