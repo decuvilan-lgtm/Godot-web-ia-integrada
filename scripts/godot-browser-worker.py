@@ -190,6 +190,17 @@ def main():
                     "gameplay_verified":False,
                     "note":"A visible Godot scene editor is not proof that the game runs; project resource errors are reported separately."
                 }
+            try:
+                semantic_probe=execute_semantic_command(page,"editor.list_capabilities",timeout_ms=12000)
+                inspection["semantic_controller_probe"]={
+                    "status":"adapter_response" if semantic_probe.get("ok") else semantic_probe.get("error","unknown"),
+                    "result":semantic_probe,
+                }
+            except Exception as exc:
+                inspection["semantic_controller_probe"]={
+                    "status":"probe_exception",
+                    "error":f"{type(exc).__name__}: {str(exc)[:300]}",
+                }
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
             command_session=run_command_loop(
