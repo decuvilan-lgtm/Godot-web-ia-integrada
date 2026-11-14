@@ -81,13 +81,15 @@ If the adapter cannot identify a target by stable editor identity (scene path, n
 
 - Manifest V3 extension directory and origin-scoped content script.
 - Page-world bridge with an explicit semantic allowlist.
+- Python client in scripts/bridge/semantic_controller.py that sends bounded semantic requests through the extension without mouse or coordinate operations.
+- Unit tests for command and argument validation in tests/test_semantic_controller.py.
 - Explicit failure when the editor-side adapter is missing.
 - Documentation separating this controller from Godot Linux Headless and from the visual Chromium station.
 
 ### Not yet implemented or verified
 
 - Editor-side window.__godotEditorAgent adapter in the Godot Web build.
-- Robust worker-to-extension request/response transport.
+- Robust worker-to-extension request/response transport and timeout/reconnect verification.
 - Extension loading in the exact GitHub Actions Chromium/Playwright configuration.
 - Real editor command tests and structured state read-back.
 - Evidence manifest integration for semantic command logs.
