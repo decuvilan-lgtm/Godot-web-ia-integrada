@@ -1,1 +1,22 @@
-{"manifest_version":3,"name":"Godot Controller Bridge","version":"0.1.0","description":"Semantic command bridge between the Actions browser worker and the Godot Web editor.","permissions":[],"host_permissions":["https://godot-web-ia-integrada-rt2l.onrender.com/*"],"content_scripts":[{"matches":["https://godot-web-ia-integrada-rt2l.onrender.com/*"],"js":["content.js"],"run_at":"document_start","world":"ISOLATED"}],"web_accessible_resources":[{"resources":["page-bridge.js"],"matches":["https://godot-web-ia-integrada-rt2l.onrender.com/*"]}]}
+{
+  "manifest_version": 3,
+  "name": "Godot Controller Bridge",
+  "version": "0.1.0",
+  "description": "Semantic command bridge between the Actions browser worker and the Godot Web editor.",
+  "permissions": [],
+  "host_permissions": ["https://godot-web-ia-integrada-rt2l.onrender.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://godot-web-ia-integrada-rt2l.onrender.com/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://godot-web-ia-integrada-rt2l.onrender.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ]
+}
