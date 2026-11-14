@@ -47,7 +47,7 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `schema_version` | Version of this event contract |
 | `original_message` | Captured text after credential/query redaction; all non-sensitive text is preserved |
 | `message` | Interpreted message body derived from the safely retained original |
-| `source` | Godot, compiler, JavaScript, network, HTTP, Node, Emscripten, etc. |
+| `source` | Godot engine, Godot script, compiler, JavaScript, network, HTTP, Node, Emscripten, etc. |
 | `source_hint` | Source supplied by the capture adapter |
 | `source_identification` | exact_prefix, caller_declared, heuristic, or unknown |
 | `transport_type` | Original transport-level event type |
@@ -56,6 +56,7 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `classification_rule` | Stable rule identifier that explains the deterministic decision |
 | `event_role` | Diagnostic root or structural continuation/context |
 | `related_event_index` / `relation` | Bounded link from a stack-trace continuation to its preceding root event |
+| `godot_source_locations` | GDScript `res://` path and line extracted from a correlated Godot stack frame, when present |
 | `redactions_applied` | Number of credential/query redactions applied before persistence |
 | `category` | Broad technical nature, not a diagnosis |
 | `context` | Workflow phase or subsystem context |
