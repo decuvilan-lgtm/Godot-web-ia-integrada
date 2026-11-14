@@ -77,7 +77,7 @@ def main() -> int:
     source.add_argument("--editor-zip", type=Path)
     source.add_argument("--editor-dir", type=Path)
     parser.add_argument("--entrypoint", default="godot.editor.html")
-    parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "tests/fixtures/nested-godot-project")
+    parser.add_argument("--project-dir", type=Path, default=REPO_ROOT / "tests/fixtures/diagnostics-godot-project")
     parser.add_argument("--timeout-seconds", type=int, default=180)
     parser.add_argument("--screenshot", type=Path, default=Path("artifacts/browser-smoke.png"))
     parser.add_argument("--diagnostics", type=Path, default=Path("artifacts/browser-smoke-diagnostics.json"))
@@ -106,15 +106,22 @@ def main() -> int:
     http_errors: list[str] = []
     worker_urls: list[str] = []
     raw_diagnostic_events: list[dict[str, object]] = []
+    current_diagnostic_context = "godot_web_editor_runtime"
 
     def record_diagnostic(message: str, transport_type: str, source_hint: str, location=None) -> None:
+        nonlocal current_diagnostic_context
+        if "PROJECT_DIAG_BEGIN" in message:
+            current_diagnostic_context = "godot_project_runtime"
         raw_diagnostic_events.append({
             "message": message,
             "transport_type": transport_type,
             "source_hint": source_hint,
             "timestamp_ns": time.time_ns(),
             "location": location,
+            "context": current_diagnostic_context,
         })
+        if "PROJECT_DIAG_END" in message:
+            current_diagnostic_context = "godot_web_editor_runtime"
 
     def build_diagnostic_report() -> dict[str, object]:
         classified = [
@@ -122,7 +129,7 @@ def main() -> int:
                 str(raw_event["message"]),
                 transport_type=str(raw_event["transport_type"]),
                 source_hint=str(raw_event["source_hint"]),
-                context="godot_web_editor_runtime",
+                context=str(raw_event.get("context") or "godot_web_editor_runtime"),
                 timestamp=str(raw_event["timestamp_ns"]),
                 location=raw_event["location"] if isinstance(raw_event["location"], dict) else None,
             )
@@ -432,6 +439,36 @@ def main() -> int:
                 if pending != 0:
                     raise RuntimeError(f"Native agent leaked pending requests: {pending}")
 
+                # Run a dedicated fixture that emits one deliberate project-runtime
+                # error. This verifies that game diagnostics are captured separately
+                # from editor startup and browser transport failures.
+                page.locator("#editor-canvas").focus()
+                page.keyboard.press("F6")
+                runtime_deadline = time.monotonic() + 30
+                while time.monotonic() < runtime_deadline:
+                    if any("PROJECT_DIAG_END" in str(event.get("text", "")) for event in console_events):
+                        break
+                    page.wait_for_timeout(100)
+                project_marker_events = [
+                    event for event in console_events
+                    if "PROJECT_DIAG_BEGIN" in str(event.get("text", ""))
+                    or "PROJECT_DIAG_END" in str(event.get("text", ""))
+                ]
+                project_error_events = [
+                    event for event in raw_diagnostic_events
+                    if event.get("context") == "godot_project_runtime"
+                    and "PROJECT_DIAG_FIXTURE" in str(event.get("message", ""))
+                ]
+                if not project_marker_events or len(project_error_events) != 1:
+                    raise RuntimeError(
+                        "Project runtime diagnostic probe did not capture exactly one intentional error: "
+                        + json.dumps({
+                            "markers": project_marker_events,
+                            "project_errors": project_error_events,
+                            "recent_console": console_events[-30:],
+                        })
+                    )
+
                 final_digest = project_digest(project_dir)
                 if final_digest != original_digest:
                     raise RuntimeError("The source project changed during browser import.")
@@ -449,6 +486,12 @@ def main() -> int:
                     "runtime": runtime,
                     "semantic_probes": probes,
                     "pending_requests_after_probes": pending,
+                    "project_runtime_probe": {
+                        "ok": True,
+                        "intentional_error_count": len(project_error_events),
+                        "events": project_error_events,
+                        "markers": project_marker_events,
+                    },
                     "console_errors": errors[-30:],
                     "console_events_raw": console_events,
                     "diagnostics": diagnostic_report,
