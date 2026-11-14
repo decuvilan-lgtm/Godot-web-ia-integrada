@@ -6,8 +6,14 @@ on:
       - feature/builtin-web-editor-agent
     paths-ignore:
       - 'scripts/build/smoke_test_godot_web_agent.py'
+      - 'scripts/build-web.sh'
+      - 'scripts/patch-web-shell.py'
+      - 'scripts/test_patch_web_shell.py'
+      - 'scripts/package-bridge-sandbox.py'
       - '.github/workflows/browser-smoke-reuse.yml'
       - '.github/workflows/build-godot-web-agent-editor.yml'
+      - '.github/workflows/publish-custom-editor-release.yml'
+      - '.github/workflows/test-web-wrapper-custom-editor.yml'
   workflow_dispatch:
     inputs:
       godot_ref:
@@ -72,10 +78,10 @@ jobs:
           node --check browser-extension/page-bridge.js
           node --check browser-extension/content.js
           changed="$(git -C godot diff --name-only | sort)"
-          expected="$(printf '%s\n' platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
+          expected="$(printf '%s\\n' platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
           test "$changed" = "$expected" || {
             echo "Patch touched unexpected engine files:"
-            printf '%s\n' "$changed"
+            printf '%s\\n' "$changed"
             exit 1
           }
 
