@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from diagnostics.classifier import classify_event, redact_sensitive_payload, summarize_events
+from diagnostics.classifier import classify_event, link_continuation_events, redact_sensitive_payload, summarize_events
 
 
 class DiagnosticsClassifierTests(unittest.TestCase):
@@ -129,6 +129,30 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(event["source"], "emscripten")
         self.assertEqual(event["declared_severity"], "warning")
         self.assertEqual(event["classification_rule"], "emscripten.blocking_main_thread.warning")
+
+    def test_continuation_is_linked_to_nearest_root_without_inflating_errors(self):
+        root = classify_event("ERROR: worker failed", timestamp="1000")
+        frame = classify_event(
+            "   at: wait_to_finish (core/os/thread.cpp:84)",
+            transport_type="error",
+            source_hint="browser_console",
+            timestamp="1200",
+        )
+        linked = link_continuation_events([root, frame])
+        report = summarize_events(linked)
+        self.assertEqual(linked[1]["related_event_index"], 0)
+        self.assertEqual(linked[1]["relation"], "stack_trace_for")
+        self.assertEqual(report["severity_counts"]["error"], 1)
+
+    def test_continuation_outside_correlation_window_is_not_attached(self):
+        root = classify_event("ERROR: worker failed", timestamp="1000")
+        frame = classify_event(
+            "   at: wait_to_finish (core/os/thread.cpp:84)",
+            source_hint="browser_console",
+            timestamp="2000000000",
+        )
+        linked = link_continuation_events([root, frame])
+        self.assertNotIn("related_event_index", linked[1])
 
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
