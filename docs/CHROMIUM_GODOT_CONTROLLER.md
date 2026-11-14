@@ -32,12 +32,12 @@ Commands are JSON objects with a protocol version, request ID, action name and b
 
 - editor.get_state
 - editor.list_capabilities
-- editor.open_panel
+- editor.open_panel (Godot main-screen tabs: 2D, 3D, Script, AssetLib)
 - scene.open
 - scene.select_node
 - node.get_inspector
 
-The adapter must validate every field and return a structured object:
+The editor-side prototype is supplied as a Godot EditorPlugin under `browser-extension/godot-addon/`. It uses Godot's documented `JavaScriptBridge` to publish `window.__godotEditorAgent` and `EditorInterface` for scene and selection operations. The adapter must validate every field and return a structured object:
 
 - ok: boolean
 - action: action name
@@ -77,7 +77,7 @@ The existing trusted issue-comment command loop can now receive a semantic comma
 }
 ```
 
-The example is a capability probe only. Until the Godot-side adapter is installed, the expected structured response is GODOT_ADAPTER_UNAVAILABLE if the extension bridge itself loaded successfully.
+The example is a capability probe only. The add-on must be present and enabled in the imported project before the Godot-side adapter becomes available.
 
 ## Security boundaries
 
@@ -95,6 +95,8 @@ The example is a capability probe only. Until the Godot-side adapter is installe
 
 ### Implemented scaffold
 
+- Godot-side EditorPlugin prototype at `browser-extension/godot-addon/addons/godot_controller_bridge/`, exposing a narrow API through JavaScriptBridge and EditorInterface.
+
 - Manifest V3 extension directory with a MAIN-world page adapter dispatcher and an isolated content-script relay, scoped to the Godot Web origin.
 - Page-world bridge with an explicit semantic allowlist and explicit failure when the editor-side adapter is missing.
 - Python client in scripts/bridge/semantic_controller.py that sends bounded semantic requests through the extension without mouse or coordinate operations.
@@ -105,12 +107,12 @@ The example is a capability probe only. Until the Godot-side adapter is installe
 
 ### Not yet implemented or verified
 
-- Editor-side window.__godotEditorAgent adapter in the Godot Web build.
+- Automatic, temporary bootstrap of the add-on into the Actions editor's browser-backed project filesystem, without committing changes to the selected game repository.
 - Successful extension load and message round-trip in an actual GitHub Actions run using the pinned Playwright 1.52.0 environment.
 - Real editor command tests and structured state read-back.
 - Evidence manifest integration for semantic command logs.
 
-The worker has been updated to load the extension in the same Actions Chromium instance and to probe the bridge. This integration has not yet been exercised in a new Actions run, and the missing editor adapter means actual Godot editor operations remain unavailable. Treat the extension as an integrated prototype, not a verified controller.
+The worker has been updated to load the extension in the same Actions Chromium instance and to probe the bridge. This integration has not yet been exercised in a new Actions run, but actual editor operations still require the add-on to be bootstrapped and enabled in the imported project. Treat the extension as an integrated prototype, not a verified controller.
 
 ## Acceptance gates
 
@@ -121,6 +123,6 @@ The worker has been updated to load the extension in the same Actions Chromium i
 5. scene.open and scene.select_node operate by stable scene/node identity, without coordinates.
 6. An unknown command is rejected with COMMAND_NOT_ALLOWED.
 7. An unsupported editor operation returns CAPABILITY_UNAVAILABLE.
-8. A missing adapter returns GODOT_ADAPTER_UNAVAILABLE.
+8. A missing or disabled add-on returns GODOT_ADAPTER_UNAVAILABLE.
 9. Chromium screenshots, video, console logs and existing evidence persistence continue to work unchanged.
 10. The command log records requested action, result, duration, request ID and exact project SHA.
