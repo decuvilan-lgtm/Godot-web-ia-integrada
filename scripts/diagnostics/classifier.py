@@ -40,6 +40,29 @@ def redact_sensitive_text(value: str) -> tuple[str, int]:
     return text, count
 
 
+def redact_sensitive_payload(value: Any) -> tuple[Any, int]:
+    """Recursively redact strings in a report payload before it is persisted."""
+    if isinstance(value, str):
+        return redact_sensitive_text(value)
+    if isinstance(value, list):
+        safe_items = []
+        total = 0
+        for item in value:
+            safe_item, count = redact_sensitive_payload(item)
+            safe_items.append(safe_item)
+            total += count
+        return safe_items, total
+    if isinstance(value, dict):
+        safe_mapping = {}
+        total = 0
+        for key, item in value.items():
+            safe_item, count = redact_sensitive_payload(item)
+            safe_mapping[key] = safe_item
+            total += count
+        return safe_mapping, total
+    return value, 0
+
+
 def _fingerprint(source: str, severity: str, message: str, context: str = "", location: dict[str, Any] | None = None) -> str:
     # Source and context are part of identity: equal text from different
     # subsystems is not necessarily the same event or root cause.
