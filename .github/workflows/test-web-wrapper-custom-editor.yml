@@ -87,5 +87,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: godot-web-wrapper-smoke-${{ github.run_id }}
-          path: |\n            public/\n            artifacts/wrapper-browser-smoke.png\n            artifacts/wrapper-browser-smoke-diagnostics.json\n          if-no-files-found: error
+          path: |
+            public/
+            artifacts/wrapper-browser-smoke.png
+            artifacts/wrapper-browser-smoke-diagnostics.json\n          if-no-files-found: error
           retention-days: 7
