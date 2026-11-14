@@ -31,7 +31,11 @@ The schema has two independent fields:
 - `declared_severity`: the severity attributed to the originating source.
 
 A Godot message beginning with `WARNING:` remains a warning even if Chromium
-delivers it as a console error. The report retains both facts. An explicit
+delivers it as a console error. The report retains both facts. Godot `at:` stack
+frames are structural continuation events, not independent errors; they are
+linked to a preceding root event only within a bounded time window. The known
+Emscripten main-thread blocking notice is classified as a warning rather than
+inheriting Chromium's transport-level error type. An explicit
 Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 `tool_pattern`; a fallback to transport metadata uses
 `transport_fallback`. The basis is visible so reviewers can judge confidence.
@@ -50,6 +54,8 @@ Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
 | `declared_severity` | fatal, error, warning, notice, debug, or unknown |
 | `severity_basis` | Evidence used to assign severity |
 | `classification_rule` | Stable rule identifier that explains the deterministic decision |
+| `event_role` | Diagnostic root or structural continuation/context |
+| `related_event_index` / `relation` | Bounded link from a stack-trace continuation to its preceding root event |
 | `redactions_applied` | Number of credential/query redactions applied before persistence |
 | `category` | Broad technical nature, not a diagnosis |
 | `context` | Workflow phase or subsystem context |
