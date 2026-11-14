@@ -18,7 +18,6 @@ on:
       - 'scripts/diagnostics/**'
       - 'tests/test_diagnostics_classifier.py'
       - 'tests/test_diagnostics_ingest_log.py'
-          PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_instrumentation.py' -v
   workflow_dispatch:
     inputs:
       godot_ref:
@@ -82,6 +81,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_native_bridge_contract.py' -v
           PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_classifier.py' -v
           PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_ingest_log.py' -v
+          PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_instrumentation.py' -v
           python -m compileall -q scripts tests
           node --check browser-extension/page-bridge.js
           node --check browser-extension/content.js
