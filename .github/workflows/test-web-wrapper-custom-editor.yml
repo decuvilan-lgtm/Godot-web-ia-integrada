@@ -1,6 +1,15 @@
 name: Test Godot Web wrapper with custom editor artifact
 
 on:
+  push:
+    branches:
+      - feature/builtin-web-editor-agent
+    paths:
+      - 'scripts/build-web.sh'
+      - 'scripts/patch-web-shell.py'
+      - 'scripts/test_patch_web_shell.py'
+      - 'scripts/package-bridge-sandbox.py'
+      - '.github/workflows/test-web-wrapper-custom-editor.yml'
   workflow_dispatch:
     inputs:
       run_id:
@@ -35,8 +44,8 @@ jobs:
       - name: Download the selected custom editor artifact
         uses: actions/download-artifact@v4
         with:
-          name: godot-web-editor-agent-${{ inputs.run_id }}
-          run-id: ${{ inputs.run_id }}
+          name: godot-web-editor-agent-${{ inputs.run_id || '43561299883' }}
+          run-id: ${{ inputs.run_id || '43561299883' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: downloaded
 
@@ -48,6 +57,8 @@ jobs:
           SUMS="downloaded/SHA256SUMS"
           META="downloaded/BUILD-METADATA.txt"
           test -s "$ZIP"
+          test -s "$SUMS"
+          test -s "$META"
           grep -qx 'project_overlay=false' "$META"
           EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
           ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
