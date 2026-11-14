@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json, os, re, time, urllib.request
 from pathlib import Path
+from bridge.semantic_controller import execute_semantic_command
 
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm"}
@@ -33,7 +34,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -42,7 +43,7 @@ def _validate(command, session_id, last_seq):
     if not isinstance(seq,int) or isinstance(seq,bool) or seq<=last_seq:
         raise ValueError("Sequence must be a new increasing integer")
     action=command.get("action")
-    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","stop"}:
+    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","semantic_command","stop"}:
         raise ValueError("Action is not allowlisted")
     text=command.get("text")
     placeholder=command.get("placeholder")
@@ -70,6 +71,11 @@ def _validate(command, session_id, last_seq):
         duration=command.get("duration_ms",250)
         if not isinstance(duration,int) or isinstance(duration,bool) or not 50<=duration<=5000:
             raise ValueError("canvas_drag duration_ms must be 50-5000")
+    if action=="semantic_command":
+        editor_action=command.get("editor_action")
+        args=command.get("args",{})
+        if not isinstance(editor_action,str) or not isinstance(args,dict) or len(args)>4:
+            raise ValueError("semantic_command needs an editor_action and up to four named arguments")
     if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
         raise ValueError("Key is not in the browser editing allowlist")
     return seq,action
@@ -174,12 +180,17 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         found=page.get_by_text(command["text"],exact=True).count()>0
                         result={"text":command["text"],"found":found}
                         if not found: raise ValueError("Expected text was not found")
+                    elif action=="semantic_command":
+                        editor_action=command["editor_action"]
+                        semantic_result=execute_semantic_command(page,editor_action,command.get("args",{}),timeout_ms=12000)
+                        result={"editor_action":editor_action,**semantic_result}
                     else:
                         stopped=True
                         result={"stopped":True}
                     processed+=1
-                    log.append({"comment_id":comment_id,"seq":seq,"action":action,"ok":True,"result":result})
-                    _post_result(repo,issue,token,comment_id,{"ok":True,**result})
+                    command_ok=not (action=="semantic_command" and result.get("ok") is False)
+                    log.append({"comment_id":comment_id,"seq":seq,"action":action,"ok":command_ok,"result":result})
+                    _post_result(repo,issue,token,comment_id,{"ok":command_ok,**result})
                 except Exception as exc:
                     error={"ok":False,"error":f"{type(exc).__name__}: {str(exc)[:400]}"}
                     log.append({"comment_id":comment_id,"ok":False,"error":error["error"]})
