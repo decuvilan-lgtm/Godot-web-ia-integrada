@@ -1,6 +1,9 @@
 name: Build Godot Web Editor with Built-in Agent
 
 on:
+  push:
+    branches:
+      - feature/builtin-web-editor-agent
   workflow_dispatch:
     inputs:
       godot_ref:
