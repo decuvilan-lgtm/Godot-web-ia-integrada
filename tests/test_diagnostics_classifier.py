@@ -75,6 +75,29 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         second = classify_event("ERROR: operation failed", location={"url": "engine.cpp", "lineNumber": 20})
         self.assertNotEqual(first["fingerprint"], second["fingerprint"])
 
+    def test_fatal_messages_have_distinct_severity(self):
+        godot = classify_event("FATAL: unrecoverable engine failure")
+        compiler = classify_event("compiler: fatal error: invalid state")
+        self.assertEqual(godot["declared_severity"], "fatal")
+        self.assertEqual(compiler["declared_severity"], "fatal")
+
+    def test_rule_identifier_explains_classification(self):
+        event = classify_event("WARNING: unsupported feature", transport_type="error")
+        self.assertEqual(event["classification_rule"], "godot.prefix.warning")
+
+    def test_secrets_and_url_queries_are_redacted_before_reporting(self):
+        event = classify_event(
+            "request failed https://example.invalid/path?access_token=abc123&state=xyz "
+            "Authorization: Bearer secret-value api_key=key-123",
+            transport_type="error",
+            source_hint="javascript",
+        )
+        self.assertNotIn("abc123", event["original_message"])
+        self.assertNotIn("secret-value", event["original_message"])
+        self.assertNotIn("key-123", event["original_message"])
+        self.assertIn("[REDACTED_QUERY]", event["original_message"])
+        self.assertGreaterEqual(event["redactions_applied"], 3)
+
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
         self.assertEqual(event["category"], "network")
