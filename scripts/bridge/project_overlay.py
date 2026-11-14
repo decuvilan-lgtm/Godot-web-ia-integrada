@@ -17,9 +17,9 @@ PLUGIN_RES_PATH = "res://addons/godot_controller_bridge/plugin.cfg"
 
 
 def _safe_zip_name(name: str) -> str:
-    normalized = name.replace("\\\\", "/")
+    normalized = name.replace(chr(92), "/")
     parts = normalized.rstrip("/").split("/")
-    if normalized.startswith("/") or "\\\\" in name or any(part in {"", ".", ".."} for part in parts):
+    if normalized.startswith("/") or chr(92) in name or any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"Unsafe path in project archive: {name[:160]}")
     return normalized
 
