@@ -27,6 +27,8 @@ jobs:
           python -m py_compile scripts/bridge/browser_command_loop.py scripts/bridge/test_browser_command_loop.py scripts/bridge/prepare_browser_issue.py scripts/bridge/test_prepare_browser_issue.py scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/github_archives.py relay/test_github_archives.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/test_app.py relay/storage_cors.py relay/persistent_sessions.py relay/test_persistent_sessions.py relay/worker_artifacts.py relay/test_worker_artifacts.py relay/project_profiles.py scripts/godot-browser-worker.py relay/test_project_profiles.py tests/live_link/test_storage_cors.py
       - name: Test diagnostic classification and raw-log preservation
         run: PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_classifier.py' -v
+      - name: Test build-log diagnostic ingestion
+        run: PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_ingest_log.py' -v
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
       - name: Test mobile shell patcher
