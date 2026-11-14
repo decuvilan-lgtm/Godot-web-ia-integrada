@@ -26,11 +26,11 @@ def redact_sensitive_text(value: str) -> tuple[str, int]:
     """Redact credential-like values and URL query strings before reports persist."""
     text = str(value)
     count = 0
-    text, n = _SECRET_ASSIGNMENT.subn(r"\\1[REDACTED]", text)
+    text, n = _SECRET_ASSIGNMENT.subn(lambda match: match.group(1) + "[REDACTED]", text)
     count += n
-    text, n = _BEARER_TOKEN.subn(r"\\1[REDACTED]", text)
+    text, n = _BEARER_TOKEN.subn(lambda match: match.group(1) + "[REDACTED]", text)
     count += n
-    text, n = _URL_QUERY.subn(r"\\1?[REDACTED_QUERY]", text)
+    text, n = _URL_QUERY.subn(lambda match: match.group(1) + "?[REDACTED_QUERY]", text)
     count += n
     return text, count
 
