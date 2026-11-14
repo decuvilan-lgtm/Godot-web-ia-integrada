@@ -121,6 +121,20 @@ jobs:
             echo "deployment=not_performed"
           } > artifacts/BUILD-METADATA.txt
 
+      - name: Install Chromium for native-agent smoke test
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Launch the built editor in real Chromium and probe the native agent
+        run: |
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-zip "$ZIP_FILE" \
+            --timeout-seconds 180 \
+            --screenshot artifacts/browser-smoke.png
+
       - name: Upload custom editor artifact
         uses: actions/upload-artifact@v4
         with:
