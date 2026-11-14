@@ -109,6 +109,27 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertNotIn("private", serialized)
         self.assertEqual(count, 2)
 
+    def test_godot_stack_trace_is_context_not_a_second_error(self):
+        event = classify_event(
+            "   at: wait_to_finish (core/os/thread.cpp:84)",
+            transport_type="error",
+            source_hint="browser_console",
+        )
+        self.assertEqual(event["event_role"], "continuation")
+        self.assertEqual(event["declared_severity"], "notice")
+        self.assertEqual(event["source"], "godot_stack_trace")
+        self.assertEqual(event["category"], "diagnostic_context")
+
+    def test_emscripten_main_thread_blocking_message_is_a_warning(self):
+        event = classify_event(
+            "Blocking on the main thread is very dangerous, see documentation",
+            transport_type="error",
+            source_hint="browser_console",
+        )
+        self.assertEqual(event["source"], "emscripten")
+        self.assertEqual(event["declared_severity"], "warning")
+        self.assertEqual(event["classification_rule"], "emscripten.blocking_main_thread.warning")
+
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
         self.assertEqual(event["category"], "network")
