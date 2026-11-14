@@ -17,12 +17,11 @@ PLUGIN_RES_PATH = "res://addons/godot_controller_bridge/plugin.cfg"
 
 
 def _safe_zip_name(name: str) -> str:
-    normalized = name.replace("\\", "/")
-    path = PurePosixPath(normalized)
-    if normalized.startswith("/") or "\\" in name or any(part in {"", ".", ".."} for part in path.parts):
+    normalized = name.replace("\\\\", "/")
+    parts = normalized.rstrip("/").split("/")
+    if normalized.startswith("/") or "\\\\" in name or any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"Unsafe path in project archive: {name[:160]}")
     return normalized
-
 
 def _enable_plugin(project_text: str) -> str:
     if "\x00" in project_text:
@@ -80,6 +79,9 @@ def apply_controller_overlay(archive_bytes: bytes, addon_source: Path) -> tuple[
                 continue
             if name in seen:
                 raise ValueError(f"Duplicate path in project archive: {name[:160]}")
+            mode = (info.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise ValueError(f"Symlinks are not accepted in project archives: {name[:160]}")
             seen.add(name)
             if not info.is_dir() and PurePosixPath(name).name == "project.godot":
                 project_entries.append(info)
@@ -95,18 +97,11 @@ def apply_controller_overlay(archive_bytes: bytes, addon_source: Path) -> tuple[
         project_text = source.read(project_info).decode("utf-8-sig")
         patched_project = _enable_plugin(project_text).encode("utf-8")
 
-        existing_addon = {
-            name[len(target_prefix):]: name
-            for name in seen
-            if name.startswith(target_prefix + PLUGIN_RELATIVE + "/")
-        }
         for relative, content in addon_files.items():
             existing_name = target_prefix + relative
             if existing_name in seen:
                 if source.read(existing_name) != content:
                     raise ValueError("Project already contains a different Godot Controller Bridge; refusing to overwrite it")
-            else:
-                existing_addon[relative] = ""
 
         output = BytesIO()
         added: list[str] = []
