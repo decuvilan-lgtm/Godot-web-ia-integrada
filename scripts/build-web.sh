@@ -38,6 +38,10 @@ else
 fi
 
 ARCHIVE_PATH="${WORK_DIR}/${ARCHIVE}"
+if [[ "${ARCHIVE}" != "$(basename "${ARCHIVE}")" || "${ARCHIVE}" == "." || "${ARCHIVE}" == ".." || "${ARCHIVE}" != *.zip ]]; then
+  echo "ERROR: editor archive name must be a plain .zip filename" >&2
+  exit 1
+fi
 
 command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is required" >&2; exit 1; }
 command -v unzip >/dev/null 2>&1 || { echo "ERROR: unzip is required" >&2; exit 1; }
