@@ -94,6 +94,7 @@ def classify_event(
     event_role = "diagnostic"
     source_identification = "caller_declared" if source != "unknown" else "unknown"
     body = text
+    match = None
     if _GODOT_STACK_TRACE.match(text):
         source = "godot_stack_trace"
         source_identification = "exact_pattern"
