@@ -11,7 +11,6 @@ ACTIONS = {
     "editor.open_panel": {"panel"},
     "scene.open": {"scene_path"},
     "scene.select_node": {"node_path"},
-    "scene.save": set(),
     "node.get_inspector": {"node_path"},
 }
 PANELS = {"scene", "filesystem", "inspector", "output", "debugger", "history", "import"}
