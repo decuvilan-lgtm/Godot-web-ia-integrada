@@ -125,7 +125,7 @@ The example is a capability probe only. The worker supplies the add-on in the te
 - Unit tests for ZIP layout, plugin activation, idempotency, unsafe paths and conflict handling are now part of the browser workflow.
 - Successful Actions import with the overlay, real editor state read-back, scene navigation and node inspection are still pending confirmation.
 
-The worker loads the extension in the same Actions Chromium instance and temporarily injects the editor adapter into the ZIP before Godot imports it. The test in issue #50 is the first end-to-end validation of this no-project-modification path. Until it completes, treat the overlay as implemented but not yet runtime-verified.
+The worker loads the extension in the same Actions Chromium instance and attempts to inject the editor adapter into the ZIP before Godot imports it. Issue #50 confirmed the extension message path but returned GODOT_ADAPTER_UNAVAILABLE, so the adapter was not active in the editor. A local ZIP-overlay smoke test passes; issue #51 adds runtime diagnostics for whether the overlay reached the import and whether the adapter globals appeared. Treat the overlay integration as experimental until those diagnostics identify and resolve the failure.
 
 ## Acceptance gates
 
