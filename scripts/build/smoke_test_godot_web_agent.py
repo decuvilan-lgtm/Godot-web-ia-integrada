@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from diagnostics.classifier import classify_event, redact_sensitive_payload, summarize_events
+from diagnostics.classifier import classify_event, link_continuation_events, redact_sensitive_payload, summarize_events
 from bridge.semantic_controller import execute_semantic_command
 
 
@@ -117,11 +117,8 @@ def main() -> int:
         })
 
     def build_diagnostic_report() -> dict[str, object]:
-        classified = []
-        previous_root_index = None
-        previous_root_timestamp = None
-        for event_index, raw_event in enumerate(raw_diagnostic_events):
-            event = classify_event(
+        classified = [
+            classify_event(
                 str(raw_event["message"]),
                 transport_type=str(raw_event["transport_type"]),
                 source_hint=str(raw_event["source_hint"]),
@@ -129,18 +126,9 @@ def main() -> int:
                 timestamp=str(raw_event["timestamp_ns"]),
                 location=raw_event["location"] if isinstance(raw_event["location"], dict) else None,
             )
-            event["event_index"] = event_index
-            timestamp_ns = int(raw_event["timestamp_ns"])
-            if event["event_role"] == "continuation":
-                if previous_root_index is not None and previous_root_timestamp is not None:
-                    if 0 <= timestamp_ns - previous_root_timestamp <= 1_000_000_000:
-                        event["related_event_index"] = previous_root_index
-                        event["relation"] = "stack_trace_for"
-            elif event["declared_severity"] in {"fatal", "error", "warning"}:
-                previous_root_index = event_index
-                previous_root_timestamp = timestamp_ns
-            classified.append(event)
-
+            for raw_event in raw_diagnostic_events
+        ]
+        classified = link_continuation_events(classified)
         summary = summarize_events(classified)
         severities = summary["severity_counts"]
         if severities.get("fatal", 0) or severities.get("error", 0):
