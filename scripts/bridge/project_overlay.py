@@ -105,6 +105,7 @@ def apply_controller_overlay(archive_bytes: bytes, addon_source: Path) -> tuple[
 
         output = BytesIO()
         added: list[str] = []
+        added_directories: list[str] = []
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as target:
             for info in infos:
                 name = info.filename.rstrip("/")
@@ -116,6 +117,19 @@ def apply_controller_overlay(archive_bytes: bytes, addon_source: Path) -> tuple[
                     target.writestr(info, patched_project)
                 else:
                     target.writestr(info, source.read(info))
+
+            # Godot's Project Manager extracts explicit directory entries before
+            # writing files. Add both parents when they are absent from the source ZIP.
+            for directory in (target_prefix + "addons/", target_prefix + PLUGIN_RELATIVE + "/"):
+                if directory.rstrip("/") in seen:
+                    continue
+                directory_info = zipfile.ZipInfo(directory)
+                directory_info.create_system = 3
+                directory_info.external_attr = (0o40775 << 16) | 0x10
+                directory_info.compress_type = zipfile.ZIP_STORED
+                target.writestr(directory_info, b"")
+                added_directories.append(directory)
+
             for relative, content in addon_files.items():
                 archive_name = target_prefix + relative
                 if archive_name not in seen:
@@ -130,6 +144,7 @@ def apply_controller_overlay(archive_bytes: bytes, addon_source: Path) -> tuple[
             "project_file": project_name,
             "plugin_path": PLUGIN_RES_PATH,
             "added_files": added,
+            "added_directories": added_directories,
             "source_archive_sha256": source_sha,
             "overlaid_archive_sha256": hashlib.sha256(result).hexdigest(),
             "source_repository_modified": False,
