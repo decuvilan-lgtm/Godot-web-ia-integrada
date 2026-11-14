@@ -68,7 +68,7 @@ jobs:
           scons --version
           python --version
 
-      - name: Build single-threaded Web Editor
+      - name: Build threaded Web Editor
         working-directory: godot
         run: |
           scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2
@@ -77,7 +77,7 @@ jobs:
         run: |
           mkdir -p artifacts
           find godot/bin -maxdepth 1 -type f -print | sort
-          ZIP_FILE="$(find godot/bin -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          ZIP_FILE="$(find godot/bin -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
           test -n "$ZIP_FILE" || {
             echo "No Web Editor template ZIP was produced."
             exit 1
