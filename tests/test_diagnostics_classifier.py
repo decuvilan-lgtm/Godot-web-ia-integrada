@@ -54,6 +54,16 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(report["duplicate_occurrences"], 2)
         self.assertEqual(len(report["events"]), 3)
 
+    def test_browser_log_is_notice_not_unknown(self):
+        event = classify_event("Editor initialized", transport_type="log", source_hint="browser_console")
+        self.assertEqual(event["declared_severity"], "notice")
+        self.assertEqual(event["classification_status"], "classified")
+
+    def test_request_failures_are_network_events(self):
+        event = classify_event("GET https://example.invalid: net::ERR_FAILED", transport_type="error", source_hint="network")
+        self.assertEqual(event["category"], "network")
+        self.assertEqual(event["declared_severity"], "error")
+
     def test_category_does_not_claim_root_cause(self):
         event = classify_event("ERROR: TCPServer listen failed")
         self.assertEqual(event["category"], "network")
