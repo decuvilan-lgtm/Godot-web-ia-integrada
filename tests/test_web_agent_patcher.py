@@ -50,6 +50,10 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("editor.list_capabilities", source)
         self.assertIn("editor.get_state", source)
         self.assertIn("scene.get_tree", source)
+        self.assertIn("r_count < 256", source)
+        self.assertIn("p_depth < 16", source)
+        self.assertIn("payload.length > 16384", source)
+        self.assertNotIn(r"\\tif", source)
         self.assertNotIn("GDScript", source)
         self.assertNotIn("execute_string", source)
 
