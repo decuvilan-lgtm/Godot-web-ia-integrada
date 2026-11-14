@@ -1,0 +1,67 @@
+name: Test Godot Web wrapper with custom editor artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful build workflow run ID
+        required: true
+        default: "43561299883"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: godot-web-wrapper-smoke
+  cancel-in-progress: true
+
+jobs:
+  wrapper-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out controller repository
+        uses: actions/checkout@v4
+        with:
+          ref: feature/builtin-web-editor-agent
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download the selected custom editor artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-web-editor-agent-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded
+
+      - name: Verify custom editor and build the wrapper
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP="downloaded/godot.web.editor.wasm32.zip"
+          SUMS="downloaded/SHA256SUMS"
+          META="downloaded/BUILD-METADATA.txt"
+          test -s "$ZIP"
+          grep -qx 'project_overlay=false' "$META"
+          EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
+          ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP" GODOT_WEB_EDITOR_SHA256="$EXPECTED" bash scripts/build-web.sh
+          test -s public/index.html
+          test -s public/godot.editor.wasm
+          grep -q 'godot-github-connector' public/index.html
+          echo "Custom editor archive SHA-256: $ACTUAL"
+
+      - name: Upload wrapper output for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-web-wrapper-smoke-${{ github.run_id }}
+          path: public/
+          if-no-files-found: error
+          retention-days: 7
