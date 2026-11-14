@@ -287,7 +287,47 @@ def main() -> int:
                     if not probe.get("ok") and not (
                         command == "scene.get_tree" and probe.get("error") == "NO_ACTIVE_SCENE"
                     ):
-                        raise RuntimeError(f"Extension semantic command failed ({command}): {json.dumps(probe)}")
+                        diagnostics = page.evaluate("""() => ({
+                            url: location.href,
+                            title: document.title,
+                            body_text: (document.body?.innerText || "").slice(0, 10000),
+                            adapter_present: !!window.__godotEditorAgent,
+                            adapter_protocol: window.__godotEditorAgent?.protocol ?? null,
+                            adapter_capabilities: window.__godotEditorAgent?.getCapabilities?.() ?? null,
+                            native_pending_count: window.__godotEditorAgentPending?.size ?? -1,
+                            native_pending_ids: window.__godotEditorAgentPending
+                                ? [...window.__godotEditorAgentPending.keys()] : [],
+                            canvases: [...document.querySelectorAll("canvas")].map(c => ({
+                                id: c.id, width: c.width, height: c.height,
+                                visible_width: Math.round(c.getBoundingClientRect().width),
+                                visible_height: Math.round(c.getBoundingClientRect().height)
+                            })),
+                            editor_tab: (() => {
+                                const e = document.querySelector("#btn-tab-editor");
+                                return e ? {disabled: e.disabled, text: e.innerText} : null;
+                            })(),
+                            status_notice: document.querySelector("#status-notice")?.innerText ?? "",
+                            service_worker_controller: !!navigator.serviceWorker?.controller
+                        })""")
+                        diagnostics["failed_command"] = command
+                        diagnostics["probe_result"] = probe
+                        diagnostics["console_errors"] = errors[-50:]
+                        diagnostics["page_errors"] = page_errors[-50:]
+                        diagnostics["request_failures"] = request_failures[-50:]
+                        diagnostics["http_errors"] = http_errors[-50:]
+                        diagnostics["workers"] = worker_urls[-30:]
+                        args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                        args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            page.screenshot(path=str(args.screenshot), full_page=False, timeout=30000)
+                            diagnostics["screenshot"] = str(args.screenshot)
+                        except Exception as screenshot_error:
+                            diagnostics["screenshot_error"] = str(screenshot_error)
+                        args.diagnostics.write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
+                        print("BROWSER_SMOKE_DIAGNOSTICS=" + json.dumps(diagnostics, indent=2), flush=True)
+                        raise RuntimeError(
+                            f"Extension semantic command failed ({command}): {json.dumps(probe)}"
+                        )
                     probes[command] = probe
 
                 state = probes["editor.get_state"].get("result", {})
