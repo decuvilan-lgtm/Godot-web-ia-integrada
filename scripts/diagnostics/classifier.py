@@ -244,38 +244,40 @@ def classify_event(
 def link_continuation_events(
     events: Iterable[dict[str, Any]], *, max_gap_ns: int = 1_000_000_000
 ) -> list[dict[str, Any]]:
-    """Link stack/context lines to the nearest preceding root diagnostic."""
+    """Link stack/context lines to the nearest preceding root in the same context."""
     linked: list[dict[str, Any]] = []
-    previous_root_index: int | None = None
-    previous_root_timestamp: int | None = None
+    previous_roots: dict[str, tuple[int, int | None]] = {}
     for index, source_event in enumerate(events):
         event = dict(source_event)
         event["event_index"] = index
+        context = str(event.get("context") or "")
         try:
             timestamp_ns = int(event.get("timestamp") or "")
         except (TypeError, ValueError):
             timestamp_ns = None
 
         if event.get("event_role") == "continuation":
-            if timestamp_ns is not None and previous_root_timestamp is not None:
-                delta = timestamp_ns - previous_root_timestamp
-                if 0 <= delta <= max_gap_ns and previous_root_index is not None:
-                    event["related_event_index"] = previous_root_index
-                    event["relation"] = "stack_trace_for"
-                    frame_text = str(event.get("original_message") or event.get("message") or "")
-                    source_match = _GODOT_PROJECT_LOCATION.search(frame_text)
-                    if source_match:
-                        root_event = linked[previous_root_index]
-                        locations = list(root_event.get("godot_source_locations", []))
-                        locations.append({
-                            "path": source_match.group(1),
-                            "line": int(source_match.group(2)),
-                            "frame": frame_text.strip(),
-                        })
-                        root_event["godot_source_locations"] = locations
+            previous_root = previous_roots.get(context)
+            if previous_root is not None:
+                root_index, root_timestamp = previous_root
+                if timestamp_ns is not None and root_timestamp is not None:
+                    delta = timestamp_ns - root_timestamp
+                    if 0 <= delta <= max_gap_ns:
+                        event["related_event_index"] = root_index
+                        event["relation"] = "stack_trace_for"
+                        frame_text = str(event.get("original_message") or event.get("message") or "")
+                        source_match = _GODOT_PROJECT_LOCATION.search(frame_text)
+                        if source_match:
+                            root_event = linked[root_index]
+                            locations = list(root_event.get("godot_source_locations", []))
+                            locations.append({
+                                "path": source_match.group(1),
+                                "line": int(source_match.group(2)),
+                                "frame": frame_text.strip(),
+                            })
+                            root_event["godot_source_locations"] = locations
         elif event.get("declared_severity") in {"fatal", "error", "warning"}:
-            previous_root_index = index
-            previous_root_timestamp = timestamp_ns
+            previous_roots[context] = (index, timestamp_ns)
         linked.append(event)
     return linked
 
