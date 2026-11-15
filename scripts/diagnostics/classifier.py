@@ -211,6 +211,7 @@ def classify_event(
 
     category = (
         "diagnostic_context" if event_role == "continuation"
+        else "build_configuration" if source == "build_orchestrator"
         else "scripts" if source == "godot_script"
         else "network" if source in {"network", "http"}
         else "unknown"

@@ -1,5 +1,7 @@
 import unittest
-from browser_command_loop import _bounded_duration_seconds, _ordered_comments, _validate
+from unittest.mock import patch
+import browser_command_loop
+from browser_command_loop import _bounded_duration_seconds, _fetch_new_comments, _ordered_comments, _validate
 
 SESSION="issue-test"
 
@@ -68,6 +70,17 @@ class BrowserCommandValidationTests(unittest.TestCase):
     def test_descending_api_comments_are_processed_oldest_first(self):
         comments = [{"id": 300}, {"id": 200}, {"id": 100}]
         self.assertEqual([item["id"] for item in _ordered_comments(comments)], [100,200,300])
+
+    @patch("browser_command_loop._api")
+    def test_comment_pagination_reads_all_new_pages_without_replaying_old(self, api):
+        api.side_effect = [
+            [{"id": value} for value in range(300, 200, -1)],
+            [{"id": value} for value in range(200, 100, -1)],
+        ]
+        comments = _fetch_new_comments("https://api.invalid/comments?per_page=100", "token", 150)
+        self.assertEqual([item["id"] for item in comments], list(range(151, 301)))
+        self.assertEqual(api.call_count, 2)
+        self.assertIn("page=2", api.call_args_list[1].args[0])
 
 if __name__=="__main__":
     unittest.main()
