@@ -1,4 +1,4 @@
-name: Test native Headless Session Bridge in disposable Bridge Sandbox
+name: Test native Headless Session Bridge in disposable Empty Godot Project Sandbox
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
           mkdir -p artifacts .tmp
           xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
           GODOT="/tmp/godot/Godot_v4.7.2-stable_linux.x86_64"
-          PROJECT="$GITHUB_WORKSPACE/.tmp/bridge_sandbox"
+          PROJECT="$GITHUB_WORKSPACE/.tmp/empty_godot_project"
           export GODOT
           "$GODOT" --path "$GITHUB_WORKSPACE" --editor >/tmp/godot-project-manager.log 2>&1 &
           pm_pid=$!
@@ -73,7 +73,7 @@ jobs:
           # Fill the native Project Name and Project Path fields explicitly.
           xdotool mousemove --sync 760 279 click 1
           xdotool key ctrl+a
-          xdotool type --clearmodifiers "Bridge Sandbox"
+          xdotool type --clearmodifiers "Empty Godot Project Sandbox"
           xdotool mousemove --sync 700 349 click 1
           xdotool key ctrl+a
           xdotool type --clearmodifiers "$PROJECT"
@@ -93,7 +93,7 @@ jobs:
           cp "$PROJECT/project.godot" "$GITHUB_WORKSPACE/artifacts/fresh-project.godot"
           # Close the editor cleanly; the bridge add-on is installed only after
           # the pristine project has been created by the editor itself.
-          editor_wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+          editor_wid=$(xdotool search --onlyvisible --name "Empty Godot Project Sandbox" 2>/dev/null | tail -1 || true)
           if [ -n "$editor_wid" ]; then
             xdotool windowfocus --sync "$editor_wid"
             xdotool key alt+F4
@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT=".tmp/bridge_sandbox"
+          PROJECT=".tmp/empty_godot_project"
           mkdir -p "$PROJECT/addons/headless_session_bridge" "$PROJECT/tools/headless_bridge"
           cp headless/native-editor/addons/headless_session_bridge/* "$PROJECT/addons/headless_session_bridge/"
           cp headless/native-editor/tools/headless_bridge/*.gd "$PROJECT/tools/headless_bridge/"
@@ -115,7 +115,7 @@ jobs:
 
           enabled=PackedStringArray("res://addons/headless_session_bridge/plugin.cfg")
           EOF
-          grep -q 'config/name="Bridge Sandbox"' "$PROJECT/project.godot"
+          grep -q 'config/name="Empty Godot Project Sandbox"' "$PROJECT/project.godot"
           grep -q 'headless_session_bridge/plugin.cfg' "$PROJECT/project.godot"
           echo "FRESH_PROJECT_BRIDGE_INSTALLED_PASS"
 
@@ -125,13 +125,13 @@ jobs:
           set -euo pipefail
           xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
           GODOT="/tmp/godot/Godot_v4.7.2-stable_linux.x86_64"
-          PROJECT="$GITHUB_WORKSPACE/.tmp/bridge_sandbox"
+          PROJECT="$GITHUB_WORKSPACE/.tmp/empty_godot_project"
           "$GODOT" --editor --path "$PROJECT" --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy >/tmp/godot-sandbox-editor.log 2>&1 &
           editor_pid=$!
           cleanup() { kill "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true; }
           trap cleanup EXIT
           for _ in $(seq 1 120); do
-            wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+            wid=$(xdotool search --onlyvisible --name "Empty Godot Project Sandbox" 2>/dev/null | tail -1 || true)
             [ -n "$wid" ] && break
             sleep 0.25
           done
@@ -170,7 +170,7 @@ jobs:
         run: |
           set -euo pipefail
           GODOT="Godot_v4.7.2-stable_linux.x86_64"
-          PROJECT=".tmp/bridge_sandbox"
+          PROJECT=".tmp/empty_godot_project"
           mkdir -p artifacts .tmp
           xvfb-run -a -s "-screen 0 1600x1000x24" env GODOT="$GODOT" PROJECT="$PROJECT" bash -euo pipefail <<'SCRIPT'
           start_editor() {
@@ -178,7 +178,7 @@ jobs:
             editor_pid=$!
             wid=""
             for _ in $(seq 1 80); do
-              wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+              wid=$(xdotool search --onlyvisible --name "Empty Godot Project Sandbox" 2>/dev/null | tail -1 || true)
               [ -n "$wid" ] && break
               sleep 0.25
             done
@@ -204,16 +204,21 @@ jobs:
           done
           grep -q SESSION_CONNECTED /tmp/sandbox-watcher.log
           "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- ping
-          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_scene | tee artifacts/blank-scene-inspection.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- editor.list_capabilities | tee artifacts/native-capabilities.json
+          grep -q '"scene.add_node"' artifacts/native-capabilities.json
+          grep -q '"preview.start"' artifacts/native-capabilities.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- editor.get_state | tee artifacts/editor-state.json
+          grep -q '"active_scene":"res://main.tscn"' artifacts/editor-state.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- scene.get_tree | tee artifacts/blank-scene-inspection.json
           grep -q '"path":"."' artifacts/blank-scene-inspection.json
           grep -q '"inspector":' artifacts/blank-scene-inspection.json
           "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_selection | tee artifacts/selection.json
           "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_project_settings | tee artifacts/project-settings.json
           "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_editor_settings | tee artifacts/editor-settings.json
-          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- add_node '{"type":"Node2D","name":"SandboxNode"}'
-          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- add_node '{"type":"Label","name":"SandboxLabel"}'
-          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- set_node_properties '{"node_path":"SandboxNode","properties":{"position":{"x":123.0,"y":45.0}}}'
-          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_scene | tee artifacts/edited-scene-inspection.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- scene.add_node '{"type":"Node2D","name":"SandboxNode"}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- scene.add_node '{"type":"Label","name":"SandboxLabel"}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- scene.set_node_properties '{"node_path":"SandboxNode","properties":{"position":{"x":123.0,"y":45.0}}}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- scene.get_tree | tee artifacts/edited-scene-inspection.json
           grep -q '"SandboxNode"' artifacts/edited-scene-inspection.json
           grep -q '"SandboxLabel"' artifacts/edited-scene-inspection.json
           bash headless/native-editor/tools/headless_bridge/verify_fresh_project_features.sh "$GODOT" "$PROJECT"
