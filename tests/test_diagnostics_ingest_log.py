@@ -47,8 +47,8 @@ class BuildLogIngestionTests(unittest.TestCase):
             source = root / "build.log"
             output = root / "report.json"
             source.write_text(
-                "scons: *** [target] Error 1\\n"
-                "make[2]: *** [other] Error 2\\n"
+                "scons: *** [target] Error 1\n"
+                "make[2]: *** [other] Error 2\n"
                 "ninja: build stopped: subcommand failed.\\n",
                 encoding="utf-8",
             )
