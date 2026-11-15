@@ -59,5 +59,25 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertNotIn('"run_shell"', plugin)
         self.assertNotIn('"eval"', plugin)
 
+
+    def test_advertised_native_capabilities_are_dispatched_and_probe_allowed(self):
+        import re
+
+        plugin = (ROOT / "headless" / "native-editor" / "addons" / "headless_session_bridge" / "plugin.gd").read_text(encoding="utf-8")
+        probe = (ROOT / "headless" / "native-editor" / "tools" / "headless_bridge" / "bridge_probe.gd").read_text(encoding="utf-8")
+
+        advertised_block = plugin.split('"commands": [', 1)[1].split('],', 1)[0]
+        advertised = set(re.findall(r'"([a-z][a-z0-9_.]+)"', advertised_block))
+
+        dispatch_block = plugin.split("\\tmatch command:", 1)[1]
+        dispatched = set(re.findall(r'^\\s*"([^"]+)":', dispatch_block, re.MULTILINE))
+
+        probe_block = probe.split("if not [", 1)[1].split("].has(action)", 1)[0]
+        probe_allowed = set(re.findall(r'"([a-z][a-z0-9_.]+)"', probe_block))
+
+        self.assertTrue(advertised, "The native adapter must advertise its capabilities.")
+        self.assertEqual(advertised - dispatched, set(), "Every advertised command must have a dispatcher.")
+        self.assertEqual(advertised - probe_allowed, set(), "Every advertised command must be callable by the native probe.")
+
 if __name__ == "__main__":
     unittest.main()
