@@ -82,7 +82,7 @@ func _run() -> void:
 	if not response is Dictionary or not bool(response.get("ok", false)):
 		_fail("Editor rejected the request: " + response_text)
 		return
-	if action == "open_scene":
+	if action in ["open_scene", "editor.open_scene"]:
 		var open_result: Variant = response.get("result", {})
 		if not open_result is Dictionary or not bool(open_result.get("opened", false)):
 			_fail("Editor acknowledged open_scene without confirming the requested scene became active.")
