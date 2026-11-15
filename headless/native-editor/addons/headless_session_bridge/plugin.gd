@@ -203,9 +203,13 @@ func _handle_request(peer: StreamPeerTCP, line: String) -> void:
 				"commands": [
 					"editor.list_capabilities", "editor.get_state",
 					"scene.get_tree", "scene.inspect_selection",
-					"scene.add_node", "scene.set_node_properties",
-					"project.list_resources", "preview.get_status",
-					"preview.start", "preview.stop", "capture.editor_screenshot"
+					"scene.add_node", "scene.set_node_properties", "scene.configure_collision_shape",
+					"scene.assign_visual_resource", "scene.create_sprite_frames",
+					"editor.open_scene", "editor.focus_inspector", "editor.inspect_undo_history",
+					"editor.undo", "editor.redo", "editor.inspect_project_settings", "editor.inspect_editor_settings",
+					"project.list_resources", "project.inspect_resource", "preview.get_status",
+					"preview.start", "preview.stop", "capture.editor_screenshot",
+					"capture.desktop_screenshot", "capture.start_editor_video", "capture.stop_editor_video", "capture.get_video_status", "capture.read_chunk"
 				],
 				"legacy_commands": [
 					"ping", "inspect_scene", "inspect_selection", "add_node",
@@ -262,6 +266,76 @@ func _handle_request(peer: StreamPeerTCP, line: String) -> void:
 			var semantic_capture := _capture_editor_screenshot()
 			response["ok"] = bool(semantic_capture.get("ok", false))
 			response["result"] = semantic_capture
+		"scene.configure_collision_shape":
+			var semantic_shape_result := _configure_collision_shape(request.get("args", {}))
+			response["ok"] = bool(semantic_shape_result.get("ok", false))
+			response["result"] = semantic_shape_result
+		"scene.assign_visual_resource":
+			var semantic_visual_result := _assign_visual_resource(request.get("args", {}))
+			response["ok"] = bool(semantic_visual_result.get("ok", false))
+			response["result"] = semantic_visual_result
+		"scene.create_sprite_frames":
+			var semantic_frames_result := _create_sprite_frames(request.get("args", {}))
+			response["ok"] = bool(semantic_frames_result.get("ok", false))
+			response["result"] = semantic_frames_result
+		"project.inspect_resource":
+			var semantic_resource_result := _inspect_project_resource(request.get("args", {}))
+			response["ok"] = bool(semantic_resource_result.get("ok", false))
+			response["result"] = semantic_resource_result
+		"editor.open_scene":
+			var semantic_open_result := _open_project_scene(request.get("args", {}))
+			if not bool(semantic_open_result.get("ok", false)):
+				response["ok"] = false
+				response["result"] = semantic_open_result
+			elif bool(semantic_open_result.get("pending", false)):
+				_pending_scene_opens.append({
+					"peer": peer,
+					"scene_path": str(semantic_open_result.get("scene_path", "")),
+					"deadline_msec": Time.get_ticks_msec() + SCENE_OPEN_TIMEOUT_MS
+				})
+				return
+		"editor.focus_inspector":
+			var semantic_focus_result := _focus_inspector(request.get("args", {}))
+			response["ok"] = bool(semantic_focus_result.get("ok", false))
+			response["result"] = semantic_focus_result
+		"editor.inspect_undo_history":
+			var semantic_history_result := _inspect_undo_history()
+			response["ok"] = bool(semantic_history_result.get("ok", false))
+			response["result"] = semantic_history_result
+		"editor.undo":
+			var semantic_undo_result := _run_bridge_undo_redo("undo")
+			response["ok"] = bool(semantic_undo_result.get("ok", false))
+			response["result"] = semantic_undo_result
+		"editor.redo":
+			var semantic_redo_result := _run_bridge_undo_redo("redo")
+			response["ok"] = bool(semantic_redo_result.get("ok", false))
+			response["result"] = semantic_redo_result
+		"editor.inspect_project_settings":
+			var semantic_project_settings := _inspect_project_settings()
+			response["ok"] = bool(semantic_project_settings.get("ok", false))
+			response["result"] = semantic_project_settings
+		"editor.inspect_editor_settings":
+			var semantic_editor_settings := _inspect_editor_settings()
+			response["ok"] = bool(semantic_editor_settings.get("ok", false))
+			response["result"] = semantic_editor_settings
+		"capture.desktop_screenshot":
+			var semantic_desktop_capture := _capture_desktop_screenshot()
+			response["ok"] = bool(semantic_desktop_capture.get("ok", false))
+			response["result"] = semantic_desktop_capture
+		"capture.start_editor_video":
+			var semantic_video_start := _start_editor_video(request.get("args", {}))
+			response["ok"] = bool(semantic_video_start.get("ok", false))
+			response["result"] = semantic_video_start
+		"capture.stop_editor_video":
+			var semantic_video_stop := _stop_editor_video()
+			response["ok"] = bool(semantic_video_stop.get("ok", false))
+			response["result"] = semantic_video_stop
+		"capture.get_video_status":
+			response["result"] = _get_editor_video_status()
+		"capture.read_chunk":
+			var semantic_chunk := _read_capture_chunk(request.get("args", {}))
+			response["ok"] = bool(semantic_chunk.get("ok", false))
+			response["result"] = semantic_chunk
 		"ping":
 			_status_label.text = "Estado: conectado (%d clientes)" % _clients.size()
 			response["status"] = "alive"
