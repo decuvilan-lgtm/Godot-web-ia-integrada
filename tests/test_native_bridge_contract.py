@@ -41,8 +41,12 @@ class NativeBridgeContractTests(unittest.TestCase):
         probe = (ROOT / "headless" / "native-editor" / "tools" / "headless_bridge" / "bridge_probe.gd").read_text(encoding="utf-8")
         for command in (
             "editor.list_capabilities", "editor.get_state", "scene.get_tree",
-            "scene.add_node", "scene.set_node_properties", "preview.get_status",
-            "preview.start", "preview.stop", "capture.editor_screenshot",
+            "scene.add_node", "scene.set_node_properties", "scene.configure_collision_shape",
+            "scene.assign_visual_resource", "scene.create_sprite_frames",
+            "editor.open_scene", "editor.focus_inspector", "editor.inspect_undo_history",
+            "editor.undo", "editor.redo", "project.list_resources", "project.inspect_resource",
+            "preview.get_status", "preview.start", "preview.stop", "capture.editor_screenshot",
+            "capture.desktop_screenshot", "capture.start_editor_video", "capture.stop_editor_video", "capture.read_chunk",
         ):
             self.assertIn(command, plugin)
             self.assertIn(command, probe)
