@@ -79,7 +79,7 @@ La prueba E2E crea un proyecto Godot vacío desde Project Manager, crea una esce
 ## Estado real
 
 - El agente Web tiene tres comandos de inspección probados en Chromium; todavía no edita proyectos.
-- El puente del editor nativo expone el vocabulario semántico canónico para inspección, edición acotada, recursos, Undo/Redo, vista previa y captura; la validación E2E de los últimos cambios está en curso.
+- El puente del editor nativo expone el vocabulario semántico canónico para inspección, edición acotada, recursos, Undo/Redo, vista previa y captura. La última E2E del proyecto vacío validó la creación del proyecto, la escena y las operaciones de edición/recursos; detectó un desajuste del test al confirmar la apertura de escena con el nombre canónico. El test y la respuesta diferida se corrigieron; falta completar una nueva ejecución para validar preview y capturas con esos cambios.
 - La extensión Chromium es transporte; no contiene una segunda implementación del editor.
 - El prototipo de complemento instalado dentro de proyectos (browser-extension/godot-addon) se retiró del flujo activo para evitar duplicar el agente Web integrado.
 - La vista previa nativa tiene inicio/parada y captura probados; depuración interactiva, pausa/reanudación y observación estructurada completa siguen pendientes.
