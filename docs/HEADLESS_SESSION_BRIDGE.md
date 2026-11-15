@@ -65,7 +65,7 @@ El complemento es propiedad del laboratorio. Se copia temporalmente a un workspa
 
 ## Pruebas
 
-El workflow `.github/workflows/test-headless-session-bridge.yml` crea un proyecto **Bridge Sandbox** usando el Project Manager real de Godot, instala el addon únicamente en ese proyecto descartable y prueba la conexión, inspección, cambios undoables, recursos visuales, preview, capturas y transferencia exacta de archivos.
+El workflow `.github/workflows/test-headless-session-bridge.yml` crea un **proyecto Godot vacío desde el Project Manager real**, sin importar ningún juego externo. Después instala el addon únicamente en ese proyecto descartable y prueba el vocabulario semántico canónico, conexión, inspección, edición undoable, recursos visuales y SpriteFrames, preview, capturas, vídeo y transferencia exacta de archivos. La misma instancia vacía sirve como fixture y se amplía durante la prueba; no se convierte en dependencia de producción.
 
 El workflow no abre ni modifica un proyecto de juego real. Los artefactos de Actions son evidencia de esa ejecución, no una afirmación general de que todas las instalaciones o versiones estén verificadas.
 
