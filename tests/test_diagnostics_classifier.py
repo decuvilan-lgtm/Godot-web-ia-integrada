@@ -173,6 +173,39 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(linked[0]["godot_source_locations"][0]["path"], "res://main.gd")
         self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 5)
 
+    def test_gdscript_backtrace_frame_is_correlated_to_root_error(self):
+        root = classify_event(
+            "ERROR: PROJECT_DIAG_FIXTURE: intentional runtime error",
+            timestamp="1000",
+            context="godot_project_runtime",
+        )
+        frame = classify_event(
+            "       [0] _ready (res://main.gd:5)",
+            source_hint="browser_console",
+            transport_type="error",
+            timestamp="1200",
+        )
+        linked = link_continuation_events([root, frame])
+        self.assertEqual(linked[1]["event_role"], "continuation")
+        self.assertEqual(linked[1]["related_event_index"], 0)
+        self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 5)
+
+    def test_print_stack_frame_format_is_classified_as_continuation(self):
+        root = classify_event(
+            "ERROR: PROJECT_DIAG_FIXTURE: intentional runtime error",
+            timestamp="1000",
+            context="godot_project_runtime",
+        )
+        frame = classify_event(
+            "Frame 0 - res://main.gd:6 in function '_ready'",
+            source_hint="browser_console",
+            timestamp="1200",
+        )
+        linked = link_continuation_events([root, frame])
+        self.assertEqual(linked[1]["event_role"], "continuation")
+        self.assertEqual(linked[1]["related_event_index"], 0)
+        self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 6)
+
     def test_project_stack_frame_adds_script_path_and_line_to_root(self):
         root = classify_event(
             "SCRIPT ERROR: Invalid call",
