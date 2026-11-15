@@ -1,0 +1,232 @@
+name: Build Godot Web Editor with Built-in Agent
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'scripts/build-web.sh'
+      - 'scripts/patch-web-shell.py'
+      - 'scripts/test_patch_web_shell.py'
+      - 'scripts/package-bridge-sandbox.py'
+      - '.github/workflows/browser-smoke-reuse.yml'
+      - '.github/workflows/publish-custom-editor-release.yml'
+      - '.github/workflows/test-web-wrapper-custom-editor.yml'
+      - 'README.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      godot_ref:
+        description: Godot source ref (must remain compatible with the patcher)
+        required: true
+        default: 4.7.2-stable
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-web-agent-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-web-editor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out controller repository
+        uses: actions/checkout@v7
+
+      - name: Check out Godot engine source
+        uses: actions/checkout@v7
+        with:
+          repository: godotengine/godot
+          ref: ${{ inputs.godot_ref || '4.7.2-stable' }}
+          path: godot
+
+      - name: Set up Python and SCons
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install scons==4.8.1
+          if [ -f godot/requirements.txt ]; then
+            python -m pip install -r godot/requirements.txt
+          fi
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.0
+          actions-cache-folder: emsdk-cache
+
+      - name: Verify source revision and patch only engine-owned files
+        run: |
+          test "$(git -C godot describe --tags --exact-match 2>/dev/null || true)" = "${{ inputs.godot_ref || '4.7.2-stable' }}" || {
+            git -C godot rev-parse HEAD
+            echo "The checked out ref is not an exact tag; continuing with the resolved commit."
+          }
+          python -m py_compile scripts/build/patch_godot_web_agent.py scripts/diagnostics/classifier.py scripts/diagnostics/ingest_log.py scripts/build/smoke_test_godot_web_agent.py
+          python scripts/build/patch_godot_web_agent.py --godot-source godot
+          git -C godot diff --check
+          git -C godot status --short
+          python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
+          python -m unittest discover -s tests -p 'test_native_bridge_contract.py' -v
+          PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_classifier.py' -v
+          PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_ingest_log.py' -v
+          python -m compileall -q scripts tests
+          node --check browser-extension/page-bridge.js
+          node --check browser-extension/content.js
+          changed="$(git -C godot diff --name-only | sort)"
+          expected="$(printf '%s\n' editor/debugger/debug_adapter/debug_adapter_server.cpp editor/project_manager/project_list.cpp platform/web/audio_driver_web.cpp platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
+          test "$changed" = "$expected" || {
+            echo "Patch touched unexpected engine files:"
+            printf '%s\n' "$changed"
+            exit 1
+          }
+
+      - name: Verify toolchain
+        run: |
+          emcc --version
+          scons --version
+          python --version
+
+      - name: Build threaded Web Editor
+        working-directory: godot
+        run: |
+          mkdir -p ../artifacts
+          set -o pipefail
+          scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2 2>&1 | tee ../build-console.log
+
+      - name: Classify build diagnostics (audit only)
+        if: always()
+        run: |
+          if [ -f build-console.log ]; then
+            PYTHONPATH=scripts python scripts/diagnostics/ingest_log.py \
+              --input build-console.log \
+              --output artifacts/build-log-diagnostics.json \
+              --source build_log \
+              --context godot_web_editor_build
+            rm -f build-console.log
+          else
+            PYTHONPATH=scripts python scripts/diagnostics/ingest_log.py \
+              --input build-console.log \
+              --output artifacts/build-log-diagnostics.json \
+              --source build_log \
+              --context godot_web_editor_build
+          fi
+
+      - name: Verify and fingerprint Web Editor output
+        run: |
+          mkdir -p artifacts
+          find godot/bin -maxdepth 1 -type f -print | sort
+          ZIP_FILE="$(find godot/bin -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE" || {
+            echo "No Web Editor template ZIP was produced."
+            exit 1
+          }
+          cp "$ZIP_FILE" artifacts/
+          python - "$ZIP_FILE" <<'PY'
+          import sys, zipfile
+          path = sys.argv[1]
+          with zipfile.ZipFile(path) as archive:
+              names = set(archive.namelist())
+              required = {"godot.editor.html", "godot.editor.js", "godot.editor.wasm", "service.worker.js"}
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit("Editor package is incomplete; missing: " + ", ".join(missing))
+              bad = archive.testzip()
+              if bad:
+                  raise SystemExit("Corrupt ZIP member: " + bad)
+              print("Verified full Web Editor package:", path)
+          PY
+          {
+            echo "godot_ref=${{ inputs.godot_ref || '4.7.2-stable' }}"
+            echo "godot_commit=$(git -C godot rev-parse HEAD)"
+            echo "emscripten=$(emcc --version | head -n 1)"
+            echo "scons=$(scons --version | tail -n 1)"
+            echo "build_command=scons platform=web target=editor arch=wasm32 threads=yes proxy_to_pthread=no -j2"
+            echo "project_overlay=false"
+            echo "deployment=not_performed"
+          } > artifacts/BUILD-METADATA.txt
+
+      - name: Install Chromium for native-agent smoke test
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Launch the built editor in real Chromium and probe the native agent
+        run: |
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-zip "$ZIP_FILE" \
+            --timeout-seconds 600 \
+            --screenshot artifacts/browser-smoke.png
+
+      - name: Verify wrapper rollback when patching fails
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EDITOR_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          mkdir -p public
+          SENTINEL="public/.wrapper-rollback-probe-${GITHUB_RUN_ID}"
+          printf 'preserve-me\n' > "$SENTINEL"
+          FAKE_BIN="$(mktemp -d)"
+          REAL_PYTHON="$(command -v python3)"
+          export REAL_PYTHON
+          cat > "$FAKE_BIN/python3" <<'EOF'
+          #!/usr/bin/env bash
+          if [[ "$1" == */scripts/test_patch_web_shell.py ]]; then
+            echo "Injected patch failure for rollback test."
+            exit 42
+          fi
+          exec "$REAL_PYTHON" "$@"
+          EOF
+          chmod +x "$FAKE_BIN/python3"
+          if PATH="$FAKE_BIN:$PATH" GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$EDITOR_SHA" bash scripts/build-web.sh; then
+            echo "Wrapper build unexpectedly passed the injected patch failure."
+            exit 1
+          fi
+          test -s "$SENTINEL"
+          grep -qx 'preserve-me' "$SENTINEL"
+          rm -f "$SENTINEL"
+          rmdir public 2>/dev/null || true
+          rm -rf "$FAKE_BIN"
+          echo "Wrapper rollback preserved the previous public directory."
+
+      - name: Build wrapper from the custom editor and test it in Chromium
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EDITOR_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$EDITOR_SHA" bash scripts/build-web.sh
+          test -s public/index.html
+          test -s public/godot.editor.wasm
+          grep -q 'godot-github-connector' public/index.html
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-dir public \
+            --entrypoint 'index.html?manual=1' \
+            --timeout-seconds 600 \
+            --screenshot artifacts/wrapper-browser-smoke.png \
+            --diagnostics artifacts/wrapper-browser-smoke-diagnostics.json
+
+      - name: Fingerprint complete build evidence
+        if: success()
+        run: |
+          sha256sum artifacts/* > artifacts/SHA256SUMS
+
+      - name: Upload custom editor artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: godot-web-editor-agent-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

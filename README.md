@@ -204,15 +204,38 @@ En cada tarea, informar:
 
 **Regla principal:** ChatGPT desarrolla y experimenta en Linux con Godot Headless; publica en el repositorio del juego solo lo definitivo; después utiliza Actions y Chromium para cargar la versión más reciente, jugarla, inspeccionar toda la interfaz y recuperar vídeo, capturas, Output y Debugger disponible desde un Artifact o Neon.
 
-### 3.1 Control semántico del editor: Chromium Controller Bridge
+### 3.1 Adaptador nativo integrado en Godot Web
 
-Se añade una herramienta separada para enviar órdenes semánticas al editor Godot que ya está abierto dentro del Chromium de GitHub Actions. Su objetivo es evitar coordenadas, clics a ciegas y automatización de ratón para operaciones normales del editor.
+El control semántico del editor se integra dentro del binario de Godot Web mediante un parche pequeño y validado sobre el código del motor. No se instala un addon en los proyectos importados y no se modifica su ZIP.
 
-**No es Godot Headless.** No ejecuta el motor, no crea otro navegador y no reemplaza el Chromium de Actions. Es un puente ligero: el worker envía una orden identificada, la extensión la entrega al adaptador del editor y devuelve un resultado estructurado. Chromium sigue siendo el puesto visual para capturas, vídeo, consola y revisión.
+- API de página: `window.__godotEditorAgent`.
+- Protocolo: versión `1`, con órdenes identificadas y respuestas correlacionadas.
+- Extensión Chromium: `browser-extension/`; solo retransmite mensajes.
+- Cliente semántico: `scripts/bridge/semantic_controller.py`.
+- Patcher del motor: `scripts/build/patch_godot_web_agent.py`.
+- Contrato y límites: `docs/CHROMIUM_GODOT_CONTROLLER.md` y `docs/BUILTIN_WEB_EDITOR_AGENT.md`.
 
-- Extensión Chromium Manifest V3: `browser-extension/`.
-- Contrato y límites: `docs/CHROMIUM_GODOT_CONTROLLER.md`.
-- Cliente Python sin coordenadas: `scripts/bridge/semantic_controller.py`.
-- Pruebas de validación del contrato: `tests/test_semantic_controller.py`.
+**Comandos nativos implementados y probados:**
+- `editor.list_capabilities`
+- `editor.get_state`
+- `scene.get_tree`
 
-**Estado:** extensión, allowlist, cliente Python y despacho semántico integrados en el worker. El adaptador Godot vive en este repositorio y el worker lo inyecta en memoria al ZIP que importa el Chromium de Actions; no se añade ni se publica en el repositorio del juego. El sandbox de origen ya no contiene el complemento. La prueba sin modificar el proyecto de la issue #50 confirmó que la extensión recibe órdenes, pero devolvió GODOT_ADAPTER_UNAVAILABLE: el adaptador no estaba activo en el editor. El smoke test local del overlay ZIP pasa; la issue #51 añade diagnóstico del ZIP transformado y de la presencia del adaptador en la página. El control efectivo del editor sigue sin estar validado. Cada workflow conserva la misma sesión Chromium durante su ventana de comandos (hasta 10 minutos); si expira, se inicia otro workflow y se importa el SHA exacto.
+Los tres respondieron desde el editor abierto en Chromium. La prueba confirmó `editor_available=true`, cero peticiones pendientes al terminar, aislamiento de origen cruzado activo y que el hash del proyecto fixture no cambió. El adaptador procesa las órdenes desde el hilo principal del editor mediante una cola acotada; no ofrece ejecución arbitraria de scripts, shell ni mutaciones genéricas.
+
+**Build personalizado:** el workflow `.github/workflows/build-godot-web-agent-editor.yml` compila Godot 4.7.2 con Emscripten y prueba el ZIP recién generado en Chromium real. La instrumentación temporal usada durante la investigación se retiró del flujo de compilación; la aceptación final debe provenir de una compilación limpia y reciente, no de artefactos históricos.
+
+**Evidencia anterior a la limpieza:** la compilación [43660833115](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43660833115), las comprobaciones [43660833184](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43660833184) y la verificación del editor oficial [43660833118](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43660833118) pasaron. La compilación personalizada todavía incluía marcadores temporales, por lo que esos resultados son evidencia de investigación y no aceptación limpia.
+
+**Protecciones incluidas en la rama:** duración real y acotada del bucle de comandos; paginación de comentarios recientes de GitHub en orden cronológico; validación estricta de argumentos semánticos; límite de 64 solicitudes pendientes en la extensión; clasificación de fallos SCons/Make/Ninja; instalación del wrapper con staging, verificación previa y rollback; validación del run, rama, conclusión y SHA antes de publicar una release. El checksum completo se genera después de las pruebas y de los metadatos.
+
+**Estado:** la nueva compilación limpia, las pruebas Chromium y la aceptación del wrapper todavía deben ejecutarse sobre el commit que incorpora estas correcciones. No se ha publicado una release ni desplegado en Render. Los proyectos de juego y el servicio Render permanecen sin cambios.
+
+### 3.1 Adaptador nativo integrado en Godot Web
+
+El adaptador nativo mantiene los tres comandos iniciales de solo lectura: `editor.list_capabilities`, `editor.get_state` y `scene.get_tree`. No permite ejecutar scripts arbitrarios, shell ni mutaciones genéricas.
+
+El workflow de compilación comprueba ahora que el patcher solo modifique los seis archivos de motor previstos. Los marcadores `WEB_DIAG_*` y su instrumentador ya no forman parte de la compilación.
+
+El Project Manager Web utiliza actualmente un escaneo síncrono como alternativa compatible con el navegador. Los directorios muy grandes pueden bloquear temporalmente la interfaz; hasta implementar escaneo incremental y acotado, se recomienda importar proyectos grandes mediante ZIP.
+
+La release versionada es manual y comprueba que el artefacto procede de una ejecución exitosa de la compilación personalizada, en la rama esperada y con el SHA indicado. El despliegue en Render sigue siendo una acción separada y no autorizada.

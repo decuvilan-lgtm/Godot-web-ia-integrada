@@ -245,6 +245,8 @@ def patch_html(html: str) -> str:
   }
 
   function scheduleGodotStart() {
+    // The acceptance harness can drive the official Project Manager manually.
+    if (new URLSearchParams(window.location.search).get("manual") === "1") return;
     startGodotWeb().catch(error => {
       window.__godotGithubConnectorStatus = {
         ...(window.__godotGithubConnectorStatus || {}),

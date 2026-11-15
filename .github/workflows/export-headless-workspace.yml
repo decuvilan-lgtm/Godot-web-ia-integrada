@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: false
 
@@ -31,7 +31,7 @@ jobs:
           tar -tzf export/godot-web-ia-integrada-source.tar.gz | head -80
 
       - name: Upload source archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: headless-workspace-${{ github.sha }}
           path: export/

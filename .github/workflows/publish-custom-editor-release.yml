@@ -1,0 +1,103 @@
+name: Publish verified custom Godot Web Editor release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful custom editor build workflow run ID
+        required: true
+        type: string
+      source_sha:
+        description: Full controller repository commit SHA for that build
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-godot-web-agent-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate the originating custom build run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUN_ID}" =~ ^[0-9]+$ ]] || { echo "run_id must be numeric" >&2; exit 1; }
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "source_sha must be a full lowercase SHA" >&2; exit 1; }
+          gh run view "${RUN_ID}" --repo "${GITHUB_REPOSITORY}" --json name,conclusion,headSha,headBranch > /tmp/custom-build-run.json
+          jq -e --arg sha "${SOURCE_SHA}" '
+            .name == "Build Godot Web Editor with Built-in Agent" and
+            .conclusion == "success" and
+            .headBranch == "feature/builtin-web-editor-agent" and
+            .headSha == $sha
+          ' /tmp/custom-build-run.json >/dev/null || {
+            echo "The selected run is not a successful custom build for the requested branch and source SHA." >&2
+            cat /tmp/custom-build-run.json
+            exit 1
+          }
+
+      - name: Download the exact successful build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: godot-web-editor-agent-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded
+
+      - name: Verify artifact and prepare release assets
+        id: prepare
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          ZIP="downloaded/godot.web.editor.wasm32.zip"
+          SUMS="downloaded/SHA256SUMS"
+          META="downloaded/BUILD-METADATA.txt"
+          test -s "$ZIP"
+          test -s "$SUMS"
+          test -s "$META"
+          grep -qx 'project_overlay=false' "$META"
+          EXPECTED="$(awk '$2 == "artifacts/godot.web.editor.wasm32.zip" {print $1}' "$SUMS")"
+          test -n "$EXPECTED" || { echo "Editor archive checksum missing from SHA256SUMS"; exit 1; }
+          ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p release-assets
+          cp "$ZIP" "$SUMS" "$META" release-assets/
+          SHORT_SHA="$(printf '%s' "$SOURCE_SHA" | cut -c1-7)"
+          TAG="godot-web-agent-4.7.2-$SHORT_SHA"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned editor release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.prepare.outputs.tag }}
+          name: Godot Web Agent Editor ${{ steps.prepare.outputs.tag }}
+          target_commitish: ${{ inputs.source_sha }}
+          draft: false
+          prerelease: false
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/godot.web.editor.wasm32.zip
+            release-assets/SHA256SUMS
+            release-assets/BUILD-METADATA.txt
+          body: |
+            Manually published only after validating the successful custom editor build and real Chromium native-agent smoke test.
+
+            Source commit: ${{ inputs.source_sha }}
+            Editor SHA-256: ${{ steps.prepare.outputs.sha }}
+            Imported-project overlay: false

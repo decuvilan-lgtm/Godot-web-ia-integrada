@@ -1,11 +1,15 @@
 (() => {
 "use strict";
-const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1", pending=new Map();
+const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1", pending=new Map(), MAX_PENDING=64;
 window.addEventListener("message",event=>{
  if(event.source!==window||event.origin!==location.origin) return;
  const data=event.data; if(!data||data.channel!==CHANNEL) return;
  if(data.direction==="host-command"){
   if(typeof data.request_id!=="string"||data.request_id.length>100||pending.has(data.request_id)) return;
+  if(pending.size>=MAX_PENDING){
+   window.postMessage({channel:CHANNEL,direction:"host-response",request_id:data.request_id,result:{ok:false,error:"BRIDGE_BUSY",message:"Too many requests are pending."}},location.origin);
+   return;
+  }
   const timeout=setTimeout(()=>{
    pending.delete(data.request_id);
    window.postMessage({channel:CHANNEL,direction:"host-response",request_id:data.request_id,result:{ok:false,error:"BRIDGE_TIMEOUT",message:"The editor adapter did not respond."}},location.origin);
