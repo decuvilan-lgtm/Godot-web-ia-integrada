@@ -55,10 +55,15 @@ jobs:
           chmod +x runtime/godot-linux-headless-agent/godot
           runtime/godot-linux-headless-agent/godot --headless --version | tee artifacts/godot-version.txt
 
+      - name: Install Xvfb for visual regression tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
       - name: Import project and run the V146 regression suites
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           GODOT="$GITHUB_WORKSPACE/runtime/godot-linux-headless-agent/godot"
           SOURCE="$GITHUB_WORKSPACE/chess-project/ajedrez_2c2_v161"
           PROJECT="$RUNNER_TEMP/ajedrez-2c2-headless"
@@ -66,38 +71,26 @@ jobs:
           test -s "$SOURCE/project.godot"
           test "$(git -C chess-project rev-parse HEAD)" = "$CHESS_SHA"
           cp -a "$SOURCE" "$PROJECT"
-          "$GODOT" --headless --editor --path "$PROJECT" --quit > artifacts/import.log 2>&1
-          import_status=$?
+          if "$GODOT" --headless --editor --path "$PROJECT" --quit > artifacts/import.log 2>&1; then
+            import_status=0
+          else
+            import_status=$?
+          fi
           echo "import_exit_code=$import_status" | tee artifacts/headless-summary.txt
           if [ "$import_status" -ne 0 ]; then
             cat artifacts/import.log
             exit "$import_status"
           fi
 
-          suites=(
-            run_tests.gd
-            v102_board_centering_tests.gd
-            v141_mobile_layout_tests.gd
-            v141_landscape_layout_tests.gd
-            mobile_scroll_gesture_v141_tests.gd
-            v145_responsive_content_scale_tests.gd
-            v145_social_ui_factory_tests.gd
-            v145_responsive_margin_lifecycle_tests.gd
-            v144_professional_hud_tests.gd
-            v134_agent_modularity_tests.gd
-            v135_system_audit_tests.gd
-            v142_mobile_ui_regression_tests.gd
-            v131_offline_diagnostics_panel_tests.gd
-            v146_board_layout_tests.gd
-            v146_social_screen_fit_tests.gd
-            account_hub_tests.gd
-          )
           failures=0
-          for suite in "${suites[@]}"; do
+          for suite in run_tests.gd v102_board_centering_tests.gd v141_mobile_layout_tests.gd v141_landscape_layout_tests.gd mobile_scroll_gesture_v141_tests.gd v145_responsive_content_scale_tests.gd v145_social_ui_factory_tests.gd v145_responsive_margin_lifecycle_tests.gd v144_professional_hud_tests.gd v134_agent_modularity_tests.gd v135_system_audit_tests.gd v142_mobile_ui_regression_tests.gd v131_offline_diagnostics_panel_tests.gd v146_board_layout_tests.gd v146_social_screen_fit_tests.gd; do
             log="artifacts/test-$suite.log"
             echo "RUN $suite"
-            timeout 180 "$GODOT" --headless --path "$PROJECT" --script "res://tests/$suite" > "$log" 2>&1
-            status=$?
+            if timeout 180 "$GODOT" --headless --path "$PROJECT" --script "res://tests/$suite" > "$log" 2>&1; then
+              status=0
+            else
+              status=$?
+            fi
             if [ "$status" -eq 0 ]; then
               echo "PASS $suite" | tee -a artifacts/headless-summary.txt
             else
@@ -107,11 +100,28 @@ jobs:
             fi
           done
 
-          timeout 60 "$GODOT" --headless --path "$PROJECT" --quit-after 120 > artifacts/main-scene-headless.log 2>&1
-          scene_status=$?
-          echo "main_scene_exit_code=$scene_status" | tee -a artifacts/headless-summary.txt
+          account_log="artifacts/test-account_hub_tests.gd.log"
+          if timeout 240 xvfb-run -a --server-args="-screen 0 1920x1080x24" "$GODOT" --path "$PROJECT" --rendering-driver opengl3 --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/account_hub_tests.gd > "$account_log" 2>&1; then
+            account_status=0
+          else
+            account_status=$?
+          fi
+          if [ "$account_status" -eq 0 ]; then
+            echo "PASS account_hub_tests.gd (Xvfb/OpenGL Compatibility)" | tee -a artifacts/headless-summary.txt
+          else
+            echo "FAIL account_hub_tests.gd exit=$account_status (Xvfb/OpenGL Compatibility)" | tee -a artifacts/headless-summary.txt
+            tail -n 120 "$account_log" || true
+            failures=$((failures + 1))
+          fi
+
+          if timeout 60 xvfb-run -a --server-args="-screen 0 1920x1080x24" "$GODOT" --path "$PROJECT" --rendering-driver opengl3 --rendering-method gl_compatibility --audio-driver Dummy --quit-after 120 > artifacts/main-scene-xvfb.log 2>&1; then
+            scene_status=0
+          else
+            scene_status=$?
+          fi
+          echo "main_scene_xvfb_exit_code=$scene_status" | tee -a artifacts/headless-summary.txt
           if [ "$scene_status" -ne 0 ]; then
-            tail -n 120 artifacts/main-scene-headless.log || true
+            tail -n 120 artifacts/main-scene-xvfb.log || true
             failures=$((failures + 1))
           fi
 
@@ -119,7 +129,7 @@ jobs:
             echo "failed_suites=$failures" | tee -a artifacts/headless-summary.txt
             exit 1
           fi
-          echo "all_suites_passed=${#suites[@]}" | tee -a artifacts/headless-summary.txt
+          echo "all_headless_suites_passed=15 plus account_hub_tests" | tee -a artifacts/headless-summary.txt
 
       - name: Verify the checked-out chess project stayed unchanged
         if: always()
@@ -284,22 +294,22 @@ jobs:
                 diagnostic_report = build_diagnostic_report()
           '''
           source = source[:start] + replacement + source[end:]
-          old = '''                \"project_runtime_probe\": {
-                        \"ok\": True,
-                        \"intentional_error_count\": len(project_error_events),
-                        \"events\": project_error_events,
-                        \"markers\": project_marker_events,
+          old = '''                    "project_runtime_probe": {
+                        "ok": True,
+                        "intentional_error_count": len(project_error_events),
+                        "events": project_error_events,
+                        "markers": project_marker_events,
                     },'''
-          new = '''                \"project_runtime_probe\": {
-                        \"ok\": not bool(project_runtime_errors),
-                        \"runtime_error_count\": len(project_runtime_errors),
-                        \"events\": project_error_events,
-                        \"source_locations\": project_source_locations,
-                        \"post_f6_state\": post_f6_state,
-                        \"post_f6_dom\": post_f6_dom,
-                        \"browser_pages_after_f6\": post_f6_pages,
-                        \"before_f6_screenshot\": str(before_f6_screenshot),
-                        \"markers\": project_marker_events,
+          new = '''                    "project_runtime_probe": {
+                        "ok": not bool(project_runtime_errors),
+                        "runtime_error_count": len(project_runtime_errors),
+                        "events": project_error_events,
+                        "source_locations": project_source_locations,
+                        "post_f6_state": post_f6_state,
+                        "post_f6_dom": post_f6_dom,
+                        "browser_pages_after_f6": post_f6_pages,
+                        "before_f6_screenshot": str(before_f6_screenshot),
+                        "markers": project_marker_events,
                     },'''
           if old not in source:
               raise SystemExit("Could not locate the diagnostic-fixture result block for safe temporary adaptation.")
