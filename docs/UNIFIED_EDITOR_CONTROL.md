@@ -53,12 +53,15 @@ Los clientes deben hablar en términos de intención, no de nombres internos del
 | `editor.get_state` | Estado del editor/proyecto | Implementado | Implementado |
 | `scene.get_tree` | Inspeccionar escena activa | Implementado | Implementado |
 | `scene.inspect_selection` | Inspeccionar selección | Implementado | Pendiente |
-| `scene.add_node` | Añadir nodo permitido con Undo | Implementado | Pendiente |
-| `scene.set_node_properties` | Cambiar propiedades permitidas con Undo | Implementado | Pendiente |
-| `project.list_resources` | Enumerar recursos del proyecto | Implementado | Pendiente |
-| `preview.get_status` | Estado de ejecución | Implementado | Pendiente |
-| `preview.start` / `preview.stop` | Controlar vista previa | Implementado | Pendiente |
-| `capture.editor_screenshot` | Captura del editor | Implementado | Pendiente |
+| `scene.add_node` / `scene.set_node_properties` | Crear nodos y cambiar propiedades permitidas con Undo | Implementado | Pendiente |
+| `scene.configure_collision_shape` | Crear y configurar colisiones 2D | Implementado | Pendiente |
+| `scene.assign_visual_resource` / `scene.create_sprite_frames` | Asignar texturas y crear recursos de animación | Implementado | Pendiente |
+| `editor.open_scene` / `editor.focus_inspector` | Navegar escenas y enfocar Inspector | Implementado | Pendiente |
+| `editor.inspect_undo_history` / `editor.undo` / `editor.redo` | Revisar y revertir cambios del puente | Implementado | Pendiente |
+| `project.list_resources` / `project.inspect_resource` | Enumerar e inspeccionar recursos | Implementado | Pendiente |
+| `preview.get_status` / `preview.start` / `preview.stop` | Consultar y controlar vista previa | Implementado | Pendiente |
+| `capture.editor_screenshot` / `capture.desktop_screenshot` | Capturas del editor y escritorio | Implementado | Pendiente |
+| `capture.start_editor_video` / `capture.stop_editor_video` / `capture.read_chunk` | Grabar vídeo y transferir evidencias | Implementado | Pendiente |
 
 Cada adaptador publica su lista real de capacidades en tiempo de ejecución. "Pendiente" no debe simularse ni resolverse mediante clics o código arbitrario. Esta tabla describe el vocabulario y el estado comprobado, no promete paridad entre entornos.
 
