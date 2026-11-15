@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - refactor/unified-editor-bridge
     paths:
       - ".github/workflows/test-headless-session-bridge.yml"
       - "headless/native-editor/addons/headless_session_bridge/**"
