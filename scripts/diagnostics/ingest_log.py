@@ -14,7 +14,9 @@ _CANDIDATE = re.compile(
     r"\b(?:FATAL|ERROR|WARNING|WARN):|"
     r"##\[(?:error|warning)\]|"
     r"DeprecationWarning|not found|unsupported|not available|"
-    r"Blocking on the main thread|ERR_CANT_CREATE|wait_to_finish",
+    r"Blocking on the main thread|ERR_CANT_CREATE|wait_to_finish|"
+    r"scons:\s+\*\*\*|make(?:\[\d+\])?:\s+\*\*\*|"
+    r"ninja:\s+build stopped:",
     re.IGNORECASE,
 )
 
@@ -27,8 +29,8 @@ def infer_source(line: str, default_source: str) -> tuple[str, str]:
         return "node", "build_runtime"
     if "msgfmt" in lowered or "gettext" in lowered:
         return "gettext", "build_dependency"
-    if "scons:" in lowered or "scons " in lowered:
-        return "scons", "build_orchestrator"
+    if "scons:" in lowered or "scons " in lowered or "make[" in lowered or lowered.startswith("make:") or "ninja:" in lowered:
+        return "build_orchestrator", "build_orchestrator"
     if re.search(r"(?:fatal error:|error:|warning:|\[-W[^]]+\])", line, re.IGNORECASE):
         return "compiler", "native_compilation"
     return default_source, "build_output"

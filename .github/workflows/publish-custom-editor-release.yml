@@ -25,6 +25,28 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     steps:
+      - name: Validate the originating custom build run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUN_ID}" =~ ^[0-9]+$ ]] || { echo "run_id must be numeric" >&2; exit 1; }
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "source_sha must be a full lowercase SHA" >&2; exit 1; }
+          gh run view "${RUN_ID}" --repo "${GITHUB_REPOSITORY}" --json name,conclusion,headSha,headBranch > /tmp/custom-build-run.json
+          jq -e --arg sha "${SOURCE_SHA}" '
+            .name == "Build Godot Web Editor with Built-in Agent" and
+            .conclusion == "success" and
+            .headBranch == "feature/builtin-web-editor-agent" and
+            .headSha == $sha
+          ' /tmp/custom-build-run.json >/dev/null || {
+            echo "The selected run is not a successful custom build for the requested branch and source SHA." >&2
+            cat /tmp/custom-build-run.json
+            exit 1
+          }
+
       - name: Download the exact successful build artifact
         uses: actions/download-artifact@v8
         with:
@@ -74,7 +96,7 @@ jobs:
             release-assets/SHA256SUMS
             release-assets/BUILD-METADATA.txt
           body: |
-            Automatically published only after the custom editor build and real Chromium native-agent smoke test passed.
+            Manually published only after validating the successful custom editor build and real Chromium native-agent smoke test.
 
             Source commit: ${{ inputs.source_sha }}
             Editor SHA-256: ${{ steps.prepare.outputs.sha }}

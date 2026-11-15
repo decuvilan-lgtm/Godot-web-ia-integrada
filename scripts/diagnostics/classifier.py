@@ -26,6 +26,11 @@ _EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerou
 _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IGNORECASE)
 _COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
 _COMPILER_ERROR = re.compile(r"(?:^|\s)error:", re.IGNORECASE)
+_BUILD_ORCHESTRATOR_FAILURE = re.compile(
+    r"^\s*(?:scons:\s+\*\*\*|make(?:\[\d+\])?:\s+\*\*\*|"
+    r"ninja:\s+build stopped:)",
+    re.IGNORECASE,
+)
 _SECRET_ASSIGNMENT = re.compile(r"(?i)(\b(?:access[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|auth[_-]?token|refresh[_-]?token|signature)\s*[=:]\s*)([^\s&,;]+)")
 _BEARER_TOKEN = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
 _AUTHORIZATION_HEADER = re.compile(r"(?i)(\bauthorization\s*[=:]\s*)(?:Bearer\s+)?[^\s&,;]+")
@@ -140,6 +145,12 @@ def classify_event(
         classification_rule = f"godot.prefix.{declared_severity}"
         body = match.group(2)
 
+    elif event_role == "diagnostic" and severity_basis == "unknown" and _BUILD_ORCHESTRATOR_FAILURE.search(text):
+        source = "build_orchestrator"
+        source_identification = "exact_pattern"
+        declared_severity = "error"
+        severity_basis = "tool_pattern"
+        classification_rule = "build.orchestrator.failure"
     elif event_role == "diagnostic" and severity_basis == "unknown" and _COMPILER_FATAL.search(text):
         if source == "unknown":
             source = "compiler"

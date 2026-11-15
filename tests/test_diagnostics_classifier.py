@@ -37,6 +37,18 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(event["classification_rule"], "godot.script_error")
         self.assertEqual(event["context"], "godot_project_runtime")
 
+    def test_build_orchestrator_failures_are_errors(self):
+        for message in (
+            "scons: *** [platform/web/target] Error 1",
+            "make[2]: *** [target] Error 1",
+            "ninja: build stopped: subcommand failed.",
+        ):
+            with self.subTest(message=message):
+                event = classify_event(message, source_hint="build_orchestrator")
+                self.assertEqual(event["declared_severity"], "error")
+                self.assertEqual(event["classification_rule"], "build.orchestrator.failure")
+                self.assertEqual(event["category"], "build_configuration")
+
     def test_compiler_warning_and_error_are_distinguished(self):
         warning = classify_event("foo.cpp:12: warning: unused variable", source_hint="compiler")
         error = classify_event("foo.cpp:13: error: unknown type", source_hint="compiler")

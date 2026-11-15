@@ -41,6 +41,23 @@ class BuildLogIngestionTests(unittest.TestCase):
             self.assertNotIn("private-value", persisted)
             self.assertIn("[REDACTED]", persisted)
 
+    def test_orchestrator_failure_lines_are_ingested_as_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "build.log"
+            output = root / "report.json"
+            source.write_text(
+                "scons: *** [target] Error 1\\n"
+                "make[2]: *** [other] Error 2\\n"
+                "ninja: build stopped: subcommand failed.\\n",
+                encoding="utf-8",
+            )
+            report = ingest_log(source, output, "build_log", "test")
+            self.assertEqual(report["candidate_count"], 3)
+            self.assertEqual(report["classification"]["severity_counts"]["error"], 3)
+            self.assertEqual(report["health_status"], "degraded")
+            self.assertTrue(all(event["source"] == "build_orchestrator" for event in report["classification"]["events"]))
+
     def test_gettext_fallback_is_a_warning_not_an_unknown(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
