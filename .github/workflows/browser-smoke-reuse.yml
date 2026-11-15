@@ -213,93 +213,96 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import textwrap
 
           source_path = Path("scripts/build/smoke_test_godot_web_agent.py")
           source = source_path.read_text(encoding="utf-8")
           start = source.index("                # Run a dedicated fixture that emits one deliberate project-runtime")
           end = source.index("                denied_write_probe = page.evaluate", start)
-          replacement = '''                # Run the actual chess project's configured main scene with F6.
-                state_before_f6 = probes["editor.get_state"].get("result", {})
-                if state_before_f6.get("has_scene") is not True:
-                    raise RuntimeError("Chess project did not open an editable scene before F6: " + json.dumps(state_before_f6))
-                if state_before_f6.get("scene_path") != "res://scenes/loading.tscn":
-                    raise RuntimeError("Expected the chess main scene res://scenes/loading.tscn before F6: " + json.dumps(state_before_f6))
-                page.locator("#editor-canvas").focus()
-                before_f6_screenshot = args.screenshot.with_name("chess-before-f6.png")
-                before_f6_screenshot.parent.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(before_f6_screenshot), full_page=False)
-                current_diagnostic_context = "godot_project_runtime"
-                page.keyboard.press("F6")
-                page.wait_for_timeout(15000)
-                current_diagnostic_context = "godot_web_editor_runtime"
-                post_f6_state = execute_semantic_command(page, "editor.get_state", timeout_ms=15000)
-                if not post_f6_state.get("ok") or post_f6_state.get("result", {}).get("editor_available") is not True:
-                    raise RuntimeError("Editor bridge did not remain responsive after F6: " + json.dumps(post_f6_state))
-                post_f6_dom = page.evaluate("""() => ({
-                    title: document.title,
-                    body_text: (document.body?.innerText || "").slice(0, 5000),
-                    canvases: [...document.querySelectorAll("canvas")].map(c => ({
-                        id: c.id, width: c.width, height: c.height,
-                        visible_width: Math.round(c.getBoundingClientRect().width),
-                        visible_height: Math.round(c.getBoundingClientRect().height)
-                    }))
-                })""")
-                post_f6_pages = [{"url": item.url, "title": item.title()} for item in context.pages]
-                probes["editor.get_state_after_f6"] = post_f6_state
-                probes["post_f6_dom"] = post_f6_dom
-                probes["browser_pages_after_f6"] = post_f6_pages
-                startup_regressions_after_f6 = [
-                    str(event.get("text", ""))
-                    for event in console_events
-                    if (
-                        'Parameter "create_fn" is null' in str(event.get("text", ""))
-                        or "Attempt of waiting to finish on a thread that was never started." in str(event.get("text", ""))
-                        or (
-                            "ERR_CANT_CREATE" in str(event.get("text", ""))
-                            and ("DebugAdapter" in str(event.get("text", "")) or "TCPServer" in str(event.get("text", "")))
-                        )
-                    )
-                ]
-                if startup_regressions_after_f6:
-                    raise RuntimeError("Web Editor startup regressions appeared after F6: " + json.dumps(startup_regressions_after_f6))
-                diagnostic_report = build_diagnostic_report()
-                classified_project_errors = [
-                    event for event in diagnostic_report["classification"]["events"]
-                    if event.get("context") == "godot_project_runtime"
-                    and event.get("declared_severity") in {"fatal", "error"}
-                ]
-                project_source_locations = [
-                    location
-                    for event in classified_project_errors
-                    for location in event.get("godot_source_locations", [])
-                ]
-                project_runtime_errors = classified_project_errors
-                project_error_events = [
-                    event for event in raw_diagnostic_events
-                    if event.get("context") == "godot_project_runtime"
-                    and event.get("message")
-                ]
-                project_marker_events = []
-                if project_runtime_errors:
-                    raise RuntimeError(
-                        "Chess project emitted GDScript/runtime errors after F6: "
-                        + json.dumps({
-                            "errors": project_runtime_errors,
-                            "source_locations": project_source_locations,
-                            "raw_events": project_error_events[-40:]
-                        })
-                    )
-                final_digest = project_digest(project_dir)
-                if final_digest != original_digest:
-                    raise RuntimeError("The chess source project changed during browser import or F6.")
-                args.screenshot.parent.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(args.screenshot), full_page=False)
-                diagnostic_report = build_diagnostic_report()
-          '''
+          replacement = textwrap.indent(textwrap.dedent('''\
+          # Run the actual chess project's configured main scene with F6.
+          state_before_f6 = probes["editor.get_state"].get("result", {})
+          if state_before_f6.get("has_scene") is not True:
+              raise RuntimeError("Chess project did not open an editable scene before F6: " + json.dumps(state_before_f6))
+          if state_before_f6.get("scene_path") != "res://scenes/loading.tscn":
+              raise RuntimeError("Expected the chess main scene res://scenes/loading.tscn before F6: " + json.dumps(state_before_f6))
+          page.locator("#editor-canvas").focus()
+          before_f6_screenshot = args.screenshot.with_name("chess-before-f6.png")
+          before_f6_screenshot.parent.mkdir(parents=True, exist_ok=True)
+          page.screenshot(path=str(before_f6_screenshot), full_page=False)
+          current_diagnostic_context = "godot_project_runtime"
+          page.keyboard.press("F6")
+          page.wait_for_timeout(15000)
+          current_diagnostic_context = "godot_web_editor_runtime"
+          post_f6_state = execute_semantic_command(page, "editor.get_state", timeout_ms=15000)
+          if not post_f6_state.get("ok") or post_f6_state.get("result", {}).get("editor_available") is not True:
+              raise RuntimeError("Editor bridge did not remain responsive after F6: " + json.dumps(post_f6_state))
+          post_f6_dom = page.evaluate("""() => ({
+              title: document.title,
+              body_text: (document.body?.innerText || "").slice(0, 5000),
+              canvases: [...document.querySelectorAll("canvas")].map(c => ({
+                  id: c.id, width: c.width, height: c.height,
+                  visible_width: Math.round(c.getBoundingClientRect().width),
+                  visible_height: Math.round(c.getBoundingClientRect().height)
+              }))
+          })""")
+          post_f6_pages = [{"url": item.url, "title": item.title()} for item in context.pages]
+          probes["editor.get_state_after_f6"] = post_f6_state
+          probes["post_f6_dom"] = post_f6_dom
+          probes["browser_pages_after_f6"] = post_f6_pages
+          startup_regressions_after_f6 = [
+              str(event.get("text", ""))
+              for event in console_events
+              if (
+                  'Parameter "create_fn" is null' in str(event.get("text", ""))
+                  or "Attempt of waiting to finish on a thread that was never started." in str(event.get("text", ""))
+                  or (
+                      "ERR_CANT_CREATE" in str(event.get("text", ""))
+                      and ("DebugAdapter" in str(event.get("text", "")) or "TCPServer" in str(event.get("text", "")))
+                  )
+              )
+          ]
+          if startup_regressions_after_f6:
+              raise RuntimeError("Web Editor startup regressions appeared after F6: " + json.dumps(startup_regressions_after_f6))
+          diagnostic_report = build_diagnostic_report()
+          classified_project_errors = [
+              event for event in diagnostic_report["classification"]["events"]
+              if event.get("context") == "godot_project_runtime"
+              and event.get("declared_severity") in {"fatal", "error"}
+          ]
+          project_source_locations = [
+              location
+              for event in classified_project_errors
+              for location in event.get("godot_source_locations", [])
+          ]
+          project_runtime_errors = classified_project_errors
+          project_error_events = [
+              event for event in raw_diagnostic_events
+              if event.get("context") == "godot_project_runtime"
+              and event.get("message")
+          ]
+          project_marker_events = []
+          if project_runtime_errors:
+              raise RuntimeError(
+                  "Chess project emitted GDScript/runtime errors after F6: "
+                  + json.dumps({
+                      "errors": project_runtime_errors,
+                      "source_locations": project_source_locations,
+                      "raw_events": project_error_events[-40:]
+                  })
+              )
+          final_digest = project_digest(project_dir)
+          if final_digest != original_digest:
+              raise RuntimeError("The chess source project changed during browser import or F6.")
+          args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+          page.screenshot(path=str(args.screenshot), full_page=False)
+          diagnostic_report = build_diagnostic_report()
+          '''), "                ")
           source = source[:start] + replacement + source[end:]
           target = Path("scripts/build/smoke_test_chess_web.py")
+          compile(source, str(target), "exec")
           target.write_text(source, encoding="utf-8")
-          print(f"Prepared temporary chess smoke runner: {target}")
+          print(f"Prepared and syntax-checked temporary chess smoke runner: {target}")
           PY
 
       - name: Import chess project, inspect it with the read-only agent, and run F6 in Chromium
