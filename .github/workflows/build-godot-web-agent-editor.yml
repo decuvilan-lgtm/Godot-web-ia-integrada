@@ -178,7 +178,8 @@ jobs:
           printf 'preserve-me\n' > "$SENTINEL"
           FAKE_BIN="$(mktemp -d)"
           REAL_PYTHON="$(command -v python3)"
-          cat > "$FAKE_BIN/python3" <<EOF
+          export REAL_PYTHON
+          cat > "$FAKE_BIN/python3" <<'EOF'
           #!/usr/bin/env bash
           if [[ "$1" == */scripts/test_patch_web_shell.py ]]; then
             echo "Injected patch failure for rollback test."
