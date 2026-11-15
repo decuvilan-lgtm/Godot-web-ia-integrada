@@ -14,9 +14,6 @@ on:
       - '.github/workflows/test-web-wrapper-custom-editor.yml'
       - 'README.md'
       - 'docs/**'
-      - 'scripts/diagnostics/**'
-      - 'tests/test_diagnostics_classifier.py'
-      - 'tests/test_diagnostics_ingest_log.py'
   workflow_dispatch:
     inputs:
       godot_ref:
@@ -71,7 +68,7 @@ jobs:
             git -C godot rev-parse HEAD
             echo "The checked out ref is not an exact tag; continuing with the resolved commit."
           }
-          python -m py_compile scripts/build/patch_godot_web_agent.py
+          python -m py_compile scripts/build/patch_godot_web_agent.py scripts/diagnostics/classifier.py scripts/diagnostics/ingest_log.py scripts/build/smoke_test_godot_web_agent.py
           python scripts/build/patch_godot_web_agent.py --godot-source godot
           PYTHONPATH=scripts python scripts/diagnostics/instrument_godot.py --godot-source godot
           git -C godot diff --check
