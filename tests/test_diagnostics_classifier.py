@@ -224,6 +224,28 @@ class DiagnosticsClassifierTests(unittest.TestCase):
             [{"path": "res://scripts/player.gd", "line": 27, "frame": "at: _ready (res://scripts/player.gd:27)"}],
         )
 
+    def test_stack_frames_never_cross_editor_and_project_contexts(self):
+        project_root = classify_event(
+            "ERROR: project failed",
+            timestamp="1000",
+            context="godot_project_runtime",
+        )
+        editor_root = classify_event(
+            "ERROR: editor failed",
+            timestamp="1050",
+            context="godot_web_editor_runtime",
+        )
+        project_frame = classify_event(
+            "at: _ready (res://main.gd:5)",
+            source_hint="browser_console",
+            timestamp="1100",
+            context="godot_project_runtime",
+        )
+        linked = link_continuation_events([project_root, editor_root, project_frame])
+        self.assertEqual(linked[2]["related_event_index"], 0)
+        self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 5)
+        self.assertNotIn("godot_source_locations", linked[1])
+
     def test_continuation_outside_correlation_window_is_not_attached(self):
         root = classify_event("ERROR: worker failed", timestamp="1000")
         frame = classify_event(
