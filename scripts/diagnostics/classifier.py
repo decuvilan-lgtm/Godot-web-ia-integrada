@@ -20,7 +20,7 @@ _GODOT_STACK_TRACE = re.compile(
     r"Frame\s+\d+\s+-\s+res://[^\s]+:\d+\s+in function .*)\s*$"
 )
 _GODOT_SCRIPT_ERROR = re.compile(r"^\s*SCRIPT ERROR:\s*(.*)$", re.IGNORECASE)
-_GODOT_PROJECT_LOCATION = re.compile(r"\((res://[^)]+):(\d+)\)")
+_GODOT_PROJECT_LOCATION = re.compile(r"(res://.+?):(\d+)(?=\)|\s|$)")
 _EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerous", re.IGNORECASE)
 _COMPILER_WARNING = re.compile(r"(?:^|\s)(?:fatal )?warning:|\[-W[^]]+\]", re.IGNORECASE)
 _COMPILER_FATAL = re.compile(r"(?:^|\s)fatal error:", re.IGNORECASE)
