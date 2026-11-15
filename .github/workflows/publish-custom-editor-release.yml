@@ -1,17 +1,10 @@
 name: Publish verified custom Godot Web Editor release
 
 on:
-  workflow_run:
-    workflows:
-      - Build Godot Web Editor with Built-in Agent
-    types:
-      - completed
-    branches:
-      - feature/builtin-web-editor-agent
   workflow_dispatch:
     inputs:
       run_id:
-        description: Successful build workflow run ID
+        description: Successful custom editor build workflow run ID
         required: true
         type: string
       source_sha:
@@ -24,19 +17,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-godot-web-agent-${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+  group: publish-godot-web-agent-${{ inputs.source_sha }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Download the exact successful build artifact
         uses: actions/download-artifact@v8
         with:
-          name: godot-web-editor-agent-${{ inputs.run_id || github.event.workflow_run.id }}
-          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          name: godot-web-editor-agent-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: downloaded
 
@@ -44,7 +37,7 @@ jobs:
         id: prepare
         shell: bash
         env:
-          SOURCE_SHA: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -Eeuo pipefail
           ZIP="downloaded/godot.web.editor.wasm32.zip"
@@ -54,7 +47,8 @@ jobs:
           test -s "$SUMS"
           test -s "$META"
           grep -qx 'project_overlay=false' "$META"
-          EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
+          EXPECTED="$(awk '$2 == "artifacts/godot.web.editor.wasm32.zip" {print $1}' "$SUMS")"
+          test -n "$EXPECTED" || { echo "Editor archive checksum missing from SHA256SUMS"; exit 1; }
           ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
           test "$EXPECTED" = "$ACTUAL"
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -70,7 +64,7 @@ jobs:
         with:
           tag_name: ${{ steps.prepare.outputs.tag }}
           name: Godot Web Agent Editor ${{ steps.prepare.outputs.tag }}
-          target_commitish: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+          target_commitish: ${{ inputs.source_sha }}
           draft: false
           prerelease: false
           make_latest: false
@@ -82,6 +76,6 @@ jobs:
           body: |
             Automatically published only after the custom editor build and real Chromium native-agent smoke test passed.
 
-            Source commit: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+            Source commit: ${{ inputs.source_sha }}
             Editor SHA-256: ${{ steps.prepare.outputs.sha }}
             Imported-project overlay: false
