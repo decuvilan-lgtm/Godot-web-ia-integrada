@@ -250,6 +250,48 @@ class DiagnosticsClassifierTests(unittest.TestCase):
         self.assertEqual(linked[0]["godot_source_locations"][0]["line"], 5)
         self.assertNotIn("godot_source_locations", linked[1])
 
+    def test_gdscript_backtrace_header_does_not_replace_root_error(self):
+        context = "godot_project_runtime"
+        root = classify_event(
+            "ERROR: PROJECT_DIAG_FIXTURE: intentional runtime error",
+            timestamp="1000",
+            context=context,
+        )
+        cpp_frame = classify_event(
+            "   at: push_error (core/variant/variant_utility.cpp:1023)",
+            transport_type="error",
+            source_hint="browser_console",
+            timestamp="1100",
+            context=context,
+        )
+        header = classify_event(
+            "GDScript backtrace (most recent call first):",
+            transport_type="error",
+            source_hint="browser_console",
+            timestamp="1200",
+            context=context,
+        )
+        script_frame = classify_event(
+            "       [0] _ready (res://main.gd:5)",
+            transport_type="error",
+            source_hint="browser_console",
+            timestamp="1300",
+            context=context,
+        )
+        print_frame = classify_event(
+            "Frame 0 - res://main.gd:6 in function '_ready'",
+            transport_type="log",
+            source_hint="browser_console",
+            timestamp="1400",
+            context=context,
+        )
+        linked = link_continuation_events([root, cpp_frame, header, script_frame, print_frame])
+        self.assertTrue(all(event.get("related_event_index") == 0 for event in linked[1:]))
+        locations = {(item["path"], item["line"]) for item in linked[0]["godot_source_locations"]}
+        self.assertEqual(locations, {("res://main.gd", 5), ("res://main.gd", 6)})
+        self.assertEqual(summarize_events(linked)["severity_counts"]["error"], 1)
+        self.assertEqual(linked[2]["classification_rule"], "godot.stack_trace.header")
+
     def test_continuation_outside_correlation_window_is_not_attached(self):
         root = classify_event("ERROR: worker failed", timestamp="1000")
         frame = classify_event(

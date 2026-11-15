@@ -19,6 +19,7 @@ _GODOT_STACK_TRACE = re.compile(
     r"\[\d+\]\s+.*\(res://[^)]+:\d+\)|"
     r"Frame\s+\d+\s+-\s+res://[^\s]+:\d+\s+in function .*)\s*$"
 )
+_GODOT_STACK_TRACE_HEADER = re.compile(r"^\s*GDScript backtrace(?: \(most recent call first\))?:\s*$", re.IGNORECASE)
 _GODOT_SCRIPT_ERROR = re.compile(r"^\s*SCRIPT ERROR:\s*(.*)$", re.IGNORECASE)
 _GODOT_PROJECT_LOCATION = re.compile(r"(res://.+?):(\d+)(?=\)|\s|$)")
 _EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerous", re.IGNORECASE)
@@ -101,12 +102,13 @@ def classify_event(
     source_identification = "caller_declared" if source != "unknown" else "unknown"
     body = text
     match = None
-    if _GODOT_STACK_TRACE.match(text):
+    stack_header_match = _GODOT_STACK_TRACE_HEADER.match(text)
+    if _GODOT_STACK_TRACE.match(text) or stack_header_match:
         source = "godot_stack_trace"
         source_identification = "exact_pattern"
         declared_severity = "notice"
         severity_basis = "structural_pattern"
-        classification_rule = "godot.stack_trace.continuation"
+        classification_rule = "godot.stack_trace.header" if stack_header_match else "godot.stack_trace.continuation"
         event_role = "continuation"
         body = text.strip()
     elif _EMSCRIPTEN_BLOCKING.search(text):

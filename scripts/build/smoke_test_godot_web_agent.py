@@ -113,7 +113,9 @@ def main() -> int:
         # Browser console APIs may deliver a multiline Godot stack trace as one
         # message. Split it into ordered records so each "at:" frame is classified
         # and linked to the preceding root error.
-        for line in str(message).splitlines() or [str(message)]:
+        for line in str(message).splitlines():
+            if not line.strip():
+                continue
             if "PROJECT_DIAG_BEGIN" in line:
                 current_diagnostic_context = "godot_project_runtime"
             raw_diagnostic_events.append({
@@ -492,6 +494,8 @@ def main() -> int:
                         "Project runtime diagnostic probe did not capture exactly one intentional error: "
                         + json.dumps({
                             "markers": project_marker_events,
+                        "source_locations": project_source_locations,
+                        "project_error_count": len(project_runtime_errors),
                             "markers_are_complete": markers_are_complete,
                             "project_errors": project_error_events,
                             "recent_console": console_events[-30:],
@@ -515,14 +519,26 @@ def main() -> int:
                     for event in classified_project_errors
                     for location in event.get("godot_source_locations", [])
                 ]
-                if len(classified_project_errors) != 1 or not any(
-                    location.get("path") == "res://main.gd" and location.get("line") == 5
+                project_runtime_errors = [
+                    event for event in diagnostic_report["classification"]["events"]
+                    if event.get("context") == "godot_project_runtime"
+                    and event.get("declared_severity") in {"fatal", "error"}
+                ]
+                actual_locations = {
+                    (location.get("path"), location.get("line"))
                     for location in project_source_locations
+                }
+                expected_locations = {("res://main.gd", 5), ("res://main.gd", 6)}
+                if (
+                    len(classified_project_errors) != 1
+                    or len(project_runtime_errors) != 1
+                    or not expected_locations.issubset(actual_locations)
                 ):
                     raise RuntimeError(
-                        "Project runtime error was not correlated to res://main.gd:5: "
+                        "Project runtime trace was not fully correlated to res://main.gd:5-6: "
                         + json.dumps({
                             "classified_errors": classified_project_errors,
+                            "project_runtime_errors": project_runtime_errors,
                             "source_locations": project_source_locations,
                             "raw_project_events": [event for event in raw_diagnostic_events if event.get("context") == "godot_project_runtime"],
                         })
@@ -534,6 +550,9 @@ def main() -> int:
                 })""")
                 if denied_write_probe.get("ok") is not False or denied_write_probe.get("error") != "COMMAND_NOT_ALLOWED":
                     raise RuntimeError("The built-in agent did not reject a non-allowlisted write command: " + json.dumps(denied_write_probe))
+                pending_after_denial = page.evaluate("() => window.__godotEditorAgentPending?.size ?? -1")
+                if pending_after_denial != 0:
+                    raise RuntimeError(f"Native agent leaked pending requests after denied command: {pending_after_denial}")
                 result = {
                     "ok": True,
                     "editor_url": origin + "/" + args.entrypoint,
@@ -544,6 +563,7 @@ def main() -> int:
                     "runtime": runtime,
                     "semantic_probes": probes,
                     "pending_requests_after_probes": pending,
+                    "pending_requests_after_denial": pending_after_denial,
                     "read_only_rejection_probe": denied_write_probe,
                     "startup_regressions": startup_regressions,
                     "project_runtime_probe": {
