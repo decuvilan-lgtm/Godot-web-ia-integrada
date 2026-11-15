@@ -27,7 +27,7 @@ def execute_semantic_command(page: Any, action: str, args: dict[str, Any] | None
     This function does not click, move the mouse, press keys, or use coordinates.
     It returns an explicit error if the extension or Godot editor adapter is absent.
     """
-    payload = args or {}
+    payload = {} if args is None else args
     _validate(action, payload)
     if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or not 100 <= timeout_ms <= 30000:
         raise ValueError("timeout_ms must be between 100 and 30000")

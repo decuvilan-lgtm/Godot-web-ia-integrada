@@ -17,6 +17,12 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertNotIn("adapter.execute", bridge)
         self.assertIn('"scene.get_tree"', bridge)
 
+    def test_extension_pending_requests_are_bounded(self):
+        relay = (ROOT / "browser-extension" / "content.js").read_text(encoding="utf-8")
+        self.assertIn("MAX_PENDING=64", relay)
+        self.assertIn("pending.size>=MAX_PENDING", relay)
+        self.assertIn('"BRIDGE_BUSY"', relay)
+
     def test_python_controller_allowlist_matches_read_only_phase(self):
         controller = (ROOT / "scripts" / "bridge" / "semantic_controller.py").read_text(encoding="utf-8")
         self.assertIn('"editor.list_capabilities"', controller)
