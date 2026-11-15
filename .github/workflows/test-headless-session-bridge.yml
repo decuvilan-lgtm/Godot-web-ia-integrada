@@ -3,7 +3,12 @@ name: Test native Headless Session Bridge in disposable Bridge Sandbox
 on:
   push:
     branches:
-      - feat/headless-session-bridge-integration
+      - main
+    paths:
+      - ".github/workflows/test-headless-session-bridge.yml"
+      - "headless/native-editor/addons/headless_session_bridge/**"
+      - "headless/native-editor/tools/headless_bridge/**"
+  pull_request:
     paths:
       - ".github/workflows/test-headless-session-bridge.yml"
       - "headless/native-editor/addons/headless_session_bridge/**"
@@ -19,7 +24,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Godot and GUI automation
         shell: bash
