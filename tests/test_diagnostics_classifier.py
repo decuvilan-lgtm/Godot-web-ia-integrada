@@ -166,6 +166,7 @@ class DiagnosticsClassifierTests(unittest.TestCase):
             "at: _ready (res://main.gd:5)",
             source_hint="browser_console",
             timestamp="1200",
+            context="godot_project_runtime",
         )
         self.assertEqual(frame["event_role"], "continuation")
         linked = link_continuation_events([root, frame])
@@ -184,6 +185,7 @@ class DiagnosticsClassifierTests(unittest.TestCase):
             source_hint="browser_console",
             transport_type="error",
             timestamp="1200",
+            context="godot_project_runtime",
         )
         linked = link_continuation_events([root, frame])
         self.assertEqual(linked[1]["event_role"], "continuation")
@@ -200,6 +202,7 @@ class DiagnosticsClassifierTests(unittest.TestCase):
             "Frame 0 - res://main.gd:6 in function '_ready'",
             source_hint="browser_console",
             timestamp="1200",
+            context="godot_project_runtime",
         )
         linked = link_continuation_events([root, frame])
         self.assertEqual(linked[1]["event_role"], "continuation")
@@ -216,6 +219,7 @@ class DiagnosticsClassifierTests(unittest.TestCase):
             "   at: _ready (res://scripts/player.gd:27)",
             source_hint="browser_console",
             timestamp="1200",
+            context="godot_project_runtime",
         )
         linked = link_continuation_events([root, frame])
         self.assertEqual(linked[1]["related_event_index"], 0)
