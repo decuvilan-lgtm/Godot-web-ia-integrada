@@ -185,12 +185,12 @@ def main() -> int:
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         origin = f"http://127.0.0.1:{server.server_port}"
         extension_dir = root / "extension"
-        prepare_extension(REPO_ROOT / "browser-extension", extension_dir, origin)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         context = None
         page = None
 
         try:
+            prepare_extension(REPO_ROOT / "browser-extension", extension_dir, origin)
             thread.start()
             with sync_playwright() as playwright:
                 context = playwright.chromium.launch_persistent_context(
@@ -491,7 +491,7 @@ def main() -> int:
                     raise RuntimeError(
                         "Project runtime diagnostic probe did not capture exactly one intentional error: "
                         + json.dumps({
-                                    "markers": project_marker_events,
+                            "markers": project_marker_events,
                             "markers_are_complete": markers_are_complete,
                             "project_errors": project_error_events,
                             "recent_console": console_events[-30:],
