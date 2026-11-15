@@ -58,24 +58,17 @@ No arbitrary GDScript evaluation, shell, external URL access, unrestricted files
 
 ## Build, wrapper, release, and deployment
 
-The engine build workflow `.github/workflows/build-godot-web-agent-editor.yml` checks out Godot `4.7.2-stable`, applies the anchor-validated patch only to the two engine-owned files, and builds the threaded Web Editor with Emscripten 4.0.0 and SCons. It validates the ZIP contents, records the engine commit and SHA-256, and runs the browser acceptance probe before uploading the artifact.
+The engine build workflow `.github/workflows/build-godot-web-agent-editor.yml` checks out Godot `4.7.2-stable`, applies anchor-validated changes to the Web Tools plugin and selected Web compatibility callsites, then builds the threaded Web Editor with Emscripten 4.0.0 and SCons. A temporary diagnostic-instrumentation pass also touches additional engine-owned callsites during investigation; it is not intended for the final production artifact. The workflow validates the exact changed-file set, ZIP contents, engine commit and SHA-256, then launches the built editor in Chromium.
 
-The custom build artifact from run `43561299883` passed the three read-only probes in real Chromium:
-- `editor.list_capabilities`
-- `editor.get_state`
-- `scene.get_tree`
+Historical artifacts are not proof that the current branch is healthy. In particular, the cached artifact workflow previously reused an older editor build and reproduced a thread-lifecycle warning. The cached browser test has therefore been changed to require an explicitly selected build run ID; the authoritative acceptance test is the Chromium smoke test run against the freshly built artifact.
 
-The fixture project remained byte-for-byte unchanged, and the editor reported no pending native requests after the probes.
-
-The wrapper builder `scripts/build-web.sh` now supports:
+The wrapper builder `scripts/build-web.sh` supports:
 - `GODOT_WEB_EDITOR_ARCHIVE`: local custom editor ZIP.
 - `GODOT_WEB_EDITOR_URL`: HTTPS URL for a custom editor ZIP.
 - `GODOT_WEB_EDITOR_SHA256`: required checksum for either custom source.
 - Without custom inputs, it retains the pinned official archive and checksum as rollback.
 
-The wrapper-only build using the custom ZIP passed in run `43564943158`. A second acceptance workflow now launches the patched wrapper itself in Chromium and exercises the same native-agent contract; that test must pass before deployment.
-
-A release workflow is configured to publish a versioned GitHub Release only after a successful custom editor build and native-agent smoke test. The existing Render static service remains unchanged until the wrapper browser acceptance test and release asset verification both pass. Preserve the COOP/COEP headers required for threaded WebAssembly.
+The wrapper acceptance workflow also requires an explicitly selected build run ID and verifies the checksum entry for the exact editor ZIP. The versioned GitHub Release workflow is manual-only; a successful build does not automatically publish a release. The existing Render static service remains unchanged until a fresh wrapper acceptance test, explicit release review, and deployment authorization are completed.
 
 ## Non-negotiable isolation checks
 
