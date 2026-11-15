@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: godot-web-agent-build
+  group: godot-web-agent-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
