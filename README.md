@@ -81,7 +81,7 @@ No se inyectan complementos, cambios a project.godot ni archivos del controlador
 
 - python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
 - python -m unittest discover -s tests -p 'test_*.py' -v
-- python -m unittest tests.test_web_agent_patcher -v
+- python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
 - bash scripts/test-bridge-sandbox.sh
 - Workflow de Chromium: ejecutar manualmente indicando el ID de una compilación personalizada exitosa.
 

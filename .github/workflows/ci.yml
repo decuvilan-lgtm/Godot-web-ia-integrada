@@ -21,7 +21,7 @@ jobs:
           bash -n scripts/build-web.sh
           bash -n scripts/ci/run-godot-task.sh
           ruby -e 'require "yaml"; c = YAML.load_file(".circleci/config.yml"); abort "CircleCI job missing" unless c.dig("jobs", "godot-task")'
-          ruby -e 'require "yaml"; %w[persistent-session-smoke.yml remote-godot-task.yml build-godot-web-agent-editor.yml browser-smoke-reuse.yml test-web-wrapper-custom-editor.yml publish-custom-editor-release.yml].each { |name| YAML.load_file(".github/workflows/" + name) }'
+          ruby -e 'require "yaml"; %w[persistent-session-smoke.yml remote-godot-task.yml build-godot-web-agent-editor.yml browser-smoke-reuse.yml test-web-wrapper-custom-editor.yml publish-custom-editor-release.yml test-headless-session-bridge.yml].each { |name| YAML.load_file(".github/workflows/" + name) }'
           ruby -e 'require "yaml"; w = YAML.load_file(".github/workflows/persistent-session-smoke.yml"); s = w.dig("jobs", "persistent-session", "steps").find { |step| step["name"] == "Open persistent editor, inspect, capture and persist evidence" }["run"]; File.write("/tmp/persistent-session-smoke.sh", s); abort "OIDC permission missing" unless w.dig("permissions", "id-token") == "write"'
           bash -n /tmp/persistent-session-smoke.sh
           python -m py_compile scripts/diagnostics/classifier.py scripts/diagnostics/ingest_log.py scripts/build/smoke_test_godot_web_agent.py scripts/bridge/browser_command_loop.py scripts/bridge/semantic_controller.py scripts/bridge/test_browser_command_loop.py scripts/bridge/prepare_browser_issue.py scripts/bridge/test_prepare_browser_issue.py scripts/bridge/prepare_issue.py scripts/bridge/test_prepare_issue.py scripts/patch-web-shell.py scripts/package-bridge-sandbox.py relay/app.py relay/github_archives.py relay/test_github_archives.py relay/command_center.py relay/admin.py relay/visual_storage.py relay/visual_proxy.py relay/project_sync.py relay/test_app.py relay/storage_cors.py relay/persistent_sessions.py relay/test_persistent_sessions.py relay/worker_artifacts.py relay/test_worker_artifacts.py relay/project_profiles.py scripts/godot-browser-worker.py relay/test_project_profiles.py tests/live_link/test_storage_cors.py
@@ -31,6 +31,10 @@ jobs:
         run: PYTHONPATH=scripts python -m unittest discover -s tests -p 'test_diagnostics_ingest_log.py' -v
       - name: Test ChatGPT GitHub Bridge task validation
         run: python -m unittest discover -s scripts/bridge -p 'test_*.py' -v
+      - name: Test built-in Godot Web agent patcher
+        run: python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
+      - name: Test native bridge project isolation contract
+        run: python -m unittest discover -s tests -p 'test_native_bridge_contract.py' -v
       - name: Test mobile shell patcher
         run: python -m unittest scripts/test_patch_web_shell.py -v
       - name: Test interactive gameplay controller
