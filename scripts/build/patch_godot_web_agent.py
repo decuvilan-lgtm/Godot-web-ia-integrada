@@ -69,9 +69,22 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\t\t\t}
 \t\t\t\tModule.HEAPU8.set(bytes, ptr);
 \t\t\t\tModule.HEAPU8[ptr + bytes.length] = 0;
-\t\t\t\tpending.set(request.id, resolve);
-\t\t\t\tModule._godot_web_agent_submit(ptr);
-\t\t\t\tModule._free(ptr);
+\t\t\t\tconst timer = setTimeout(() => {
+\t\t\t\t\tconst entry = pending.get(request.id);
+\t\t\t\t\tif (!entry) return;
+\t\t\t\t\tpending.delete(request.id);
+\t\t\t\t\tentry.reject(new Error("Native agent request timed out"));
+\t\t\t\t}, 8000);
+\t\t\t\tpending.set(request.id, {resolve, reject, timer});
+\t\t\t\ttry {
+\t\t\t\t\tModule._godot_web_agent_submit(ptr);
+\t\t\t\t} catch (error) {
+\t\t\t\t\tclearTimeout(timer);
+\t\t\t\t\tpending.delete(request.id);
+\t\t\t\t\treject(error);
+\t\t\t\t} finally {
+\t\t\t\t\tModule._free(ptr);
+\t\t\t\t}
 \t\t\t});
 \t\t}
 \t};
@@ -83,10 +96,11 @@ EM_JS(void, godot_web_agent_publish, (const char *p_json), {
 \ttry { response = JSON.parse(UTF8ToString(p_json)); } catch (_) { return; }
 \tconst pending = window.__godotEditorAgentPending;
 \tif (!pending || typeof response.id !== "string") return;
-\tconst resolve = pending.get(response.id);
-\tif (!resolve) return;
+\tconst entry = pending.get(response.id);
+\tif (!entry) return;
 \tpending.delete(response.id);
-\tresolve(response);
+\tclearTimeout(entry.timer);
+\tentry.resolve(response);
 });
 
 extern "C" {
