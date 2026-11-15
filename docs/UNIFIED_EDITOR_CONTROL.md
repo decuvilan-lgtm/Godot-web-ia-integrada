@@ -43,6 +43,25 @@ El complemento valida token, versión, identidad del proyecto, tamaño y comando
 
 Las acciones nativas existentes incluyen inspección de escena y recursos, creación de nodos permitidos, configuración de algunas propiedades/colisiones, asignación de recursos visuales, Undo/Redo, apertura de escenas, foco del Inspector, vista previa y captura. La lista real se obtiene del adaptador; no asumir que todas las operaciones del editor están cubiertas.
 
+## Vocabulario semántico común v1
+
+Los clientes deben hablar en términos de intención, no de nombres internos del adaptador. El puente nativo ya expone esta primera capa de nombres canónicos; los nombres históricos se conservan como alias de compatibilidad mientras se migran los clientes.
+
+| Comando canónico | Intención | Godot nativo | Godot Web |
+|---|---|---|---|
+| `editor.list_capabilities` | Descubrir funciones disponibles | Implementado | Implementado |
+| `editor.get_state` | Estado del editor/proyecto | Implementado | Implementado |
+| `scene.get_tree` | Inspeccionar escena activa | Implementado | Implementado |
+| `scene.inspect_selection` | Inspeccionar selección | Implementado | Pendiente |
+| `scene.add_node` | Añadir nodo permitido con Undo | Implementado | Pendiente |
+| `scene.set_node_properties` | Cambiar propiedades permitidas con Undo | Implementado | Pendiente |
+| `project.list_resources` | Enumerar recursos del proyecto | Implementado | Pendiente |
+| `preview.get_status` | Estado de ejecución | Implementado | Pendiente |
+| `preview.start` / `preview.stop` | Controlar vista previa | Implementado | Pendiente |
+| `capture.editor_screenshot` | Captura del editor | Implementado | Pendiente |
+
+Cada adaptador publica su lista real de capacidades en tiempo de ejecución. "Pendiente" no debe simularse ni resolverse mediante clics o código arbitrario. Esta tabla describe el vocabulario y el estado comprobado, no promete paridad entre entornos.
+
 ## Reglas comunes
 
 1. **Descubrir capacidades:** nunca inferir que una operación está disponible por el nombre del entorno.
