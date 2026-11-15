@@ -98,8 +98,9 @@ one deliberately identifiable `push_error()` message between
 those markers to assign the resulting event and its Godot stack continuation
 to `godot_project_runtime`, while editor startup messages remain in
 `godot_web_editor_runtime`. The smoke test asserts that exactly one expected
-project error is captured; the expected error is retained as an error in the
-artifact, not hidden or downgraded.
+project error is captured and that the GDScript backtrace header and its frame
+lines are treated as structural continuations. The expected error is retained
+as an error in the artifact, not hidden or downgraded.
 
 This proves the browser capture path can observe at least one real GDScript
 runtime error from an executing project and keep its context separate from
@@ -107,12 +108,18 @@ editor diagnostics. It does **not** yet claim complete project diagnostics:
 static GDScript parse coverage, resource/import failures, scene-load failures,
 signals, shader errors, and performance telemetry need dedicated probes and
 source-aware correlation. The current project runtime probe is intentionally
-small and deterministic.
+small and deterministic. In the Web Project Manager, directory scanning currently
+uses a synchronous fallback because browser builds cannot rely on the native
+thread path. Very large user-selected directory trees can block the UI; until
+scanning is bounded or incremental, prefer ZIP import for large projects.
 
-The capture is currently **audit-only**. It does not change engine behavior,
-suppress messages, or alter the smoke test's pass/fail policy. CI runs focused
-classifier regression tests. A later policy change must be based on measured
-baselines and functional impact, not on a desire to make logs look clean.
+The classifier is **audit-only**: it does not change engine behavior or suppress
+messages. The browser smoke test has a separate functional contract: it checks
+that the two project markers occur exactly once and in order, captures exactly
+one intentional project runtime error, correlates both expected GDScript source
+locations (res://main.gd:5 and res://main.gd:6), verifies the read-only command
+rejection, and confirms pending requests return to zero. Diagnostic health
+summaries do not independently decide whether the editor build passes.
 
 ## Non-goals and safeguards
 

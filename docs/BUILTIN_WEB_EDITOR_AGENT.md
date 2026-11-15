@@ -81,11 +81,12 @@ The wrapper acceptance workflow also requires an explicitly selected build run I
 
 ## Current status
 
-- **Implemented:** native C++ adapter, bounded queue, protocol v1, browser extension relay, Python semantic client, anchor-validated patcher, and diagnostic capture.
-- **Implemented:** native request timeouts clean up pending entries; stack frames are correlated only within their own runtime context; browser smoke failures preserve redacted diagnostic artifacts.
-- **Historical evidence only:** earlier builds exercised the three read-only commands and wrapper packaging, but those artifacts predate the current diagnostic and lifecycle checks. Do not use their run IDs as current acceptance evidence.
-- **Pending verification:** a fresh custom engine build, the fresh-artifact Chromium smoke test, and the full wrapper acceptance test.
-- **Not deployed:** no Render deployment or versioned release has been performed as part of this branch.
+- **Implemented:** native C++ adapter, bounded native queue, protocol v1, browser extension relay, Python semantic client, anchor-validated patcher, and runtime diagnostic capture.
+- **Verified before cleanup:** custom editor build and Chromium probes passed on run [43660833115](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43660833115); repository checks passed on [43660833184](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43660833184); official Web Editor verification passed on [43660833118](https://github.com/decuvilan-lgtgm/Godot-web-ia-integrada/actions/runs/43660833118). The custom artifact still contained temporary diagnostic markers, so it is investigation evidence, not clean acceptance.
+- **Clean acceptance pending:** temporary engine instrumentation has been removed. A new build must verify that only the six engine files changed by the production patcher are modified and pass Chromium smoke without WEB_DIAG markers.
+- **Hardening included:** actual bounded command-loop duration, paginated chronological GitHub comments, strict semantic argument validation, bounded extension pending requests, build-orchestrator error classification, rollback-safe wrapper assembly, and exact source-run validation for manual releases.
+- **Project Manager limitation:** Web folder scanning currently falls back to a synchronous scan. Very large directory trees can block the editor; use ZIP import for large projects until bounded/incremental scanning is implemented.
+- **Not deployed:** no Render deployment or versioned release has been performed. The release workflow remains manual and now verifies the exact successful build run, branch, and source SHA.
 - **Not changed:** imported game repositories, Render services, and Neon storage.
 
-Do not describe the current branch as production-ready until the latest custom build and browser acceptance tests pass, temporary instrumentation is removed, a clean production build passes, and deployment is separately authorized.
+Do not describe the current branch as production-ready until the latest clean custom build, Chromium acceptance, wrapper acceptance, and all repository checks pass. Deployment remains a separate, explicitly authorized action.
