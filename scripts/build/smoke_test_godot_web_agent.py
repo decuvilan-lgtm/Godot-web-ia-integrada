@@ -183,13 +183,15 @@ def main() -> int:
 
         handler = lambda *a, **kw: IsolatedHandler(*a, directory=str(editor_root), **kw)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
         origin = f"http://127.0.0.1:{server.server_port}"
         extension_dir = root / "extension"
         prepare_extension(REPO_ROOT / "browser-extension", extension_dir, origin)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        context = None
+        page = None
 
         try:
+            thread.start()
             with sync_playwright() as playwright:
                 context = playwright.chromium.launch_persistent_context(
                     str(root / "chromium-profile"),
@@ -479,11 +481,18 @@ def main() -> int:
                     if event.get("context") == "godot_project_runtime"
                     and "PROJECT_DIAG_FIXTURE" in str(event.get("message", ""))
                 ]
-                if not project_marker_events or len(project_error_events) != 1:
+                marker_texts = [str(event.get("text", "")) for event in project_marker_events]
+                markers_are_complete = (
+                    len(marker_texts) == 2
+                    and "PROJECT_DIAG_BEGIN" in marker_texts[0]
+                    and "PROJECT_DIAG_END" in marker_texts[1]
+                )
+                if not markers_are_complete or len(project_error_events) != 1:
                     raise RuntimeError(
                         "Project runtime diagnostic probe did not capture exactly one intentional error: "
                         + json.dumps({
-                            "markers": project_marker_events,
+                                    "markers": project_marker_events,
+                            "markers_are_complete": markers_are_complete,
                             "project_errors": project_error_events,
                             "recent_console": console_events[-30:],
                         })
@@ -557,9 +566,40 @@ def main() -> int:
                 print(json.dumps(result, indent=2))
                 args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
                 args.diagnostics.write_text(json.dumps(result, indent=2), encoding="utf-8")
-                context.close()
+        except Exception as exc:
+            failure_diagnostics = {
+                "ok": False,
+                "failure": f"{type(exc).__name__}: {str(exc)[:2000]}",
+                "console_events_raw": console_events[-200:],
+                "raw_diagnostic_events": raw_diagnostic_events[-500:],
+                "diagnostics": build_diagnostic_report(),
+                "page_errors": page_errors[-100:],
+                "request_failures": request_failures[-100:],
+                "http_errors": http_errors[-100:],
+                "workers": worker_urls[-50:],
+            }
+            if page is not None:
+                try:
+                    args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(args.screenshot), full_page=False, timeout=10000)
+                    failure_diagnostics["screenshot"] = str(args.screenshot)
+                except Exception as screenshot_error:
+                    failure_diagnostics["screenshot_error"] = str(screenshot_error)
+            failure_diagnostics, report_redactions = redact_sensitive_payload(failure_diagnostics)
+            failure_diagnostics["report_redactions_applied"] = report_redactions
+            args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+            args.diagnostics.write_text(json.dumps(failure_diagnostics, indent=2), encoding="utf-8")
+            print("BROWSER_SMOKE_FAILURE_DIAGNOSTICS=" + json.dumps(failure_diagnostics, indent=2), flush=True)
+            raise
         finally:
-            server.shutdown()
+            if context is not None:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+            if thread.is_alive():
+                server.shutdown()
+                thread.join(timeout=5)
             server.server_close()
 
     return 0
