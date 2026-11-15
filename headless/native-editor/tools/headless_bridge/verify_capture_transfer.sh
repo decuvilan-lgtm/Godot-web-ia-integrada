@@ -20,7 +20,7 @@ transfer_file() {
   : > "$destination_path"
   while [ "$offset" -lt "$total_size" ]; do
     chunk_args=$(jq -cn --arg path "$source_path" --argjson offset "$offset" '{path:$path,offset:$offset,length:48000}')
-    chunk_response=$(run_probe read_capture_chunk "$chunk_args")
+    chunk_response=$(run_probe capture.read_chunk "$chunk_args")
     chunk_json=$(printf '%s\n' "$chunk_response" | sed -n 's/^BRIDGE_TEST_PASS //p' | tail -n 1)
     [ -n "$chunk_json" ]
     printf '%s\n' "$chunk_json" | jq -r '.result.data' | tr -d '\r\n ' | base64 -d >> "$destination_path"
