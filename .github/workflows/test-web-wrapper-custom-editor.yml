@@ -21,10 +21,31 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Validate the originating custom build run
+        id: validate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUN_ID}" =~ ^[0-9]+$ ]] || { echo "run_id must be numeric" >&2; exit 1; }
+          gh run view "${RUN_ID}" --repo "${GITHUB_REPOSITORY}" --json name,conclusion,headSha,headBranch > /tmp/wrapper-build-run.json
+          jq -e '
+            .name == "Build Godot Web Editor with Built-in Agent" and
+            .conclusion == "success" and
+            .headBranch == "feature/builtin-web-editor-agent"
+          ' /tmp/wrapper-build-run.json >/dev/null || {
+            echo "The selected run is not a successful custom build from the expected branch." >&2
+            cat /tmp/wrapper-build-run.json
+            exit 1
+          }
+          echo "source_sha=$(jq -r .headSha /tmp/wrapper-build-run.json)" >> "$GITHUB_OUTPUT"
+
       - name: Check out controller repository
         uses: actions/checkout@v7
         with:
-          ref: feature/builtin-web-editor-agent
+          ref: ${{ steps.validate.outputs.source_sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v7
