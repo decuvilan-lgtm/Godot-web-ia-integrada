@@ -1,22 +1,19 @@
 name: Browser smoke test using cached Godot Web Editor artifact
 
 on:
-  push:
-    branches:
-      - feature/builtin-web-editor-agent
-    paths:
-      - 'scripts/build/smoke_test_godot_web_agent.py'
-      - 'scripts/diagnostics/classifier.py'
-      - 'tests/test_diagnostics_classifier.py'
-      - '.github/workflows/browser-smoke-reuse.yml'
   workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: Successful custom editor build run ID to smoke-test
+        required: true
+        type: string
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: godot-web-agent-browser-smoke
+  group: godot-web-agent-browser-smoke-${{ inputs.artifact_run_id || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -27,6 +24,9 @@ jobs:
       - name: Check out controller repository
         uses: actions/checkout@v7
 
+      - name: Validate smoke-test Python syntax
+        run: python -m py_compile scripts/diagnostics/classifier.py scripts/build/smoke_test_godot_web_agent.py
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -35,8 +35,8 @@ jobs:
       - name: Download previously compiled editor artifact
         uses: actions/download-artifact@v8
         with:
-          name: godot-web-editor-agent-43561299883
-          run-id: 43561299883
+          name: godot-web-editor-agent-${{ inputs.artifact_run_id }}
+          run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: downloaded-artifact
 
@@ -47,8 +47,12 @@ jobs:
           cp -a downloaded-artifact/. artifacts/outer/
           INNER_ZIP="$(find artifacts/outer -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
           test -n "$INNER_ZIP"
-          EXPECTED_SHA="$(awk '{print $1}' artifacts/outer/SHA256SUMS)"
+          EXPECTED_SHA="$(awk -v f="artifacts/$(basename "$INNER_ZIP")" '$2 == f { print $1 }' artifacts/outer/SHA256SUMS)"
           ACTUAL_SHA="$(sha256sum "$INNER_ZIP" | awk '{print $1}')"
+          test -n "$EXPECTED_SHA" || {
+            echo "No checksum entry found for the selected editor archive."
+            exit 1
+          }
           test "$EXPECTED_SHA" = "$ACTUAL_SHA" || {
             echo "Cached editor archive checksum mismatch."
             exit 1
