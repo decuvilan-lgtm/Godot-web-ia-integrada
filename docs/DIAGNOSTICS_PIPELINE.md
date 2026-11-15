@@ -31,9 +31,11 @@ The schema has two independent fields:
 - `declared_severity`: the severity attributed to the originating source.
 
 A Godot message beginning with `WARNING:` remains a warning even if Chromium
-delivers it as a console error. The report retains both facts. Godot `at:` stack
-frames are structural continuation events, not independent errors; they are
-linked to a preceding root event only within a bounded time window. The known
+delivers it as a console error. The report retains both facts. Godot `at:` frames and GDScript backtrace formats such as `[0] _ready
+(res://main.gd:5)` and `Frame 0 - res://main.gd:6 in function '_ready'` are
+structural continuation events, not independent errors. They are linked to a
+preceding root event only within a bounded time window and the same diagnostic
+context, so editor startup traces cannot attach to project-runtime errors. The known
 Emscripten main-thread blocking notice is classified as a warning rather than
 inheriting Chromium's transport-level error type. An explicit
 Godot prefix has `severity_basis=exact_prefix`; compiler syntax uses
