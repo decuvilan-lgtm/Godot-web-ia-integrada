@@ -81,13 +81,11 @@ The wrapper acceptance workflow also requires an explicitly selected build run I
 
 ## Current status
 
-- **Implemented:** native C++ adapter, bounded queue, protocol v1, browser extension relay, Python semantic client, anchor-validated patcher, and tests.
-- **Proven:** Godot 4.7.2 Web Editor compiled successfully; the native adapter answered all three read-only commands in Chromium; `editor_available=true`; pending queue returned to zero; the fixture project hash remained unchanged.
-- **Proven:** the custom editor ZIP was consumed by `scripts/build-web.sh`, and the patched wrapper files were produced successfully.
-- **Proven:** the patched wrapper's own `index.html` launched in Chromium and repeated all three native-agent probes successfully in run `43565341712`. The scene was `NestedRelayFixture`, the queue drained to zero, the source fixture hash remained unchanged, `crossOriginIsolated` was true, `SharedArrayBuffer` was available, and there were no page errors, request failures, or HTTP errors.
-- **Runtime warnings to classify:** Godot logs a wait on a thread that was never started and a TCP server creation error in the browser runtime. They did not block editor use or the adapter probes, but should be understood before deployment.
-- **Implemented, not yet executed:** `.github/workflows/publish-custom-editor-release.yml` publishes a versioned GitHub Release only after verifying the selected build artifact's metadata, no-overlay marker, and SHA-256. Its automatic `workflow_run` trigger requires the workflow to exist on the default branch; it also supports manual dispatch with the successful build run ID and source commit SHA.
-- **Pending:** execute and verify the versioned release, then deploy to the existing Render static service with rollback.
-- **Not changed:** Render services, Neon storage, and any imported game repository.
+- **Implemented:** native C++ adapter, bounded queue, protocol v1, browser extension relay, Python semantic client, anchor-validated patcher, and diagnostic capture.
+- **Implemented:** native request timeouts clean up pending entries; stack frames are correlated only within their own runtime context; browser smoke failures preserve redacted diagnostic artifacts.
+- **Historical evidence only:** earlier builds exercised the three read-only commands and wrapper packaging, but those artifacts predate the current diagnostic and lifecycle checks. Do not use their run IDs as current acceptance evidence.
+- **Pending verification:** a fresh custom engine build, the fresh-artifact Chromium smoke test, and the full wrapper acceptance test.
+- **Not deployed:** no Render deployment or versioned release has been performed as part of this branch.
+- **Not changed:** imported game repositories, Render services, and Neon storage.
 
-Do not describe the Render deployment as operational until the wrapper browser acceptance test and deployed-site verification pass.
+Do not describe the current branch as production-ready until the latest custom build and browser acceptance tests pass, temporary instrumentation is removed, a clean production build passes, and deployment is separately authorized.
