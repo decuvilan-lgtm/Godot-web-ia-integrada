@@ -12,13 +12,19 @@ Esta sección registra la dirección acordada para el flujo de desarrollo asisti
 
 Flujo: Headless clona y registra el SHA base → desarrolla y prueba → verifica que `main` no haya avanzado externamente → publica en `main` → Godot Web actualiza el proyecto asociado → se verifica visualmente el mismo SHA. Si la inspección detecta defectos, se corrigen desde Headless y se publica otro commit en `main`.
 
-### Control semántico del editor Chromium
+### Control semántico del editor
 
-El puesto visual de Godot Web continúa siendo el Chromium de GitHub Actions. Se incorpora una extensión ligera que recibe órdenes semánticas del worker y las entrega a un adaptador del editor; no es otro Godot Headless, no abre un segundo navegador y no sustituye la inspección visual.
+La arquitectura actual mantiene dos adaptadores según el entorno:
 
-El worker usa un contexto persistente de Playwright con el canal Chromium que admite extensiones en modo headless. La extensión y el cliente Python se encuentran documentados en [Chromium Godot Controller](CHROMIUM_GODOT_CONTROLLER.md). Las órdenes nuevas deben identificar escenas, nodos y paneles mediante nombres/rutas estables, nunca mediante coordenadas o clics simulados.
+- **Godot Web en Chromium:** agente C++ integrado en el binario; la extensión Chromium solo retransmite comandos. La primera versión expone inspección de capacidades, estado del editor y árbol de escena.
+- **Editor nativo:** Headless Session Bridge instalado únicamente en una copia de trabajo aislada. Usa TCP local, token por sesión y huella del proyecto; incluye operaciones de edición acotadas y control básico de la vista previa.
+- **Godot Headless:** motor de ejecución y pruebas técnicas; no es un editor visual ni sustituye a los adaptadores anteriores.
 
-La extensión y el despacho semántico están integrados en el worker. El adaptador EditorPlugin, propiedad de este laboratorio, se inyecta temporalmente en el ZIP seleccionado en memoria antes de que Godot lo importe; ni el ZIP de origen ni el repositorio del juego se modifican. El overlay tiene un smoke test local satisfactorio, pero la primera ejecución de Actions (issue #50) devolvió GODOT_ADAPTER_UNAVAILABLE: el complemento no quedó activo en el editor. La issue #51 añade diagnósticos para determinar si el ZIP transformado llegó al importador y si el adaptador se inicializó. Hasta resolverlo, el control del editor sigue siendo experimental. Las capturas, vídeo, consola y evidencias siguen perteneciendo al Chromium existente.
+El addon Web antiguo que se inyectaba en proyectos fue retirado porque duplicaba el agente integrado. Ningún proyecto fuente debe recibir archivos del controlador ni cambios de configuración para habilitarlo.
+
+Los dos adaptadores no comparten todavía una API completa de alto nivel: cada uno anuncia sus capacidades reales. La documentación autoritativa es [Control y arquitectura unificados](UNIFIED_EDITOR_CONTROL.md), [Chromium Godot Controller](CHROMIUM_GODOT_CONTROLLER.md), [Built-in Web Editor Agent](BUILTIN_WEB_EDITOR_AGENT.md) y [Headless Session Bridge](HEADLESS_SESSION_BRIDGE.md).
+
+El control Web continúa siendo de solo lectura. El adaptador nativo ofrece más operaciones, pero no cubre todavía todas las herramientas del editor. No describir el conjunto como control completo hasta superar pruebas de edición, vista previa y depuración en proyectos de distinta complejidad.
 
 ### Project Manager y entrada automática
 
