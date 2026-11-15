@@ -1,12 +1,24 @@
 # Godot Web IA Integrada
 
-Laboratorio para que una IA pueda **entender, construir, ejecutar, inspeccionar y corregir juegos Godot** con la menor intervención manual posible.
+Laboratorio independiente para que una IA pueda **entender, construir, ejecutar, inspeccionar y corregir juegos Godot** con la menor intervención manual posible.
 
-Este repositorio contiene la infraestructura genérica. Los proyectos de juegos conservan su código, recursos, instrucciones y pruebas en sus propios repositorios.
+**Este sistema no depende de ningún repositorio de juegos ni viene ligado a un proyecto concreto. El usuario elige qué proyecto quiere trabajar.** El repositorio de este laboratorio contiene únicamente la infraestructura genérica de control, automatización, pruebas y diagnóstico; no contiene un juego obligatorio ni necesita que el usuario adopte uno de nuestros proyectos de ejemplo.
+
+## Independencia y selección del proyecto
+
+- No hay un repositorio de juego predeterminado, obligatorio ni privilegiado.
+- El usuario selecciona explícitamente el proyecto Godot sobre el que quiere trabajar en cada sesión.
+- La infraestructura debe poder trabajar con cualquier proyecto compatible que el usuario elija, sin exigir que ese proyecto se cree dentro de este repositorio ni que se adapte para satisfacer al controlador.
+- El proyecto seleccionado se trata como entrada de trabajo. El sistema registra su origen e identidad cuando corresponda y crea una copia aislada para experimentar.
+- Las pruebas, demos y proyectos sandbox de este repositorio son fixtures desechables: sirven para verificar el controlador y **nunca son dependencias del juego del usuario**.
+- No se debe consultar, modificar, clonar ni publicar en otro repositorio por suposición. El destino siempre debe corresponder al proyecto que el usuario seleccionó.
+- Los cambios experimentales permanecen en la copia de trabajo. Exportar o publicar cambios al proyecto elegido requiere revisión y aprobación explícita.
+
+En resumen: **el laboratorio aporta las herramientas; el usuario decide qué juego se abre y trabaja.** Cambiar de proyecto no debe requerir modificar el código del laboratorio ni adaptar el juego para un repositorio específico.
 
 ## Arquitectura
 
-    Proyecto de juego (origen)
+    Proyecto Godot elegido explícitamente por el usuario
              |
              v
     Copia de trabajo aislada y verificable
@@ -25,7 +37,7 @@ Este repositorio contiene la infraestructura genérica. Los proyectos de juegos 
     Ejecución / vista previa / diagnóstico / evidencias
              |
              v
-    Diff revisado -> publicación explícita en el repositorio del juego
+    Diff revisado -> exportación aprobada al proyecto elegido
 
 ### Tres entornos, responsabilidades distintas
 
@@ -47,15 +59,16 @@ No se inyectan complementos, cambios a project.godot ni archivos del controlador
 
 ## Flujo de trabajo seguro
 
-1. Registrar repositorio, rama y SHA del proyecto de origen.
-2. Crear una copia aislada para experimentar.
-3. Detectar qué entorno está disponible y consultar sus capacidades reales.
-4. Inspeccionar antes de modificar; validar rutas, tipos y argumentos.
-5. Aplicar cambios pequeños y recuperables.
-6. Ejecutar la vista previa o pruebas Headless según corresponda.
-7. Capturar errores, logs, capturas y vídeo disponibles.
-8. Corregir y repetir las pruebas.
-9. Revisar el diff y publicar únicamente los cambios aprobados.
+1. El usuario selecciona explícitamente el proyecto Godot que quiere trabajar; no se asume ningún repositorio.
+2. Identificar el origen disponible y registrar repositorio, rama y SHA si el proyecto procede de Git.
+3. Crear una copia aislada para experimentar, sin alterar el original.
+4. Detectar qué entorno está disponible y consultar sus capacidades reales.
+5. Inspeccionar antes de modificar; validar rutas, tipos y argumentos.
+6. Aplicar cambios pequeños y recuperables.
+7. Ejecutar la vista previa o pruebas Headless según corresponda.
+8. Capturar errores, logs, capturas y vídeo disponibles.
+9. Corregir y repetir las pruebas.
+10. Presentar el diff para revisión; exportar o publicar únicamente los cambios aprobados por el usuario y en el destino que haya elegido.
 
 ## Estado real
 
@@ -90,7 +103,8 @@ La compilación del motor Godot Web y el runtime Linux Headless son dependencias
 ## Integridad
 
 - No modificar repositorios de juegos para que el controlador funcione.
+- No asumir ni seleccionar un repositorio de juego por defecto.
 - No publicar automáticamente cambios experimentales.
 - No ejecutar GDScript arbitrario, shell ni procesos recibidos como comandos del agente.
-- Mantener los listeners TCP en loopback y las sesiones asociadas a un proyecto concreto.
+- Mantener los listeners TCP en loopback y las sesiones asociadas al proyecto concreto elegido.
 - No fusionar a main ni desplegar servicios sin revisión y autorización.
