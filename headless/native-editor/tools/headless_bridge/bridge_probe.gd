@@ -23,7 +23,7 @@ func _run() -> void:
 			_fail("Command arguments must be a JSON object.")
 			return
 		command_args = parsed_args
-	if not ["ping", "show_test_marker", "clear_test_marker", "open_scene", "inspect_scene", "inspect_selection", "focus_inspector", "inspect_undo_history", "undo_bridge_action", "redo_bridge_action", "inspect_project_settings", "inspect_editor_settings", "inspect_resource", "list_project_resources", "add_node", "set_node_properties", "configure_collision_shape", "assign_visual_resource", "create_sprite_frames", "preview_status", "start_preview", "stop_preview", "capture_editor_screenshot", "capture_desktop_screenshot", "start_editor_video", "stop_editor_video", "get_editor_video_status", "read_capture_chunk"].has(action):
+	if not ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.inspect_selection", "scene.add_node", "scene.set_node_properties", "project.list_resources", "preview.get_status", "preview.start", "preview.stop", "capture.editor_screenshot", "ping", "show_test_marker", "clear_test_marker", "open_scene", "inspect_scene", "inspect_selection", "focus_inspector", "inspect_undo_history", "undo_bridge_action", "redo_bridge_action", "inspect_project_settings", "inspect_editor_settings", "inspect_resource", "list_project_resources", "add_node", "set_node_properties", "configure_collision_shape", "assign_visual_resource", "create_sprite_frames", "preview_status", "start_preview", "stop_preview", "capture_editor_screenshot", "capture_desktop_screenshot", "start_editor_video", "stop_editor_video", "get_editor_video_status", "read_capture_chunk"].has(action):
 		_fail("Unsupported action: " + action)
 		return
 
