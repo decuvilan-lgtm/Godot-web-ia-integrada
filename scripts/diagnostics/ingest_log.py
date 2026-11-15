@@ -76,8 +76,6 @@ def ingest_log(input_path: Path, output_path: Path, default_source: str, context
         health_status = "degraded"
     elif severities.get("warning", 0) and unknown:
         health_status = "warnings_and_unclassified"
-    elif severities.get("warning", 0) and unknown:
-        health_status = "warnings_and_unclassified"
     elif severities.get("warning", 0):
         health_status = "warnings"
     elif unknown:
