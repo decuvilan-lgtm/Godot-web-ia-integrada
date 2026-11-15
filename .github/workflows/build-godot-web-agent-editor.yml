@@ -80,7 +80,7 @@ jobs:
           node --check browser-extension/page-bridge.js
           node --check browser-extension/content.js
           changed="$(git -C godot diff --name-only | sort)"
-          expected="$(printf '%s\\n' editor/debugger/debug_adapter/debug_adapter_server.cpp editor/project_manager/project_list.cpp platform/web/audio_driver_web.cpp platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
+          expected="$(printf '%s\n' editor/debugger/debug_adapter/debug_adapter_server.cpp editor/project_manager/project_list.cpp platform/web/audio_driver_web.cpp platform/web/editor/web_tools_editor_plugin.cpp platform/web/editor/web_tools_editor_plugin.h | sort)"
           test "$changed" = "$expected" || {
             echo "Patch touched unexpected engine files:"
             printf '%s\n' "$changed"
