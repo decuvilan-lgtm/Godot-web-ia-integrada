@@ -70,10 +70,16 @@ No se inyectan complementos, cambios a project.godot ni archivos del controlador
 9. Corregir y repetir las pruebas.
 10. Presentar el diff para revisión; exportar o publicar únicamente los cambios aprobados por el usuario y en el destino que haya elegido.
 
+## API semántica y pruebas
+
+El puente nativo publica un vocabulario canónico de comandos (`editor.*`, `scene.*`, `project.*`, `preview.*` y `capture.*`) y anuncia las capacidades reales de la sesión con `editor.list_capabilities`. Conserva alias internos anteriores por compatibilidad; los clientes nuevos deben usar los nombres canónicos. La API Web comparte los comandos de inspección que realmente soporta y declara el resto como pendiente, sin fingir paridad.
+
+La prueba E2E crea un proyecto Godot vacío desde Project Manager, crea una escena desde el editor real y ejercita el puente, la edición permitida, Undo/Redo, recursos, vista previa, capturas y vídeo. Ese proyecto es temporal y no depende de ningún juego externo.
+
 ## Estado real
 
 - El agente Web tiene tres comandos de inspección probados en Chromium; todavía no edita proyectos.
-- El puente del editor nativo pasó una prueba E2E en un proyecto desechable, con inspección, edición limitada, Undo/Redo, vista previa y captura.
+- El puente del editor nativo expone el vocabulario semántico canónico para inspección, edición acotada, recursos, Undo/Redo, vista previa y captura; la validación E2E de los últimos cambios está en curso.
 - La extensión Chromium es transporte; no contiene una segunda implementación del editor.
 - El prototipo de complemento instalado dentro de proyectos (browser-extension/godot-addon) se retiró del flujo activo para evitar duplicar el agente Web integrado.
 - La vista previa nativa tiene inicio/parada y captura probados; depuración interactiva, pausa/reanudación y observación estructurada completa siguen pendientes.
