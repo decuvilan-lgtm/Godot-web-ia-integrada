@@ -507,11 +507,11 @@ def main() -> int:
                     for location in event.get("godot_source_locations", [])
                 ]
                 if len(classified_project_errors) != 1 or not any(
-                    location.get("path") == "res://main.gd" and location.get("line") == 6
+                    location.get("path") == "res://main.gd" and location.get("line") == 5
                     for location in project_source_locations
                 ):
                     raise RuntimeError(
-                        "Project runtime error was not correlated to res://main.gd:6: "
+                        "Project runtime error was not correlated to res://main.gd:5: "
                         + json.dumps({
                             "classified_errors": classified_project_errors,
                             "source_locations": project_source_locations,
