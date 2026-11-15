@@ -71,9 +71,10 @@ El workflow no abre ni modifica un proyecto de juego real. Los artefactos de Act
 
 Ejecutar las pruebas manualmente desde Actions o al modificar este módulo en la rama de integración. Antes de integrar a `main`, exigir un workflow verde y revisar los artefactos de evidencia.
 
-## Estado conocido al integrar
+## Estado conocido
 
-- El código del addon, watcher, probe y pruebas procede del trabajo experimental anterior en un repositorio de juego.
-- Se incorpora aquí como herramienta genérica del laboratorio.
-- El workflow original no tenía una ejecución E2E confirmada en el momento de su traslado; por tanto, la integración no se marca como validada hasta que el workflow de este repositorio termine correctamente.
-- El control del editor Godot Web vía Chromium sigue siendo un módulo distinto y tiene su propio estado de validación en `docs/CHROMIUM_GODOT_CONTROLLER.md`.
+- El código del addon, watcher, probe y pruebas está integrado como herramienta genérica del laboratorio; no pertenece a un juego concreto.
+- La ejecución E2E anterior del sandbox terminó correctamente: [run 43763946788](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/43763946788). Verificó creación de un proyecto nuevo desde Project Manager, instalación aislada del addon, escena real, conexión, Inspector, edición, Undo/Redo, preview, capturas, vídeo y transferencia de evidencias.
+- La integración consolidada vuelve a ejecutar el workflow en PR #55; su resultado actual debe consultarse en Actions antes de considerar validado este cambio.
+- El control del editor Godot Web vía Chromium es un módulo distinto y tiene su propio estado en `docs/CHROMIUM_GODOT_CONTROLLER.md`.
+
