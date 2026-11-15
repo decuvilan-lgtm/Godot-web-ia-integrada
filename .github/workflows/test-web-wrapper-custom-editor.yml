@@ -1,21 +1,11 @@
 name: Test Godot Web wrapper with custom editor artifact
 
 on:
-  push:
-    branches:
-      - feature/builtin-web-editor-agent
-    paths:
-      - 'scripts/build-web.sh'
-      - 'scripts/patch-web-shell.py'
-      - 'scripts/test_patch_web_shell.py'
-      - 'scripts/package-bridge-sandbox.py'
-      - '.github/workflows/test-web-wrapper-custom-editor.yml'
   workflow_dispatch:
     inputs:
       run_id:
-        description: Successful build workflow run ID
+        description: Successful custom editor build workflow run ID
         required: true
-        default: "43561299883"
         type: string
 
 permissions:
@@ -44,8 +34,8 @@ jobs:
       - name: Download the selected custom editor artifact
         uses: actions/download-artifact@v8
         with:
-          name: godot-web-editor-agent-${{ inputs.run_id || '43561299883' }}
-          run-id: ${{ inputs.run_id || '43561299883' }}
+          name: godot-web-editor-agent-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: downloaded
 
@@ -60,7 +50,8 @@ jobs:
           test -s "$SUMS"
           test -s "$META"
           grep -qx 'project_overlay=false' "$META"
-          EXPECTED="$(awk 'NR == 1 {print $1}' "$SUMS")"
+          EXPECTED="$(awk '$2 == "artifacts/godot.web.editor.wasm32.zip" {print $1}' "$SUMS")"
+          test -n "$EXPECTED" || { echo "Editor archive checksum missing from SHA256SUMS"; exit 1; }
           ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
           test "$EXPECTED" = "$ACTUAL"
           GODOT_WEB_EDITOR_ARCHIVE="$ZIP" GODOT_WEB_EDITOR_SHA256="$EXPECTED" bash scripts/build-web.sh
