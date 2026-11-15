@@ -216,3 +216,14 @@ Se añade una herramienta separada para enviar órdenes semánticas al editor Go
 - Pruebas de validación del contrato: `tests/test_semantic_controller.py`.
 
 **Estado:** extensión, allowlist, cliente Python y despacho semántico integrados en el worker. El adaptador Godot vive en este repositorio y el worker lo inyecta en memoria al ZIP que importa el Chromium de Actions; no se añade ni se publica en el repositorio del juego. El sandbox de origen ya no contiene el complemento. La prueba sin modificar el proyecto de la issue #50 confirmó que la extensión recibe órdenes, pero devolvió GODOT_ADAPTER_UNAVAILABLE: el adaptador no estaba activo en el editor. El smoke test local del overlay ZIP pasa; la issue #51 añade diagnóstico del ZIP transformado y de la presencia del adaptador en la página. El control efectivo del editor sigue sin estar validado. Cada workflow conserva la misma sesión Chromium durante su ventana de comandos (hasta 10 minutos); si expira, se inicia otro workflow y se importa el SHA exacto.
+
+
+## Headless Session Bridge (editor nativo)
+
+El laboratorio también incluye un puente local para que un proceso Godot Headless inspeccione y opere una instancia nativa del editor Godot mediante comandos autenticados y allowlisted. Este módulo genérico se mantiene dentro de este repositorio:
+
+- [Headless tooling](headless/README.md)
+- [Arquitectura, aislamiento y pruebas](docs/HEADLESS_SESSION_BRIDGE.md)
+- [Workflow del Bridge Sandbox](.github/workflows/test-headless-session-bridge.yml)
+
+El addon se inyecta solo en copias temporales de trabajo o en el Bridge Sandbox descartable. No se instala ni se activa en el repositorio original de los juegos. El controlador del editor Godot Web en Chromium y el Command Center web siguen siendo módulos distintos.
