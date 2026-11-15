@@ -166,6 +166,56 @@ jobs:
             --timeout-seconds 600 \
             --screenshot artifacts/browser-smoke.png
 
+      - name: Verify wrapper rollback when patching fails
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EDITOR_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          mkdir -p public
+          SENTINEL="public/.wrapper-rollback-probe-${GITHUB_RUN_ID}"
+          printf 'preserve-me\n' > "$SENTINEL"
+          FAKE_BIN="$(mktemp -d)"
+          REAL_PYTHON="$(command -v python3)"
+          cat > "$FAKE_BIN/python3" <<EOF
+          #!/usr/bin/env bash
+          if [[ "$1" == */scripts/test_patch_web_shell.py ]]; then
+            echo "Injected patch failure for rollback test."
+            exit 42
+          fi
+          exec "$REAL_PYTHON" "$@"
+          EOF
+          chmod +x "$FAKE_BIN/python3"
+          if PATH="$FAKE_BIN:$PATH" GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$EDITOR_SHA" bash scripts/build-web.sh; then
+            echo "Wrapper build unexpectedly passed the injected patch failure."
+            exit 1
+          fi
+          test -s "$SENTINEL"
+          grep -qx 'preserve-me' "$SENTINEL"
+          rm -f "$SENTINEL"
+          rmdir public 2>/dev/null || true
+          rm -rf "$FAKE_BIN"
+          echo "Wrapper rollback preserved the previous public directory."
+
+      - name: Build wrapper from the custom editor and test it in Chromium
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP_FILE="$(find artifacts -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EDITOR_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$EDITOR_SHA" bash scripts/build-web.sh
+          test -s public/index.html
+          test -s public/godot.editor.wasm
+          grep -q 'godot-github-connector' public/index.html
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-dir public \
+            --entrypoint 'index.html?manual=1' \
+            --timeout-seconds 600 \
+            --screenshot artifacts/wrapper-browser-smoke.png \
+            --diagnostics artifacts/wrapper-browser-smoke-diagnostics.json
+
       - name: Fingerprint complete build evidence
         if: success()
         run: |
