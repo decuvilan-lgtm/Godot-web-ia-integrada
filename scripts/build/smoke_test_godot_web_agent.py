@@ -463,6 +463,17 @@ def main() -> int:
                 if startup_regressions:
                     raise RuntimeError("Known Godot Web startup regressions returned: " + json.dumps(startup_regressions))
 
+                temporary_instrumentation = [
+                    str(event.get("text", ""))
+                    for event in console_events
+                    if "WEB_DIAG_" in str(event.get("text", ""))
+                ]
+                if temporary_instrumentation:
+                    raise RuntimeError(
+                        "Temporary WEB_DIAG instrumentation is present in this editor build: "
+                        + json.dumps(temporary_instrumentation[:20])
+                    )
+
                 # Run a dedicated fixture that emits one deliberate project-runtime
                 # error. This verifies that game diagnostics are captured separately
                 # from editor startup and browser transport failures.
@@ -494,8 +505,7 @@ def main() -> int:
                         "Project runtime diagnostic probe did not capture exactly one intentional error: "
                         + json.dumps({
                             "markers": project_marker_events,
-                        "source_locations": project_source_locations,
-                        "project_error_count": len(project_runtime_errors),
+                            "project_error_count": len(project_error_events),
                             "markers_are_complete": markers_are_complete,
                             "project_errors": project_error_events,
                             "recent_console": console_events[-30:],

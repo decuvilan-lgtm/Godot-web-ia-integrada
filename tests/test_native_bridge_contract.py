@@ -17,6 +17,11 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertNotIn("adapter.execute", bridge)
         self.assertIn('"scene.get_tree"', bridge)
 
+    def test_clean_build_smoke_rejects_temporary_instrumentation(self):
+        smoke = (ROOT / "scripts" / "build" / "smoke_test_godot_web_agent.py").read_text(encoding="utf-8")
+        self.assertIn('"WEB_DIAG_"', smoke)
+        self.assertIn("Temporary WEB_DIAG instrumentation is present", smoke)
+
     def test_extension_pending_requests_are_bounded(self):
         relay = (ROOT / "browser-extension" / "content.js").read_text(encoding="utf-8")
         self.assertIn("MAX_PENDING=64", relay)
