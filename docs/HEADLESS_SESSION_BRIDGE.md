@@ -71,6 +71,17 @@ El workflow no abre ni modifica un proyecto de juego real. Los artefactos de Act
 
 Ejecutar las pruebas manualmente desde Actions o al modificar este módulo en la rama de integración. Antes de integrar a `main`, exigir un workflow verde y revisar los artefactos de evidencia.
 
+## Resultado de la última prueba y corrección
+
+La ejecución `43773864465` creó correctamente el proyecto vacío desde Project Manager, instaló el puente en esa copia, creó `main.tscn` desde el editor real y completó las pruebas de inspección, nodos 2D, colisiones, propiedades, recursos visuales, SpriteFrames, Undo/Redo y validaciones de rutas/tipos. Falló al confirmar la apertura de escena porque el probe aún esperaba el nombre del comando histórico `open_scene`, aunque la solicitud ya usaba `editor.open_scene`.
+
+Corrección aplicada en la rama de integración:
+- El probe valida tanto el comando histórico como `editor.open_scene`.
+- El puente conserva el nombre canónico de la orden en la respuesta asíncrona de apertura.
+- La prueba se configura para ejecutarse también en pushes de la rama de integración.
+
+**Pendiente:** obtener una ejecución E2E posterior a esta corrección. La ejecución fallida no llegó a los pasos posteriores de foco del Inspector, ciclo completo de preview, captura final y vídeo; no se consideran validados por ese run.
+
 ## Estado conocido
 
 - El código del addon, watcher, probe y pruebas está integrado como herramienta genérica del laboratorio; no pertenece a un juego concreto.
