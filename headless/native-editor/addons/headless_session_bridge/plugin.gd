@@ -147,7 +147,7 @@ func _poll_pending_scene_opens() -> void:
 		if root != null and root.scene_file_path == requested_path:
 			_send_response(peer, {
 				"ok": true,
-				"command": "open_scene",
+				"command": str(pending.get("command", "open_scene")),
 				"project_id": _project_id,
 				"editor_pid": OS.get_process_id(),
 				"result": {"ok": true, "scene_path": requested_path, "opened": true}
@@ -158,7 +158,7 @@ func _poll_pending_scene_opens() -> void:
 		if Time.get_ticks_msec() >= int(pending["deadline_msec"]):
 			_send_response(peer, {
 				"ok": false,
-				"command": "open_scene",
+				"command": str(pending.get("command", "open_scene")),
 				"project_id": _project_id,
 				"editor_pid": OS.get_process_id(),
 				"error": "scene_open_timeout",
@@ -290,6 +290,7 @@ func _handle_request(peer: StreamPeerTCP, line: String) -> void:
 			elif bool(semantic_open_result.get("pending", false)):
 				_pending_scene_opens.append({
 					"peer": peer,
+					"command": command,
 					"scene_path": str(semantic_open_result.get("scene_path", "")),
 					"deadline_msec": Time.get_ticks_msec() + SCENE_OPEN_TIMEOUT_MS
 				})
@@ -367,6 +368,7 @@ func _handle_request(peer: StreamPeerTCP, line: String) -> void:
 			elif bool(open_result.get("pending", false)):
 				_pending_scene_opens.append({
 					"peer": peer,
+					"command": command,
 					"scene_path": str(open_result.get("scene_path", "")),
 					"deadline_msec": Time.get_ticks_msec() + SCENE_OPEN_TIMEOUT_MS
 				})
