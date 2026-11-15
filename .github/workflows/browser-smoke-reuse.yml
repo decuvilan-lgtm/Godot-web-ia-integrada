@@ -1,11 +1,17 @@
 name: Browser smoke test using cached Godot Web Editor artifact
 
 on:
+  push:
+    branches:
+      - feature/builtin-web-editor-agent
+    paths:
+      - '.github/workflows/browser-smoke-reuse.yml'
   workflow_dispatch:
     inputs:
       artifact_run_id:
         description: Successful custom editor build run ID to smoke-test
-        required: true
+        required: false
+        default: '43664288302'
         type: string
 
 permissions:
@@ -13,77 +19,315 @@ permissions:
   actions: read
 
 concurrency:
-  group: godot-web-agent-browser-smoke-${{ inputs.artifact_run_id || github.run_id }}
+  group: godot-web-agent-browser-smoke-\${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EDITOR_ARTIFACT_RUN_ID: \${{ inputs.artifact_run_id || '43664288302' }}
+  CHESS_REPOSITORY: gavilandavid89-pixel/Ajedrez-2c2
+  CHESS_SHA: 1cff3b4749598e72bec8cb786824cf2d0b571d14
+
 jobs:
-  browser-smoke:
+  headless-project-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
+    steps:
+      - name: Check out chess project at the pinned revision
+        uses: actions/checkout@v7
+        with:
+          repository: \${{ env.CHESS_REPOSITORY }}
+          ref: \${{ env.CHESS_SHA }}
+          path: chess-project
+          persist-credentials: false
+
+      - name: Download and verify Godot 4.7.2 Linux Headless runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime artifacts
+          BASE="https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/releases/download/godot-linux-headless-agent-v0.1.0"
+          curl -fsSL --retry 3 "$BASE/godot-linux-headless-agent.tar.gz" -o runtime/godot-linux-headless-agent.tar.gz
+          curl -fsSL --retry 3 "$BASE/godot-linux-headless-agent.tar.gz.sha256" -o runtime/godot-linux-headless-agent.tar.gz.sha256
+          (cd runtime && sha256sum -c godot-linux-headless-agent.tar.gz.sha256)
+          tar -xzf runtime/godot-linux-headless-agent.tar.gz -C runtime
+          (cd runtime && sha256sum -c godot-linux-headless-agent/SHA256SUMS)
+          chmod +x runtime/godot-linux-headless-agent/godot
+          runtime/godot-linux-headless-agent/godot --headless --version | tee artifacts/godot-version.txt
+
+      - name: Import project and run the V146 regression suites
+        shell: bash
+        run: |
+          set -uo pipefail
+          GODOT="$GITHUB_WORKSPACE/runtime/godot-linux-headless-agent/godot"
+          SOURCE="$GITHUB_WORKSPACE/chess-project/ajedrez_2c2_v161"
+          PROJECT="$RUNNER_TEMP/ajedrez-2c2-headless"
+          mkdir -p artifacts
+          test -s "$SOURCE/project.godot"
+          test "$(git -C chess-project rev-parse HEAD)" = "$CHESS_SHA"
+          cp -a "$SOURCE" "$PROJECT"
+          "$GODOT" --headless --editor --path "$PROJECT" --quit > artifacts/import.log 2>&1
+          import_status=$?
+          echo "import_exit_code=$import_status" | tee artifacts/headless-summary.txt
+          if [ "$import_status" -ne 0 ]; then
+            cat artifacts/import.log
+            exit "$import_status"
+          fi
+
+          suites=(
+            run_tests.gd
+            v102_board_centering_tests.gd
+            v141_mobile_layout_tests.gd
+            v141_landscape_layout_tests.gd
+            mobile_scroll_gesture_v141_tests.gd
+            v145_responsive_content_scale_tests.gd
+            v145_social_ui_factory_tests.gd
+            v145_responsive_margin_lifecycle_tests.gd
+            v144_professional_hud_tests.gd
+            v134_agent_modularity_tests.gd
+            v135_system_audit_tests.gd
+            v142_mobile_ui_regression_tests.gd
+            v131_offline_diagnostics_panel_tests.gd
+            v146_board_layout_tests.gd
+            v146_social_screen_fit_tests.gd
+            account_hub_tests.gd
+          )
+          failures=0
+          for suite in "\${suites[@]}"; do
+            log="artifacts/test-$suite.log"
+            echo "RUN $suite"
+            timeout 180 "$GODOT" --headless --path "$PROJECT" --script "res://tests/$suite" > "$log" 2>&1
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "PASS $suite" | tee -a artifacts/headless-summary.txt
+            else
+              echo "FAIL $suite exit=$status" | tee -a artifacts/headless-summary.txt
+              tail -n 100 "$log" || true
+              failures=$((failures + 1))
+            fi
+          done
+
+          timeout 60 "$GODOT" --headless --path "$PROJECT" --quit-after 120 > artifacts/main-scene-headless.log 2>&1
+          scene_status=$?
+          echo "main_scene_exit_code=$scene_status" | tee -a artifacts/headless-summary.txt
+          if [ "$scene_status" -ne 0 ]; then
+            tail -n 120 artifacts/main-scene-headless.log || true
+            failures=$((failures + 1))
+          fi
+
+          if [ "$failures" -ne 0 ]; then
+            echo "failed_suites=$failures" | tee -a artifacts/headless-summary.txt
+            exit 1
+          fi
+          echo "all_suites_passed=\${#suites[@]}" | tee -a artifacts/headless-summary.txt
+
+      - name: Verify the checked-out chess project stayed unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C chess-project status --short
+          test -z "$(git -C chess-project status --porcelain)"
+          echo "Chess repository checkout remains unchanged." | tee -a artifacts/source-isolation.txt
+
+      - name: Upload headless test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: chess-headless-tests-\${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  web-editor-chess-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - name: Check out controller repository
         uses: actions/checkout@v7
 
-      - name: Validate smoke-test Python syntax
-        run: python -m py_compile scripts/diagnostics/classifier.py scripts/build/smoke_test_godot_web_agent.py
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Check out chess project at the pinned revision
+        uses: actions/checkout@v7
         with:
-          python-version: '3.12'
+          repository: \${{ env.CHESS_REPOSITORY }}
+          ref: \${{ env.CHESS_SHA }}
+          path: chess-project
+          persist-credentials: false
 
-      - name: Download previously compiled editor artifact
+      - name: Download the selected custom Web Editor build artifact
         uses: actions/download-artifact@v8
         with:
-          name: godot-web-editor-agent-${{ inputs.artifact_run_id }}
-          run-id: ${{ inputs.artifact_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: godot-web-editor-agent-\${{ env.EDITOR_ARTIFACT_RUN_ID }}
+          run-id: \${{ env.EDITOR_ARTIFACT_RUN_ID }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}
           path: downloaded-artifact
 
-      - name: Verify and extract the cached editor
+      - name: Verify and extract the custom Web Editor
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/outer artifacts/editor
-          cp -a downloaded-artifact/. artifacts/outer/
-          INNER_ZIP="$(find artifacts/outer -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
-          test -n "$INNER_ZIP"
-          EXPECTED_SHA="$(awk -v f="artifacts/$(basename "$INNER_ZIP")" '$2 == f { print $1 }' artifacts/outer/SHA256SUMS)"
-          ACTUAL_SHA="$(sha256sum "$INNER_ZIP" | awk '{print $1}')"
-          test -n "$EXPECTED_SHA" || {
-            echo "No checksum entry found for the selected editor archive."
-            exit 1
-          }
-          test "$EXPECTED_SHA" = "$ACTUAL_SHA" || {
-            echo "Cached editor archive checksum mismatch."
-            exit 1
-          }
-          unzip -q "$INNER_ZIP" -d artifacts/editor
+          mkdir -p artifacts/editor
+          ZIP_FILE="$(find downloaded-artifact -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EXPECTED_SHA="$(awk -v f="artifacts/$(basename "$ZIP_FILE")" '$2 == f { print $1 }' downloaded-artifact/SHA256SUMS)"
+          ACTUAL_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          test -n "$EXPECTED_SHA"
+          test "$EXPECTED_SHA" = "$ACTUAL_SHA"
+          unzip -q "$ZIP_FILE" -d artifacts/editor
           test -s artifacts/editor/godot.editor.wasm
-          cp artifacts/outer/BUILD-METADATA.txt artifacts/
+          cp downloaded-artifact/BUILD-METADATA.txt artifacts/
 
       - name: Install Playwright and Chromium
         run: |
           python -m pip install playwright==1.52.0
           python -m playwright install --with-deps chromium
 
-      - name: Launch cached editor in Chromium and probe the native agent
+      - name: Recheck startup, F6, GDScript source diagnostics, and read-only agent contract
         run: |
           python scripts/build/smoke_test_godot_web_agent.py \
-            --editor-zip "$(find artifacts/outer -maxdepth 1 -type f -name '*.zip' -print -quit || true)" \
+            --editor-dir artifacts/editor \
+            --project-dir tests/fixtures/diagnostics-godot-project \
             --timeout-seconds 600 \
-            --screenshot artifacts/browser-smoke.png \
-            --diagnostics artifacts/browser-smoke-diagnostics.json
+            --screenshot artifacts/diagnostic-fixture-smoke.png \
+            --diagnostics artifacts/diagnostic-fixture-smoke.json
         env:
           PYTHONUNBUFFERED: '1'
 
-      - name: Upload browser diagnostics
+      - name: Prepare chess-project browser smoke using the same native bridge
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("scripts/build/smoke_test_godot_web_agent.py")
+          source = source_path.read_text(encoding="utf-8")
+          start = source.index("                # Run a dedicated fixture that emits one deliberate project-runtime")
+          end = source.index("                denied_write_probe = page.evaluate", start)
+          replacement = '''                # Run the actual chess project's configured main scene with F6.
+                state_before_f6 = probes["editor.get_state"].get("result", {})
+                if state_before_f6.get("has_scene") is not True:
+                    raise RuntimeError("Chess project did not open an editable scene before F6: " + json.dumps(state_before_f6))
+                if state_before_f6.get("scene_path") != "res://scenes/loading.tscn":
+                    raise RuntimeError("Expected the chess main scene res://scenes/loading.tscn before F6: " + json.dumps(state_before_f6))
+                page.locator("#editor-canvas").focus()
+                before_f6_screenshot = args.screenshot.with_name("chess-before-f6.png")
+                before_f6_screenshot.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(before_f6_screenshot), full_page=False)
+                current_diagnostic_context = "godot_project_runtime"
+                page.keyboard.press("F6")
+                page.wait_for_timeout(15000)
+                current_diagnostic_context = "godot_web_editor_runtime"
+                post_f6_state = execute_semantic_command(page, "editor.get_state", timeout_ms=15000)
+                if not post_f6_state.get("ok") or post_f6_state.get("result", {}).get("editor_available") is not True:
+                    raise RuntimeError("Editor bridge did not remain responsive after F6: " + json.dumps(post_f6_state))
+                post_f6_dom = page.evaluate("""() => ({
+                    title: document.title,
+                    body_text: (document.body?.innerText || "").slice(0, 5000),
+                    canvases: [...document.querySelectorAll("canvas")].map(c => ({
+                        id: c.id, width: c.width, height: c.height,
+                        visible_width: Math.round(c.getBoundingClientRect().width),
+                        visible_height: Math.round(c.getBoundingClientRect().height)
+                    }))
+                })""")
+                post_f6_pages = [{"url": item.url, "title": item.title()} for item in context.pages]
+                startup_regressions_after_f6 = [
+                    str(event.get("text", ""))
+                    for event in console_events
+                    if (
+                        'Parameter "create_fn" is null' in str(event.get("text", ""))
+                        or "Attempt of waiting to finish on a thread that was never started." in str(event.get("text", ""))
+                        or (
+                            "ERR_CANT_CREATE" in str(event.get("text", ""))
+                            and ("DebugAdapter" in str(event.get("text", "")) or "TCPServer" in str(event.get("text", "")))
+                        )
+                    )
+                ]
+                if startup_regressions_after_f6:
+                    raise RuntimeError("Web Editor startup regressions appeared after F6: " + json.dumps(startup_regressions_after_f6))
+                diagnostic_report = build_diagnostic_report()
+                classified_project_errors = [
+                    event for event in diagnostic_report["classification"]["events"]
+                    if event.get("context") == "godot_project_runtime"
+                    and event.get("declared_severity") in {"fatal", "error"}
+                ]
+                project_source_locations = [
+                    location
+                    for event in classified_project_errors
+                    for location in event.get("godot_source_locations", [])
+                ]
+                project_runtime_errors = classified_project_errors
+                project_error_events = [
+                    event for event in raw_diagnostic_events
+                    if event.get("context") == "godot_project_runtime"
+                    and event.get("message")
+                ]
+                project_marker_events = []
+                if project_runtime_errors:
+                    raise RuntimeError(
+                        "Chess project emitted GDScript/runtime errors after F6: "
+                        + json.dumps({
+                            "errors": project_runtime_errors,
+                            "source_locations": project_source_locations,
+                            "raw_events": project_error_events[-40:]
+                        })
+                    )
+                final_digest = project_digest(project_dir)
+                if final_digest != original_digest:
+                    raise RuntimeError("The chess source project changed during browser import or F6.")
+                args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(args.screenshot), full_page=False)
+                diagnostic_report = build_diagnostic_report()
+          '''
+          source = source[:start] + replacement + source[end:]
+          old = '''                "project_runtime_probe": {
+                      "ok": True,
+                      "intentional_error_count": len(project_error_events),
+                      "events": project_error_events,
+                      "markers": project_marker_events,
+                  },'''
+          new = '''                "project_runtime_probe": {
+                      "ok": not bool(project_runtime_errors),
+                      "runtime_error_count": len(project_runtime_errors),
+                      "events": project_error_events,
+                      "source_locations": project_source_locations,
+                      "post_f6_state": post_f6_state,
+                      "post_f6_dom": post_f6_dom,
+                      "browser_pages_after_f6": post_f6_pages,
+                      "before_f6_screenshot": str(before_f6_screenshot),
+                      "markers": project_marker_events,
+                  },'''
+          if old not in source:
+              raise SystemExit("Could not locate the diagnostic-fixture result block for safe temporary adaptation.")
+          source = source.replace(old, new, 1)
+          target = Path("scripts/build/smoke_test_chess_web.py")
+          target.write_text(source, encoding="utf-8")
+          print(f"Prepared temporary chess smoke runner: {target}")
+          PY
+
+      - name: Import chess project, inspect it with the read-only agent, and run F6 in Chromium
+        run: |
+          python scripts/build/smoke_test_chess_web.py \
+            --editor-dir artifacts/editor \
+            --project-dir chess-project/ajedrez_2c2_v161 \
+            --timeout-seconds 600 \
+            --screenshot artifacts/chess-web-smoke.png \
+            --diagnostics artifacts/chess-web-smoke.json
+        env:
+          PYTHONUNBUFFERED: '1'
+
+      - name: Verify chess source checkout stayed unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C chess-project status --short
+          test -z "$(git -C chess-project status --porcelain)"
+          echo "Chess repository checkout remains unchanged." > artifacts/chess-source-isolation.txt
+
+      - name: Upload real Chromium evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: godot-web-browser-diagnostics-${{ github.run_id }}
-          path: |
-            artifacts/browser-smoke.png
-            artifacts/browser-smoke-diagnostics.json
-            artifacts/BUILD-METADATA.txt
+          name: chess-web-editor-smoke-\${{ github.run_id }}
+          path: artifacts/
           if-no-files-found: warn
           retention-days: 14
