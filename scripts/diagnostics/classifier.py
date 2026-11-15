@@ -14,7 +14,7 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
 _GODOT_PREFIX = re.compile(r"^\s*(FATAL|CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG|VERBOSE):\s*(.*)$", re.IGNORECASE)
-_GODOT_STACK_TRACE = re.compile(r"^\s*at:\s+.*\([^)]*:\d+\)\s*$")
+_GODOT_STACK_TRACE = re.compile(\n    r"^\\s*(?:at:\\s+.*\\([^)]*:\\d+\\)|"\n    r"\\[\\d+\\]\\s+.*\\(res://[^)]+:\\d+\\)|"\n    r"Frame\\s+\\d+\\s+-\\s+res://[^\\s]+:\\d+\\s+in function .*)\\s*$"\n)
 _GODOT_SCRIPT_ERROR = re.compile(r"^\s*SCRIPT ERROR:\s*(.*)$", re.IGNORECASE)
 _GODOT_PROJECT_LOCATION = re.compile(r"\((res://[^)]+):(\d+)\)")
 _EMSCRIPTEN_BLOCKING = re.compile(r"Blocking on the main thread is very dangerous", re.IGNORECASE)
