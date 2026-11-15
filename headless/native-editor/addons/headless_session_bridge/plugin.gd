@@ -194,6 +194,74 @@ func _handle_request(peer: StreamPeerTCP, line: String) -> void:
 	var command := str(request.get("command", ""))
 	var response := {"ok": true, "command": command, "project_id": _project_id, "editor_pid": OS.get_process_id()}
 	match command:
+		"editor.list_capabilities":
+			response["result"] = {
+				"ok": true,
+				"adapter": "godot_native_editor",
+				"protocol": PROTOCOL_VERSION,
+				"project_id": _project_id,
+				"commands": [
+					"editor.list_capabilities", "editor.get_state",
+					"scene.get_tree", "scene.inspect_selection",
+					"scene.add_node", "scene.set_node_properties",
+					"project.list_resources", "preview.get_status",
+					"preview.start", "preview.stop", "capture.editor_screenshot"
+				],
+				"legacy_commands": [
+					"ping", "inspect_scene", "inspect_selection", "add_node",
+					"set_node_properties", "list_project_resources", "preview_status",
+					"start_preview", "stop_preview", "capture_editor_screenshot"
+				],
+				"mutations_require_explicit_commands": true,
+				"automatic_save": false
+			}
+		"editor.get_state":
+			var active_root := EditorInterface.get_edited_scene_root()
+			response["result"] = {
+				"ok": true,
+				"adapter": "godot_native_editor",
+				"project_id": _project_id,
+				"project_path": ProjectSettings.globalize_path("res://").simplify_path(),
+				"editor_pid": OS.get_process_id(),
+				"active_scene": active_root.scene_file_path if active_root != null else "",
+				"preview": _preview_status()
+			}
+		"scene.get_tree":
+			var semantic_tree_result := _inspect_edited_scene()
+			response["ok"] = bool(semantic_tree_result.get("ok", false))
+			response["result"] = semantic_tree_result
+		"scene.inspect_selection":
+			var semantic_selection_result := _inspect_editor_selection()
+			response["ok"] = bool(semantic_selection_result.get("ok", false))
+			response["result"] = semantic_selection_result
+		"scene.add_node":
+			var semantic_add_result := _add_node_to_edited_scene(request.get("args", {}))
+			response["ok"] = bool(semantic_add_result.get("ok", false))
+			response["result"] = semantic_add_result
+		"scene.set_node_properties":
+			var semantic_property_result := _set_node_properties(request.get("args", {}))
+			response["ok"] = bool(semantic_property_result.get("ok", false))
+			response["result"] = semantic_property_result
+		"project.list_resources":
+			var semantic_resources_result := _list_project_resources()
+			response["ok"] = bool(semantic_resources_result.get("ok", false))
+			response["result"] = semantic_resources_result
+		"preview.get_status":
+			var semantic_preview_status := _preview_status()
+			response["ok"] = bool(semantic_preview_status.get("ok", false))
+			response["result"] = semantic_preview_status
+		"preview.start":
+			var semantic_preview_start := _start_preview(request.get("args", {}))
+			response["ok"] = bool(semantic_preview_start.get("ok", false))
+			response["result"] = semantic_preview_start
+		"preview.stop":
+			var semantic_preview_stop := _stop_preview()
+			response["ok"] = bool(semantic_preview_stop.get("ok", false))
+			response["result"] = semantic_preview_stop
+		"capture.editor_screenshot":
+			var semantic_capture := _capture_editor_screenshot()
+			response["ok"] = bool(semantic_capture.get("ok", false))
+			response["result"] = semantic_capture
 		"ping":
 			_status_label.text = "Estado: conectado (%d clientes)" % _clients.size()
 			response["status"] = "alive"
