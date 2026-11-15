@@ -1,0 +1,235 @@
+name: Test native Headless Session Bridge in disposable Bridge Sandbox
+
+on:
+  push:
+    branches:
+      - feat/headless-session-bridge-integration
+    paths:
+      - ".github/workflows/test-headless-session-bridge.yml"
+      - "headless/native-editor/addons/headless_session_bridge/**"
+      - "headless/native-editor/tools/headless_bridge/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-project-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot and GUI automation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool imagemagick ffmpeg
+          curl --fail --location --retry 3 \
+            "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip" \
+            -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          echo "/tmp/godot" >> "$GITHUB_PATH"
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Create a new project from Godot Project Manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts .tmp
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
+          GODOT="/tmp/godot/Godot_v4.7.2-stable_linux.x86_64"
+          PROJECT="$GITHUB_WORKSPACE/.tmp/bridge_sandbox"
+          export GODOT
+          "$GODOT" --path "$GITHUB_WORKSPACE" --editor >/tmp/godot-project-manager.log 2>&1 &
+          pm_pid=$!
+          cleanup() { kill "$pm_pid" 2>/dev/null || true; wait "$pm_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for _ in $(seq 1 80); do
+            wid=$(xdotool search --onlyvisible --name "Project Manager" 2>/dev/null | head -1 || true)
+            [ -n "$wid" ] && break
+            sleep 0.25
+          done
+          if [ -z "${wid:-}" ]; then
+            cat /tmp/godot-project-manager.log
+            exit 1
+          fi
+          xdotool windowfocus --sync "$wid"
+          sleep 1
+          # Open the native New Project dialog, enter a new project path and
+          # use Godot's own "Create & Edit" action (not a hand-written project.godot).
+          xdotool mousemove --sync 705 117 click 1
+          sleep 2
+          xdotool mousemove --sync 264 159 click 1
+          sleep 2
+          # Fill the native Project Name and Project Path fields explicitly.
+          xdotool mousemove --sync 760 279 click 1
+          xdotool key ctrl+a
+          xdotool type --clearmodifiers "Bridge Sandbox"
+          xdotool mousemove --sync 700 349 click 1
+          xdotool key ctrl+a
+          xdotool type --clearmodifiers "$PROJECT"
+          sleep 1
+          import -window root -silent "$GITHUB_WORKSPACE/artifacts/project-manager-filled-dialog.png"
+          # Move keyboard focus from Project Path through Browse, renderer, metadata, Edit Now and Cancel to Create.
+          for _ in 1 2 3 4 5 6 7 8 9; do xdotool key Tab; done
+          import -window root -silent "$GITHUB_WORKSPACE/artifacts/project-manager-create-focused.png"
+          xdotool key Return
+          sleep 10
+          if [ ! -f "$PROJECT/project.godot" ]; then
+            import -window root -silent "$GITHUB_WORKSPACE/artifacts/project-manager-create-failed.png" || true
+            cat /tmp/godot-project-manager.log
+            exit 1
+          fi
+          echo "GODOT_PROJECT_MANAGER_CREATE_PASS"
+          cp "$PROJECT/project.godot" "$GITHUB_WORKSPACE/artifacts/fresh-project.godot"
+          # Close the editor cleanly; the bridge add-on is installed only after
+          # the pristine project has been created by the editor itself.
+          editor_wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+          if [ -n "$editor_wid" ]; then
+            xdotool windowfocus --sync "$editor_wid"
+            xdotool key alt+F4
+          fi
+          sleep 2
+          SCRIPT
+
+      - name: Install the bridge into the fresh project
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT=".tmp/bridge_sandbox"
+          mkdir -p "$PROJECT/addons/headless_session_bridge" "$PROJECT/tools/headless_bridge"
+          cp headless/native-editor/addons/headless_session_bridge/* "$PROJECT/addons/headless_session_bridge/"
+          cp headless/native-editor/tools/headless_bridge/*.gd "$PROJECT/tools/headless_bridge/"
+          cat >> "$PROJECT/project.godot" <<'EOF'
+
+          [editor_plugins]
+
+          enabled=PackedStringArray("res://addons/headless_session_bridge/plugin.cfg")
+          EOF
+          grep -q 'config/name="Bridge Sandbox"' "$PROJECT/project.godot"
+          grep -q 'headless_session_bridge/plugin.cfg' "$PROJECT/project.godot"
+          echo "FRESH_PROJECT_BRIDGE_INSTALLED_PASS"
+
+      - name: Create and save an empty scene in the real editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
+          GODOT="/tmp/godot/Godot_v4.7.2-stable_linux.x86_64"
+          PROJECT="$GITHUB_WORKSPACE/.tmp/bridge_sandbox"
+          "$GODOT" --editor --path "$PROJECT" --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy >/tmp/godot-sandbox-editor.log 2>&1 &
+          editor_pid=$!
+          cleanup() { kill "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for _ in $(seq 1 120); do
+            wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+            [ -n "$wid" ] && break
+            sleep 0.25
+          done
+          if [ -z "${wid:-}" ]; then cat /tmp/godot-sandbox-editor.log; exit 1; fi
+          xdotool windowfocus --sync "$wid"
+          sleep 5
+          xdotool key ctrl+n
+          sleep 2
+          # Create a real root Node in the editor's Create New Node dialog.
+          xdotool key ctrl+a
+          xdotool type --clearmodifiers "Node"
+          sleep 2
+          import -window root -silent "$GITHUB_WORKSPACE/artifacts/create-root-node-dialog.png"
+          # The Node result is already highlighted; Enter creates the root node.
+          xdotool key Return
+          sleep 4
+          import -window root -silent "$GITHUB_WORKSPACE/artifacts/editor-with-root-node.png"
+          # The Save Scene dialog focuses its File field with the default node.tscn selected.
+          xdotool key ctrl+s
+          sleep 2
+          xdotool key ctrl+a
+          xdotool type --clearmodifiers "main.tscn"
+          xdotool key Return
+          sleep 4
+          if [ ! -f "$PROJECT/main.tscn" ]; then
+            import -window root -silent "$GITHUB_WORKSPACE/artifacts/empty-scene-save-failed.png" || true
+            cat /tmp/godot-sandbox-editor.log
+            exit 1
+          fi
+          echo "GODOT_EDITOR_EMPTY_SCENE_CREATE_PASS"
+          cp "$PROJECT/main.tscn" "$GITHUB_WORKSPACE/artifacts/editor-created-main.tscn"
+          SCRIPT
+
+      - name: Verify live bridge, inspector, editing, screenshots and video
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="Godot_v4.7.2-stable_linux.x86_64"
+          PROJECT=".tmp/bridge_sandbox"
+          mkdir -p artifacts .tmp
+          xvfb-run -a -s "-screen 0 1600x1000x24" env GODOT="$GODOT" PROJECT="$PROJECT" bash -euo pipefail <<'SCRIPT'
+          start_editor() {
+            "$GODOT" --editor --path "$PROJECT" --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy >> /tmp/godot-sandbox-editor.log 2>&1 &
+            editor_pid=$!
+            wid=""
+            for _ in $(seq 1 80); do
+              wid=$(xdotool search --onlyvisible --name "Bridge Sandbox" 2>/dev/null | tail -1 || true)
+              [ -n "$wid" ] && break
+              sleep 0.25
+            done
+            if [ -n "$wid" ]; then
+              xdotool windowmove "$wid" 0 0
+              xdotool windowsize "$wid" 1600 1000
+              sleep 2
+              xdotool getwindowgeometry --shell "$wid" > artifacts/editor-window-geometry.txt
+            fi
+          }
+          cleanup() {
+            if [ -n "${watcher_pid:-}" ]; then kill "$watcher_pid" 2>/dev/null || true; wait "$watcher_pid" 2>/dev/null || true; fi
+            if [ -n "${editor_pid:-}" ]; then kill "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
+          : > /tmp/godot-sandbox-editor.log
+          start_editor
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/session_watcher.gd >/tmp/sandbox-watcher.log 2>&1 &
+          watcher_pid=$!
+          for _ in $(seq 1 120); do
+            grep -q SESSION_CONNECTED /tmp/sandbox-watcher.log 2>/dev/null && break
+            sleep 0.25
+          done
+          grep -q SESSION_CONNECTED /tmp/sandbox-watcher.log
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- ping
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_scene | tee artifacts/blank-scene-inspection.json
+          grep -q '"path":"."' artifacts/blank-scene-inspection.json
+          grep -q '"inspector":' artifacts/blank-scene-inspection.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_selection | tee artifacts/selection.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_project_settings | tee artifacts/project-settings.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_editor_settings | tee artifacts/editor-settings.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- add_node '{"type":"Node2D","name":"SandboxNode"}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- add_node '{"type":"Label","name":"SandboxLabel"}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- set_node_properties '{"node_path":"SandboxNode","properties":{"position":{"x":123.0,"y":45.0}}}'
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- inspect_scene | tee artifacts/edited-scene-inspection.json
+          grep -q '"SandboxNode"' artifacts/edited-scene-inspection.json
+          grep -q '"SandboxLabel"' artifacts/edited-scene-inspection.json
+          bash headless/native-editor/tools/headless_bridge/verify_fresh_project_features.sh "$GODOT" "$PROJECT"
+          import -window root -silent "$GITHUB_WORKSPACE/artifacts/editor-desktop-root.png"
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- capture_editor_screenshot | tee artifacts/screenshot-response.json
+          grep -q '"source":"actual_editor_window"' artifacts/screenshot-response.json
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- start_editor_video '{"fps":2,"duration_seconds":3}'
+          sleep 2
+          "$GODOT" --headless --path "$PROJECT" --script res://tools/headless_bridge/bridge_probe.gd -- stop_editor_video | tee artifacts/video-response.json
+          grep -q '"source":"actual_editor_window"' artifacts/video-response.json
+          bash headless/native-editor/tools/headless_bridge/verify_capture_transfer.sh "$GODOT" "$PROJECT"
+          grep -q SESSION_CONNECTED /tmp/sandbox-watcher.log
+          echo "FRESH_GODOT_PROJECT_END_TO_END_PASS"
+          cp /tmp/sandbox-watcher.log artifacts/session-watcher.log
+          cp /tmp/godot-sandbox-editor.log artifacts/editor.log
+          SCRIPT
+
+      - name: Upload fresh-project evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-godot-project-bridge-evidence
+          path: artifacts/
+          if-no-files-found: warn
