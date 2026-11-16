@@ -73,7 +73,8 @@ class PersistentSession:
     project_path: str
     commit_sha: str | None = None
     max_duration_seconds: int = DEFAULT_SESSION_DURATION_SECONDS
-    created_at: float = field(default_factory=time.time)
+    created_at: float | None = None
+    loading_started_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     context: Any = None
     page: Any = None
@@ -179,7 +180,9 @@ def _store_session_artifact(session: PersistentSession, name: str, data: bytes) 
 def _touch(session: PersistentSession) -> None:
     session.last_activity = time.time()
 
-def _session_remaining_seconds(session: PersistentSession, now: float | None = None) -> int:
+def _session_remaining_seconds(session: PersistentSession, now: float | None = None) -> int | None:
+    if session.created_at is None:
+        return None
     current = time.time() if now is None else now
     return max(0, int(session.max_duration_seconds - (current - session.created_at)))
 
@@ -189,7 +192,7 @@ def _get_session(session_id: str) -> PersistentSession:
     if session is None:
         raise HTTPException(status_code=404, detail="Persistent session not found")
     now = time.time()
-    if now - session.created_at >= session.max_duration_seconds:
+    if session.created_at is not None and now - session.created_at >= session.max_duration_seconds:
         raise HTTPException(status_code=410, detail="Persistent session reached its configured maximum lifetime")
     if now - session.last_activity > IDLE_TTL:
         raise HTTPException(status_code=410, detail="Persistent session expired after inactivity")
@@ -252,8 +255,10 @@ async def _expire_loop() -> None:
     while True:
         now = time.time()
         for session in list(_sessions.values()):
-            if (now - session.created_at >= session.max_duration_seconds
-                    or now - session.last_activity > IDLE_TTL):
+            loading_expired = session.created_at is None and now - session.loading_started_at > 480
+            duration_expired = session.created_at is not None and now - session.created_at >= session.max_duration_seconds
+            idle_expired = now - session.last_activity > IDLE_TTL
+            if loading_expired or duration_expired or idle_expired:
                 await _close_session(session)
         # Check frequently so the configured close is not delayed materially.
         await asyncio.sleep(5)
@@ -293,10 +298,10 @@ async def list_persistent_sessions(authorization: str | None = Header(default=No
                 "commit_sha": session.commit_sha,
                 "created_at": session.created_at,
                 "last_activity_at": session.last_activity,
-                "expires_at": session.created_at + session.max_duration_seconds,
+                "expires_at": session.created_at + session.max_duration_seconds if session.created_at is not None else None,
                 "max_duration_seconds": session.max_duration_seconds,
                 "remaining_seconds": _session_remaining_seconds(session),
-                "state": "open" if session.page is not None and not session.page.is_closed() else "disconnected",
+                "state": ("loading" if session.created_at is None else "open") if session.page is not None and not session.page.is_closed() else "disconnected",
             }
             for session in _sessions.values()
         ]
@@ -507,14 +512,15 @@ async def persistent_session_status(session_id: str, authorization: str | None =
     _touch(session)
     return {
         "session_id": session_id,
-        "state": "open" if session.page and not session.page.is_closed() else "disconnected",
+        "state": ("loading" if session.created_at is None else "open") if session.page and not session.page.is_closed() else "disconnected",
+        "ready": session.created_at is not None and session.page is not None and not session.page.is_closed(),
         "repository": session.repository,
         "branch": session.branch,
         "project_path": session.project_path,
         "commit_sha": session.commit_sha,
         "last_activity_at": session.last_activity,
         "created_at": session.created_at,
-        "expires_at": session.created_at + session.max_duration_seconds,
+        "expires_at": session.created_at + session.max_duration_seconds if session.created_at is not None else None,
         "max_duration_seconds": session.max_duration_seconds,
         "remaining_seconds": _session_remaining_seconds(session),
         "idle_ttl_seconds": IDLE_TTL,
