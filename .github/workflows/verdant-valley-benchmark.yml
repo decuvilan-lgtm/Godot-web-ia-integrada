@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg
+          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg xdotool
           PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
           python3 "$PROJECT/tools/generate_assets.py"
           mkdir -p "$PROJECT/addons"
@@ -50,16 +50,33 @@ jobs:
           chmod +x "$GODOT"
           "$GODOT" --headless --version | tee artifacts/godot-version.txt
 
-      - name: Import and run full gameplay suite in Actions Headless
+      - name: Diagnose project in a real Headless Editor session
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
           PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
           export GODOT_SILENCE_ROOT_WARNING=1
-          "$GODOT" --headless --path "$PROJECT" --editor --import --quit 2>&1 | tee artifacts/import.log
-          "$GODOT" --headless --path "$PROJECT" --script res://tests/test_suite.gd 2>&1 | tee artifacts/functional-tests.log
-          ! grep -E 'SCRIPT ERROR|ERROR:' artifacts/import.log artifacts/functional-tests.log
+          "$GODOT" --headless --editor --path "$PROJECT" --quit > artifacts/editor-headless.log 2>&1
+          status=$?
+          echo "$status" > artifacts/editor-headless-exit-code.txt
+          cat artifacts/editor-headless.log
+          exit 0
+
+      - name: Import and run full gameplay suite in Actions Headless
+        shell: bash
+        run: |
+          set -uo pipefail
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
+          export GODOT_SILENCE_ROOT_WARNING=1
+          "$GODOT" --headless --path "$PROJECT" --editor --import --quit > artifacts/import.log 2>&1
+          echo "$?" > artifacts/import-exit-code.txt
+          "$GODOT" --headless --path "$PROJECT" --script res://tests/test_suite.gd > artifacts/functional-tests.log 2>&1
+          echo "$?" > artifacts/functional-tests-exit-code.txt
+          cat artifacts/import.log
+          cat artifacts/functional-tests.log
+          exit 0
 
       - name: Start real editor, connect through bridge and capture editor plus game video
         shell: bash
@@ -81,13 +98,29 @@ jobs:
           "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --audio-driver Dummy -- --demo > artifacts/game.log 2>&1 &
           game_pid=$!
           trap 'kill -TERM "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
-          sleep 2
-          timeout 20s ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 9 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
+          sleep 3
+          game_window=$(xdotool search --onlyvisible --name "Verdant Valley" | head -n 1 || true)
+          if [ -n "$game_window" ]; then xdotool windowactivate --sync "$game_window" || true; fi
+          # Real desktop input: move, jump across hazards, activate the crystal, then continue toward the portal.
+          xdotool keydown Right
+          sleep 3.05; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.05; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.25; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.25; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.75; xdotool key e
+          sleep 0.75; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
+          sleep 2.25; xdotool keyup Right
+          timeout 20s ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 2 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
           kill -TERM "$game_pid" 2>/dev/null || true
           wait "$game_pid" 2>/dev/null || true
           trap - EXIT
-          ! grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor.log artifacts/game.log
+          grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor-headless.log artifacts/import.log artifacts/functional-tests.log artifacts/editor.log artifacts/game.log > artifacts/error-summary.log || true
+          cat artifacts/error-summary.log
+          if [ "$(cat artifacts/functional-tests-exit-code.txt)" != "0" ]; then echo "Functional suite failed"; exit 1; fi
+          if grep -Eq 'SCRIPT ERROR|ERROR:' artifacts/editor-headless.log artifacts/import.log artifacts/editor.log artifacts/game.log; then echo "Godot emitted runtime/editor errors"; exit 1; fi
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
