@@ -100,7 +100,7 @@ def resolve_sha():
     if REQUESTED_SHA: sha=REQUESTED_SHA
     else:
         branch=urllib.parse.quote(BRANCH,safe="")
-        req=urllib.request.Request(f"https://api.github.com/repos/{REPOSITORY}/branches/{branch}",headers={"Accept":"application/vnd.github+json"})
+        req=urllib.request.Request(f"https://api.github.com/repos/{REPOSITORY}/branches/{branch}",headers={"Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ.get("GITHUB_TOKEN",""),"X-GitHub-Api-Version":"2022-11-28"})
         with urllib.request.urlopen(req,timeout=30) as res: sha=json.loads(res.read())["commit"]["sha"].lower()
     if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})",sha): raise ValueError("Expected a full Git commit SHA")
     return sha
