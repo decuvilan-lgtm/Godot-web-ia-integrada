@@ -138,12 +138,12 @@ jobs:
               extra={"screenshot":screenshot}
               commands_sent=3
           else:
-              clicked=send("click_text",text="Scene")
+              canvas_click=send("canvas_click",x=0.02,y=0.02)
               escaped=send("press_key",key="Escape")
-              after=send("status")
               screenshot=send("screenshot")
-              extra={"clicked_menu":clicked,"escape_key":escaped,"screenshot":screenshot}
-              commands_sent=4
+              after=send("status")
+              extra={"canvas_click":canvas_click,"escape_key":escaped,"screenshot":screenshot}
+              commands_sent=5
           if initial.get("title")!=after.get("title") or initial.get("url")!=after.get("url"):
               raise RuntimeError("The browser page changed while Workflow B was operating it")
           if not after.get("visible_canvases"):
