@@ -21,8 +21,8 @@ var playtest_elapsed := 0.0
 var playtest_reported := false
 var playtest_last_trace_second := -1
 const PLAYTEST_JUMP_WINDOWS := [
-	[0.55, 0.69], [2.0, 2.14], [3.04, 3.18], [4.3, 4.44],
-	[5.3, 5.44], [6.7, 6.84], [8.0, 8.14], [10.35, 10.49], [11.0, 11.14]
+	[2.0, 2.14], [3.04, 3.18], [4.3, 4.44], [5.4, 5.54],
+	[6.9, 7.04], [8.0, 8.14], [10.63, 10.77]
 ]
 
 func _ready() -> void:
