@@ -82,7 +82,10 @@ jobs:
                   body=item.get("body") or ""
                   if ready_marker not in body:
                       continue
-                  try: marker=json.loads(body.split(ready_marker,1)[1].strip())
+                  ready_payload=body.split(ready_marker,1)[1].strip()
+                  if ready_payload.startswith("\\\\n"):
+                      ready_payload=ready_payload[2:].lstrip()
+                  try: marker=json.loads(ready_payload)
                   except Exception: continue
                   if marker.get("session_id")==session_id and marker.get("commit_sha"):
                       ready=True
