@@ -1,3 +1,4 @@
+@tool
 extends CharacterBody2D
 class_name ValleyPlayer
 signal health_changed(value: int)
@@ -52,6 +53,7 @@ func _make_frames() -> SpriteFrames:
 	return frames
 
 func _physics_process(delta: float) -> void:
+	if Engine.is_editor_hint(): return
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
 	var axis := Input.get_axis("move_left", "move_right")
