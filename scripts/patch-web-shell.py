@@ -197,6 +197,7 @@ def patch_html(html: str) -> str:
         const transfer = new DataTransfer();
         transfer.items.add(new File([blob], filename, { type: "application/zip" }));
         input.files = transfer.files;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
 
         if (input.files.length !== 1 || input.files[0].name !== filename) {
@@ -230,18 +231,48 @@ def patch_html(html: str) -> str:
     }
 
     // Godot puede mantener Start deshabilitado mientras termina su inicialización.
-    // No abortar la importación: esperar a que el botón esté listo.
-    const readyStartButton = await waitForElement("#startButton", element => !element.disabled, 240000);
-    if (typeof closeWelcomeModal === "function") closeWelcomeModal(false);
-    window.__godotGithubConnectorStatus = {
-      ...(window.__godotGithubConnectorStatus || {}),
-      phase: "starting"
-    };
-    readyStartButton.click();
-    window.__godotGithubConnectorStatus = {
-      ...(window.__godotGithubConnectorStatus || {}),
-      phase: "started"
-    };
+    // Esperar al botón actual y conservar diagnóstico si el shell no llega a habilitarlo.
+    try {
+      const readyStartButton = await waitForElement("#startButton", element => !element.disabled, 240000);
+      if (typeof closeWelcomeModal === "function") closeWelcomeModal(false);
+      window.__godotGithubConnectorStatus = {
+        ...(window.__godotGithubConnectorStatus || {}),
+        phase: "starting"
+      };
+      readyStartButton.click();
+      window.__godotGithubConnectorStatus = {
+        ...(window.__godotGithubConnectorStatus || {}),
+        phase: "started"
+      };
+    } catch (error) {
+      const button = document.querySelector("#startButton");
+      const zipInput = document.querySelector("#zip-file");
+      const buttons = Array.from(document.querySelectorAll("button")).slice(0, 30).map(item => ({
+        id: item.id || "",
+        text: (item.innerText || item.textContent || "").trim().slice(0, 100),
+        disabled: !!item.disabled
+      }));
+      const inputs = Array.from(document.querySelectorAll("input")).slice(0, 30).map(item => ({
+        id: item.id || "",
+        type: item.type || "",
+        value: item.type === "file" ? "" : String(item.value || "").slice(0, 100),
+        files: item.files ? item.files.length : 0
+      }));
+      window.__godotGithubConnectorStatus = {
+        ...(window.__godotGithubConnectorStatus || {}),
+        phase: "failed",
+        error: String(error.message || error),
+        startButtonExists: !!button,
+        startButtonDisabled: button ? !!button.disabled : null,
+        startButtonText: button ? (button.innerText || button.textContent || "").trim().slice(0, 100) : "",
+        zipInputFiles: zipInput && zipInput.files ? zipInput.files.length : 0,
+        buttons,
+        inputs,
+        bodyText: String(document.body ? document.body.innerText : "").slice(0, 1200)
+      };
+      console.error("[Godot GitHub connector] Editor start failed:", String(error.message || error));
+      return;
+    }
   }
 
   function scheduleGodotStart() {
