@@ -1,0 +1,84 @@
+name: Linux Headless Runtime Visual Probe
+
+on:
+  push:
+    branches:
+      - test/linux-headless-runtime-visual-probe
+    paths:
+      - "examples/linux-headless-runtime-probe/**"
+      - ".github/workflows/linux-headless-runtime-visual-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the repository-built Godot 4.7.2 Linux runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/godot-runtime artifacts
+          URL="https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/releases/download/godot-linux-headless-agent-v0.1.0"
+          curl --fail --location --retry 3 "$URL/godot-linux-headless-agent.tar.gz" -o /tmp/godot-runtime/runtime.tar.gz
+          printf '%s  %s\n' "87243b7b1d1384900907a2ee52811f2dab414fe485e1ee911ee527e693a0a9f4" "/tmp/godot-runtime/runtime.tar.gz" | sha256sum --check
+          tar -xzf /tmp/godot-runtime/runtime.tar.gz -C /tmp/godot-runtime
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          chmod +x "$GODOT"
+          "$GODOT" --headless --version | tee artifacts/godot-version.txt
+          "$GODOT" --headless --help > artifacts/godot-headless-help.txt
+          grep -q -- "--path" artifacts/godot-headless-help.txt
+
+      - name: Import, parse and run the sample project headlessly
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          PROJECT="$GITHUB_WORKSPACE/examples/linux-headless-runtime-probe"
+          export GODOT_SILENCE_ROOT_WARNING=1
+          "$GODOT" --headless --path "$PROJECT" --editor --import --quit 2>&1 | tee artifacts/import.log
+          for script in "$PROJECT"/scripts/*.gd; do
+            "$GODOT" --headless --path "$PROJECT" --check-only --script "$script"
+          done
+          "$GODOT" --headless --path "$PROJECT" --quit-after 120 2>&1 | tee artifacts/headless-smoke.log
+          if grep -E 'SCRIPT ERROR|ERROR:' artifacts/import.log artifacts/headless-smoke.log; then exit 1; fi
+          echo "LOCAL_RUNTIME_IMPORT_SCRIPT_AND_120_FRAME_SMOKE_PASS" | tee artifacts/result.txt
+
+      - name: Capture the real Godot editor and running game
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb ffmpeg
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          PROJECT="$GITHUB_WORKSPACE/examples/linux-headless-runtime-probe"
+          export GODOT_SILENCE_ROOT_WARNING=1
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
+          "$GODOT" --editor --path "$PROJECT" --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/editor.log 2>&1 &
+          editor_pid=$!
+          sleep 8
+          ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/godot-editor.png
+          kill "$editor_pid" 2>/dev/null || true
+          wait "$editor_pid" 2>/dev/null || true
+          "$GODOT" --path "$PROJECT" --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/game.log 2>&1 &
+          game_pid=$!
+          sleep 5
+          ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/game-running.png
+          kill "$game_pid" 2>/dev/null || true
+          wait "$game_pid" 2>/dev/null || true
+          SCRIPT
+          file artifacts/godot-editor.png artifacts/game-running.png | tee artifacts/image-info.txt
+
+      - name: Upload visual and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-headless-runtime-visual-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
