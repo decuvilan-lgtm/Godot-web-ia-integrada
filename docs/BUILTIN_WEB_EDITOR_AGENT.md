@@ -49,4 +49,4 @@ No usar artefactos antiguos como evidencia de la rama actual. Para aceptar un ca
 
 ## Estado
 
-La versión actual combina inspección con una primera mutación acotada: crear nodos mediante `scene.add_node`. No es todavía un editor autónomo completo; editar propiedades, recursos y scripts desde Chromium sigue pendiente. El control de edición más amplio corresponde por ahora al adaptador del editor nativo descrito en docs/HEADLESS_SESSION_BRIDGE.md.
+La versión actual combina inspección con una primera mutación acotada: crear nodos mediante `scene.add_node`. No es todavía un editor autónomo completo; editar propiedades, recursos y scripts desde Chromium sigue pendiente. No se necesita una PC ni un agente local para esta ruta: la ampliación de edición debe seguir dentro del binario Godot Web que ejecuta GitHub Actions. El puente nativo es una herramienta experimental separada, no un requisito del flujo móvil.
