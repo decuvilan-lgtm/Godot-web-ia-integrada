@@ -54,7 +54,7 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit","preview-smoke"}:
+          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit","preview-smoke","stop"}:
               raise SystemExit("Unsupported operator verification operation")
 
           semantic_action=request.get("editor_action","editor.get_state")
@@ -170,6 +170,11 @@ jobs:
               after=send("status")
               extra={"semantic":semantic,"verification":verification,"screenshot":screenshot}
               commands_sent=5 if operation=="semantic-edit" else 4
+          elif operation=="stop":
+              stopped=send("stop")
+              after=initial
+              extra={"stop":stopped}
+              commands_sent=2
           elif operation=="preview-smoke":
               launched=send("run_game")
               game_view=send("game_view")
@@ -196,7 +201,7 @@ jobs:
               raise RuntimeError("The same browser session no longer exposes a visible canvas")
           result={"workflow":"B-operator","operation":operation,"session_id":session_id,
                   "issue_number":issue_number,"commands_sent":commands_sent,**extra,
-                  "initial_status":initial,"final_status":after,"session_kept_open":True}
+                  "initial_status":initial,"final_status":after,"session_kept_open":operation!="stop"}
           Path("operator-result.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
           print(json.dumps(result,ensure_ascii=False,indent=2))
           PY
