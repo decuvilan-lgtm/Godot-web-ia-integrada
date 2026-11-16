@@ -1,7 +1,6 @@
-# Remote native Godot operator
+# Experimental local native Godot operator (not used by the mobile A/B workflow)
 
-This is a separate transport for the native editor addon. It does not use the
-Chromium/Web editor session and does not expose the editor's TCP listener.
+This document describes an experimental, optional bridge for a graphical native Godot editor running on the same computer as its local agent. **It is not part of the mobile A/B workflow and is not required by the user.** The mobile workflow runs the Godot Web editor in GitHub Actions; A keeps that browser session alive and B sends scoped commands through the existing GitHub issue channel. Render is the relay for that A/B browser workflow. Do not ask the mobile user to install Godot or run this local agent.
 
 ## Trust model
 
