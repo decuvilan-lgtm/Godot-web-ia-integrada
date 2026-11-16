@@ -21,6 +21,8 @@ services:
         generateValue: true
       - key: PERSISTENT_SESSION_IDLE_TTL_SECONDS
         value: "3600"
+      - key: PERSISTENT_SESSION_MAX_DURATION_SECONDS
+        value: "600"
       - key: PERSISTENT_SESSION_MAX_COUNT
         value: "1"
       - key: GODOT_WEB_EDITOR_URL
