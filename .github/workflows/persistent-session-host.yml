@@ -32,8 +32,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import json, re
+          python3 - <<'PY'
+          import json, os, re
           from pathlib import Path
           request=json.loads(Path(".session-host-request.json").read_text(encoding="utf-8"))
           fields={
@@ -54,8 +54,9 @@ jobs:
           project=str(fields["PROJECT_PATH"] or "")
           if project.startswith("/") or ".." in project.split("/") or "\\" in project:
               raise SystemExit("Invalid project path")
-          for key,value in fields.items():
-              print(f"{key}={value}")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
+              for key,value in fields.items():
+                  env.write(f"{key}={value}\\n")
           PY
 
       - name: Set up Python
