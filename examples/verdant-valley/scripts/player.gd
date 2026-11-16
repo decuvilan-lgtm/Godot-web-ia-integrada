@@ -6,7 +6,7 @@ signal shards_changed(value: int)
 signal checkpoint_reached
 
 const SPEED := 270.0
-const JUMP_VELOCITY := -510.0
+const JUMP_VELOCITY := -700.0
 const GRAVITY := 1350.0
 const MAX_HEALTH := 5
 var health := MAX_HEALTH
