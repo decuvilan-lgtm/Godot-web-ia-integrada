@@ -12,7 +12,7 @@ API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=5
-SEMANTIC_ACTIONS={"editor.get_state","editor.list_capabilities","scene.get_tree"}
+SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.add_node":{"node_type","node_name","parent_path"}}
 ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
@@ -78,8 +78,19 @@ def _validate(command, session_id, last_seq):
     if action=="semantic_command":
         editor_action=command.get("editor_action")
         args=command.get("args",{})
-        if editor_action not in SEMANTIC_ACTIONS or not isinstance(args,dict) or args:
-            raise ValueError("semantic_command only permits zero-argument read-only editor inspection actions")
+        if editor_action not in SEMANTIC_ACTIONS or not isinstance(args,dict) or set(args)-SEMANTIC_ACTIONS[editor_action]:
+            raise ValueError("semantic_command arguments do not match the action allowlist")
+        if editor_action=="scene.add_node":
+            if not {"node_type","node_name"}.issubset(args):
+                raise ValueError("scene.add_node requires node_type and node_name")
+            if any(not isinstance(value,str) or not value or len(value)>200 for value in args.values()):
+                raise ValueError("scene.add_node arguments must be bounded strings")
+            if args["node_type"] not in {"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}:
+                raise ValueError("Node type is not allowlisted")
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",args["node_name"]):
+                raise ValueError("Node name is not a valid identifier")
+            if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"",".."}):
+                raise ValueError("Parent path must be relative to the edited scene root")
     if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
         raise ValueError("Key is not in the browser editing allowlist")
     return seq,action
