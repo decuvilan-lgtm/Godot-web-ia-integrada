@@ -63,7 +63,7 @@ func _dispatch(arguments: Array) -> Dictionary:
 	if action in ["editor.get_state", "editor.list_capabilities", "scene.get_tree"] and not args.is_empty():
 		return _error("INVALID_ARGUMENTS", "This inspection action accepts no arguments.")
 	if action == "scene.add_node":
-		if not {"node_type", "node_name"}.all(func(key): return args.has(key)) or args.size() > 3:
+		if not args.has("node_type") or not args.has("node_name") or args.size() > 3:
 			return _error("INVALID_ARGUMENTS", "scene.add_node requires node_type and node_name, with optional parent_path.")
 		for key in args:
 			if key not in ["node_type", "node_name", "parent_path"] or not args[key] is String or str(args[key]).is_empty() or str(args[key]).length() > 200:
