@@ -54,7 +54,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
-          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha || (github.event_name == 'push' && 'f8a127878de3a0822995c494c88b0e5a55ea9791' || '') }}
+          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha || '' }}
         shell: bash
         run: |
           set -euo pipefail
