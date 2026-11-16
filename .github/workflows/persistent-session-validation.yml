@@ -82,6 +82,7 @@ jobs:
               "default duration is 600 seconds": '"PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS", "600"' in relay_source,
               "per-session duration is stored": "max_duration_seconds=body.duration_seconds" in relay_source,
               "expiry uses each session duration": "now - session.created_at >= session.max_duration_seconds" in relay_source,
+              "idle cleanup cannot pre-empt configured duration": "IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS" in relay_source,
               "Workflow B has no session creation action": 'if op=="open"' not in operator_source,
               "Workflow B exposes coordinate click": 'op=="click"' in operator_source and '"command":"click"' in operator_source,
               "Workflow B exposes text entry": 'op=="type_text"' in operator_source and '"command":"type_text"' in operator_source,
