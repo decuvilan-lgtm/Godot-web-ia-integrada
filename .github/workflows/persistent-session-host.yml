@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       duration_minutes:
-        description: How long Workflow A keeps the same Godot Web session open (default 10; allowed 1-350)
+        description: How long Workflow A keeps the same Godot Web session open (default 10; allowed 1-340)
         required: true
         default: 10
         type: number
@@ -57,8 +57,8 @@ jobs:
           if not numeric_duration.is_integer():
               raise RuntimeError("duration_minutes must be a whole number")
           duration=int(numeric_duration)
-          if not 1 <= duration <= 350:
-              raise RuntimeError("duration_minutes must be between 1 and 350")
+          if not 1 <= duration <= 340:
+              raise RuntimeError("duration_minutes must be between 1 and 340")
 
           token_url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
           token_req=urllib.request.Request(token_url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
@@ -86,7 +86,7 @@ jobs:
               "reuse_existing":True,
               "reimport_existing":False,
               "duration_seconds":duration*60,
-          },timeout=600)
+          },timeout=180)
           sid=opened["session_id"]
           status=opened
           while status.get("state") == "loading":
