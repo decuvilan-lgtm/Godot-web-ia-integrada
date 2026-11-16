@@ -9,7 +9,7 @@ except ImportError:  # Support unittest discovery with scripts/bridge as the sta
     from semantic_controller import execute_semantic_command
 
 API="https://api.github.com"
-TRUSTED_ACTORS={"decuvilan-lgtm"}
+TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=5
 ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
