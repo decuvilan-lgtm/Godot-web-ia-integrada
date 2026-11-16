@@ -64,7 +64,7 @@ func run() -> void:
 	for i in 20: await physics_frame
 	Input.action_release("move_right")
 	check(world.player.global_position.x>120,"player responds to horizontal movement input")
-	world.player.velocity.y=-510
+	world.player.velocity.y=ValleyPlayer.JUMP_VELOCITY
 	await physics_frame
 	check(world.player.velocity.y<0,"jump impulse enters upward movement")
 	world.player.invulnerable=0.0
