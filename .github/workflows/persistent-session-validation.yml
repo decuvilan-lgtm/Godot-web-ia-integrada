@@ -12,6 +12,9 @@ on:
       - "relay/test_persistent_sessions.py"
       - "scripts/patch-web-shell.py"
       - "scripts/test_patch_web_shell.py"
+      - "scripts/godot-browser-worker.py"
+      - "scripts/bridge/browser_command_loop.py"
+      - "scripts/bridge/test_browser_command_loop.py"
       - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
   pull_request:
@@ -92,11 +95,14 @@ jobs:
               "idle cleanup cannot pre-empt configured duration": "IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS" in relay_source,
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
               "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
+              "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
               "Workflow A runs Chromium on the GitHub runner": "scripts/godot-browser-worker.py" in host_source and "runs-on: ubuntu-24.04" in host_source,
               "Workflow A uses only the test editor and Relay": "godot-web-ia-editor-test.onrender.com" in host_source and "godot-web-ia-relay-test.onrender.com" in host_source and "godot-web-ia-relay.onrender.com" not in host_source,
               "Workflow A imports an immutable project revision": "resolve_sha()" in worker_source and '"expected_sha":sha' in worker_source,
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
+              "Workflow A publishes its ready marker": "post_host_ready_comment" in worker_source,
+              "Workflow A exports request variables safely": "chr(10)" in host_source,
               "Workflow A retries transient Relay startup failures": "404,502,503,504" in worker_source,
               "A and B share the same browser session ID": "session_id" in operator_source and "session_id" in command_loop_source,
               "The issue command loop trusts the user and GitHub Actions bot": 'TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}' in command_loop_source,
