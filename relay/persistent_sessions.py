@@ -433,9 +433,38 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         )
         session.page = await session.context.new_page()
         await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, effective_sha), wait_until="domcontentloaded", timeout=90000)
-        # Start the ten-minute window only after the editor page has loaded.
+
+        # Wait for the exact project revision to finish importing and expose
+        # the editor canvas before starting the user's selected time window.
+        readiness_started = time.monotonic()
+        readiness = {"phase": "waiting", "imported_sha": "", "expected_sha": effective_sha, "canvas_count": 0}
+        while time.monotonic() - readiness_started < 480:
+            connector = await session.page.evaluate("() => window.__godotGithubConnectorStatus || null")
+            canvas_count = await session.page.locator("canvas").count()
+            readiness = {
+                "phase": (connector or {}).get("phase", "unknown"),
+                "imported_sha": (connector or {}).get("commitSha", ""),
+                "expected_sha": effective_sha,
+                "canvas_count": canvas_count,
+                "elapsed_seconds": round(time.monotonic() - readiness_started, 1),
+            }
+            if readiness["phase"] == "started" and readiness["imported_sha"] == effective_sha and canvas_count >= 1:
+                break
+            await session.page.wait_for_timeout(5000)
+        if not (
+            readiness["phase"] == "started"
+            and readiness["imported_sha"] == effective_sha
+            and readiness["canvas_count"] >= 1
+        ):
+            raise HTTPException(
+                status_code=504,
+                detail="Godot Web editor did not confirm the exact project revision and canvas within 480 seconds",
+            )
+
+        # The selected duration begins only when the exact project is ready.
         session.created_at = time.time()
         session.last_activity = session.created_at
+        session.events.append({"type": "session.editor_ready", "at": session.created_at, **readiness})
         session.events.append({
             "type": "session.opened",
             "at": time.time(),
@@ -447,6 +476,9 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "duration_seconds": body.duration_seconds,
         })
         _sessions[session_id] = session
+    except HTTPException:
+        await _close_session(session)
+        raise
     except Exception as exc:
         await _close_session(session)
         logger.exception("Persistent editor session could not be opened")
