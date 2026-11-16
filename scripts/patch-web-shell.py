@@ -160,7 +160,8 @@ def patch_html(html: str) -> str:
       try {
         window.__godotGithubConnectorStatus.phase = "downloading";
         const archiveUrl = new URL(
-          relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive"
+          relay + "/v1/github/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repository) + "/archive",
+          window.location.href
         );
         if (branch) archiveUrl.searchParams.set("branch", branch);
         if (commitSha) archiveUrl.searchParams.set("sha", commitSha);
