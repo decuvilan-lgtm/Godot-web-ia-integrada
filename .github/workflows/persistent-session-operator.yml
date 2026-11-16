@@ -100,41 +100,41 @@ jobs:
           sessions=call("/v1/persistent-sessions").get("sessions",[])
           sid=os.environ.get("SESSION_ID","").strip()
           if not sid:
-                  matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
-                           and s["branch"]==os.environ["BRANCH"]
-                           and s["project_path"]==os.environ.get("PROJECT_PATH","")]
-                  if len(matches)!=1:
-                      raise RuntimeError(f"Expected exactly one matching active session; found {len(matches)}. Supply session_id explicitly.")
-                  sid=matches[0]["session_id"]
-              if op=="status":
-                  result=call("/v1/persistent-sessions/"+urllib.parse.quote(sid,safe=""))
-              elif op=="inspect":
-                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"inspect"})
-              elif op=="screenshot":
-                  call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"screenshot"})
-                  result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
-                              {"task_id":(os.environ["TASK_ID"][:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]),
-                               "summary":"Operator screenshot checkpoint","result":{"operation":"screenshot"}})
-                  artifact=call(result["artifact_url"])
-                  Path("artifacts").mkdir(exist_ok=True)
-                  Path("artifacts/session-evidence.zip").write_bytes(artifact)
-              elif op in ("run_game","stop_game"):
-                  key="F5" if op=="run_game" else "Escape"
-                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
-              elif op=="click_text":
-                  text=os.environ.get("CLICK_TEXT","")
-                  if not text: raise RuntimeError("text is required for click_text")
-                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
-              elif op=="complete":
-                  task=os.environ.get("TASK_ID","")[:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]
-                  if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
-                  result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
-                              {"task_id":task,"summary":"Operator checkpoint","result":{"workflow_run":os.environ["GH_RUN_ID"]}})
-                  artifact=call(result["artifact_url"])
-                  Path("artifacts").mkdir(exist_ok=True)
-                  Path("artifacts/session-evidence.zip").write_bytes(artifact)
-              else:
-                  raise RuntimeError("Unsupported operation")
+              matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
+                       and s["branch"]==os.environ["BRANCH"]
+                       and s["project_path"]==os.environ.get("PROJECT_PATH","")]
+              if len(matches)!=1:
+                  raise RuntimeError(f"Expected exactly one matching active session; found {len(matches)}. Supply session_id explicitly.")
+              sid=matches[0]["session_id"]
+          if op=="status":
+              result=call("/v1/persistent-sessions/"+urllib.parse.quote(sid,safe=""))
+          elif op=="inspect":
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"inspect"})
+          elif op=="screenshot":
+              call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"screenshot"})
+              result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
+                          {"task_id":(os.environ["TASK_ID"][:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]),
+                           "summary":"Operator screenshot checkpoint","result":{"operation":"screenshot"}})
+              artifact=call(result["artifact_url"])
+              Path("artifacts").mkdir(exist_ok=True)
+              Path("artifacts/session-evidence.zip").write_bytes(artifact)
+          elif op in ("run_game","stop_game"):
+              key="F5" if op=="run_game" else "Escape"
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
+          elif op=="click_text":
+              text=os.environ.get("CLICK_TEXT","")
+              if not text: raise RuntimeError("text is required for click_text")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
+          elif op=="complete":
+              task=os.environ.get("TASK_ID","")[:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]
+              if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
+              result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
+                          {"task_id":task,"summary":"Operator checkpoint","result":{"workflow_run":os.environ["GH_RUN_ID"]}})
+              artifact=call(result["artifact_url"])
+              Path("artifacts").mkdir(exist_ok=True)
+              Path("artifacts/session-evidence.zip").write_bytes(artifact)
+          else:
+              raise RuntimeError("Unsupported operation")
 
           summary={"operation":op,"session_id":sid,"session_kept_open":True,
                    "configured_duration_seconds":result.get("max_duration_seconds") if isinstance(result,dict) else None,
