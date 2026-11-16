@@ -9,6 +9,7 @@ on:
       - ".github/workflows/persistent-session-host.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
+      - "relay/test_persistent_sessions.py"
       - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
   pull_request:
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/persistent-session-host.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
+      - "relay/test_persistent_sessions.py"
       - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
 
