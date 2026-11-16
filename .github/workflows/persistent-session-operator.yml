@@ -157,10 +157,19 @@ jobs:
               commands_sent=3
           elif operation in {"semantic-inspect","semantic-edit"}:
               semantic=send("semantic_command",editor_action=semantic_action,args=semantic_args)
+              verification=None
+              if operation=="semantic-edit":
+                  verification=send("semantic_command",editor_action="scene.get_tree",args={})
+                  created=semantic.get("result",{}).get("created",{})
+                  created_name=created.get("name")
+                  def tree_contains(node,name):
+                      return isinstance(node,dict) and (node.get("name")==name or any(tree_contains(child,name) for child in node.get("children",[])))
+                  if not created_name or not tree_contains(verification.get("result",{}),created_name):
+                      raise RuntimeError("The editor acknowledged creation but the follow-up scene tree did not contain the new node")
               screenshot=send("screenshot")
               after=send("status")
-              extra={"semantic":semantic,"screenshot":screenshot}
-              commands_sent=4
+              extra={"semantic":semantic,"verification":verification,"screenshot":screenshot}
+              commands_sent=5 if operation=="semantic-edit" else 4
           else:
               canvas_click=send("canvas_click",x=0.02,y=0.02)
               escaped=send("press_key",key="Escape")
