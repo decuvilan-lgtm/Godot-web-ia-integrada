@@ -13,7 +13,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: godot-session-operator-${{ github.repository }}
+  group: godot-session-operator-${{ github.repository }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
