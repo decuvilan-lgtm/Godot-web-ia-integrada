@@ -9,6 +9,7 @@ on:
       - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
+      - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
+      - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
 
 permissions:
@@ -35,6 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
+          python -m compileall -q relay/persistent_sessions.py
           python - <<'PY'
           from pathlib import Path
           import re, textwrap, yaml
@@ -61,4 +64,24 @@ jobs:
                   raise SystemExit(f"{path}: expected exactly one embedded Python client, found {len(scripts)}")
               compile(scripts[0],str(path)+"::<embedded-python>","exec")
               print(f"EMBEDDED PYTHON PASS: {path}")
+
+          relay_source=Path("relay/persistent_sessions.py").read_text(encoding="utf-8")
+          operator_source=Path(".github/workflows/persistent-session-operator.yml").read_text(encoding="utf-8")
+          render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
+          docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
+          required_checks = {
+              "configurable per-session API duration": "duration_seconds: int = Field(default=DEFAULT_SESSION_DURATION_SECONDS" in relay_source,
+              "default duration is 600 seconds": '"PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS", "600"' in relay_source,
+              "per-session duration is stored": "max_duration_seconds=body.duration_seconds" in relay_source,
+              "expiry uses each session duration": "now - session.created_at >= session.max_duration_seconds" in relay_source,
+              "operator exposes duration input": "duration_minutes:" in operator_source and "DURATION_MINUTES:" in operator_source,
+              "operator defaults to ten minutes": "default: 10" in operator_source,
+              "operator sends selected duration": '"duration_seconds":duration_minutes*60' in operator_source,
+              "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
+              "docs explain duration can be changed": "change" in docs and "1440 minutes" in docs,
+          }
+          for label, passed in required_checks.items():
+              if not passed:
+                  raise SystemExit(f"CONFIGURATION CHECK FAILED: {label}")
+              print(f"CONFIGURATION CHECK PASS: {label}")
           PY
