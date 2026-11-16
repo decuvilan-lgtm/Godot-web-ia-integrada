@@ -29,7 +29,7 @@ on:
         default: examples/verdant-valley
         type: string
       duration_minutes:
-        description: Session lifetime in minutes (default 10; allowed 1-1440). Used only by open.
+        description: Session lifetime in minutes (default 10; allowed 1-350). Used only by open.
         required: false
         default: 10
         type: number
@@ -107,8 +107,8 @@ jobs:
           sid=os.environ.get("SESSION_ID","").strip()
           if op=="open":
               duration_minutes=int(float(os.environ.get("DURATION_MINUTES","10")))
-              if not 1 <= duration_minutes <= 1440:
-                  raise RuntimeError("duration_minutes must be between 1 and 1440")
+              if not 1 <= duration_minutes <= 350:
+                  raise RuntimeError("duration_minutes must be between 1 and 350")
               body={"repository":os.environ["REPOSITORY"],"branch":os.environ["BRANCH"],
                     "project_path":os.environ.get("PROJECT_PATH",""),"reuse_existing":True,
                     "reimport_existing":False,"duration_seconds":duration_minutes*60}
