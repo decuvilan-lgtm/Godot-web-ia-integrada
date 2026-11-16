@@ -32,7 +32,7 @@ class GodotWebEditorAdapterTests(unittest.TestCase):
             self.assertIn(f'"{action}"', self.source)
         self.assertIn('"COMMAND_NOT_ALLOWED"', self.source)
         self.assertIn('"INVALID_ARGUMENTS"', self.source)
-        self.assertIn('not (args as Dictionary).is_empty()', self.source)
+        self.assertIn("if not args.is_empty():", self.source)
 
     def test_scene_tree_has_depth_and_node_limits(self):
         self.assertIn("MAX_TREE_NODES := 1000", self.source)
