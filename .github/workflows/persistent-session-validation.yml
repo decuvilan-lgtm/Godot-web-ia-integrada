@@ -61,7 +61,7 @@ jobs:
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python -m compileall -q relay/persistent_sessions.py relay/native_remote.py
           python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/native_editor_client.py scripts/bridge/native_remote_agent.py
-          (cd scripts/bridge && python -m unittest -v test_browser_command_loop)
+          (cd scripts/bridge && python -m unittest -v test_browser_command_loop test_semantic_controller)
           python -m unittest -v tests.test_native_editor_client
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions test_native_remote)
@@ -116,7 +116,8 @@ jobs:
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
               "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
           "Workflow B supports coordinate-free semantic inspection": '"semantic-inspect"' in operator_source and '"editor.get_state"' in operator_source and '"scene.get_tree"' in operator_source,
-          "Workflow B semantic mode is read-only": "semantic_allowlist" in operator_source and "semantic_args!={}" in operator_source,
+          "Workflow B semantic inspection remains read-only": "semantic_read_allowlist" in operator_source and '"semantic-inspect"' in operator_source,
+          "Workflow B exposes one scoped semantic edit": '"semantic-edit"' in operator_source and '"scene.add_node"' in operator_source and "allowed_node_types" in operator_source,
               "Workflow B exposes canvas click and keyboard actions": 'send("canvas_click",x=0.02,y=0.02)' in operator_source and 'send("press_key",key="Escape")' in operator_source,
               "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
