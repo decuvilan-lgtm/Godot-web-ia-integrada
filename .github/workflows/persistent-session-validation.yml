@@ -6,6 +6,7 @@ on:
       - test/verdant-valley-development-benchmark
     paths:
       - ".github/workflows/persistent-session-operator.yml"
+      - ".github/workflows/persistent-session-host.yml"
       - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/persistent-session-operator.yml"
+      - ".github/workflows/persistent-session-host.yml"
       - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
@@ -50,10 +52,15 @@ jobs:
                   raise SystemExit(f"{path}: workflow root must be a mapping")
               print(f"YAML PASS: {path}")
 
-          for name in ("persistent-session-operator.yml","persistent-session-keeper.yml"):
+          workflow_jobs = {
+              "persistent-session-operator.yml": "operate",
+              "persistent-session-host.yml": "host",
+              "persistent-session-keeper.yml": "heartbeat",
+          }
+          for name, job_name in workflow_jobs.items():
               path=workflow_dir/name
               parsed=yaml.load(path.read_text(encoding="utf-8"),Loader=yaml.BaseLoader)
-              steps=parsed.get("jobs",{}).get("operate",{}).get("steps",[]) if name.endswith("operator.yml") else parsed.get("jobs",{}).get("heartbeat",{}).get("steps",[])
+              steps=parsed.get("jobs",{}).get(job_name,{}).get("steps",[])
               scripts=[]
               for step in steps:
                   command=step.get("run","")
@@ -67,6 +74,7 @@ jobs:
 
           relay_source=Path("relay/persistent_sessions.py").read_text(encoding="utf-8")
           operator_source=Path(".github/workflows/persistent-session-operator.yml").read_text(encoding="utf-8")
+          host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
           required_checks = {
@@ -77,8 +85,12 @@ jobs:
               "operator exposes duration input": "duration_minutes:" in operator_source and "DURATION_MINUTES:" in operator_source,
               "operator defaults to ten minutes": "default: 10" in operator_source,
               "operator sends selected duration": '"duration_seconds":duration_minutes*60' in operator_source,
+              "Workflow A exposes configurable duration": "duration_minutes:" in host_source and "default: 10" in host_source,
+              "Workflow A keeps a host heartbeat": '"/heartbeat","POST"' in host_source,
+              "Workflow A closes its session at deadline": '"DELETE"' in host_source,
+              "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
               "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
-              "docs explain duration can be changed": "change" in docs and "1440 minutes" in docs,
+              "docs explain duration can be changed": "change" in docs and "350 minutes" in docs,
           }
           for label, passed in required_checks.items():
               if not passed:
