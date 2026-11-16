@@ -22,8 +22,9 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/v1/command-center", tags=["command-center"])
 
-DEVICE_KINDS = {"android_editor", "web_editor", "agent_controller"}
-EDITOR_KINDS = {"android_editor", "web_editor"}
+DEVICE_KINDS = {"android_editor", "web_editor", "native_editor", "agent_controller"}
+EDITOR_KINDS = {"android_editor", "web_editor", "native_editor"}
+NATIVE_READ_ONLY_ACTIONS = {"ping", "editor.get_state", "scene.get_tree", "project.list_resources", "capture.editor_screenshot", "capture.desktop_screenshot"}
 READ_ONLY_ACTIONS = {
     "ping",
     "project.get_state",
@@ -57,7 +58,7 @@ COMMAND_TTL_SECONDS = 600
 
 
 class PairingCodeRequest(BaseModel):
-    device_kind: Literal["android_editor", "web_editor", "agent_controller"]
+    device_kind: Literal["android_editor", "web_editor", "native_editor", "agent_controller"]
     workspace: str = Field(default="default", min_length=1, max_length=80)
 
 
@@ -68,7 +69,7 @@ class PairDeviceRequest(BaseModel):
 
 
 class CreateCommandRequest(BaseModel):
-    target: Literal["android_editor", "web_editor"]
+    target: Literal["android_editor", "web_editor", "native_editor"]
     action: str = Field(min_length=1, max_length=80)
     args: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str = Field(min_length=1, max_length=MAX_IDEMPOTENCY_KEY)
@@ -486,8 +487,10 @@ async def create_command(
     identity = await authenticate_device(request, authorization)
     if identity["device_kind"] != "agent_controller":
         raise HTTPException(status_code=403, detail="Only an agent controller can enqueue commands")
-    if body.action not in ALLOWED_ACTIONS:
+    if body.action not in ALLOWED_ACTIONS and not (body.target == "native_editor" and body.action in NATIVE_READ_ONLY_ACTIONS):
         raise HTTPException(status_code=400, detail="Action is not enabled in the command policy")
+    if body.target == "native_editor" and body.action not in NATIVE_READ_ONLY_ACTIONS:
+        raise HTTPException(status_code=403, detail="Native editor currently permits read-only inspection and capture commands only")
     if body.action in SCENE_NAVIGATION_ACTIONS:
         if body.target != "web_editor":
             raise HTTPException(status_code=403, detail="Scene navigation commands are restricted to the isolated AI web_editor workspace")
