@@ -470,6 +470,14 @@ def main() -> int:
                 if not contains_smoke_node(tree_root):
                     raise RuntimeError("The editor acknowledged node creation but the active scene tree did not contain the new node.")
 
+                invalid_node_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
+                    id: "smoke-invalid-node-class",
+                    command: "scene.add_node",
+                    args: {node_type: "EditorPlugin", node_name: "NotAllowed"}
+                })""")
+                if invalid_node_probe.get("ok") is not False or invalid_node_probe.get("error") != "INVALID_NODE_REQUEST":
+                    raise RuntimeError("The built-in agent did not reject an unapproved node class: " + json.dumps(invalid_node_probe))
+
                 pending = page.evaluate("() => window.__godotEditorAgentPending?.size ?? -1")
                 if pending != 0:
                     raise RuntimeError(f"Native agent leaked pending requests: {pending}")
@@ -599,6 +607,9 @@ def main() -> int:
                     "source_project_unchanged": True,
                     "runtime": runtime,
                     "semantic_probes": probes,
+                    "node_creation_probe": node_creation_probe,
+                    "tree_after_creation_probe": tree_after_creation_probe,
+                    "invalid_node_probe": invalid_node_probe,
                     "node_creation_probe": node_creation_probe,
                     "tree_after_creation_probe": tree_after_creation_probe,
                     "pending_requests_after_probes": pending,
