@@ -2,88 +2,100 @@
 
 Laboratorio independiente para que una IA pueda **entender, construir, ejecutar, inspeccionar y corregir juegos Godot** con la menor intervención manual posible.
 
-**Este sistema no depende de ningún repositorio de juegos ni viene ligado a un proyecto concreto. El usuario elige qué proyecto quiere trabajar.** El repositorio de este laboratorio contiene únicamente la infraestructura genérica de control, automatización, pruebas y diagnóstico; no contiene un juego obligatorio ni necesita que el usuario adopte uno de nuestros proyectos de ejemplo.
+**Este sistema no depende de ningún repositorio de juegos ni viene ligado a un proyecto concreto. El usuario elige qué proyecto quiere trabajar.** Este repositorio contiene infraestructura genérica, adaptadores, automatización y pruebas; no contiene un juego obligatorio.
 
 ## Independencia y selección del proyecto
 
 - No hay un repositorio de juego predeterminado, obligatorio ni privilegiado.
-- El usuario selecciona explícitamente el proyecto Godot sobre el que quiere trabajar en cada sesión.
-- La infraestructura debe poder trabajar con cualquier proyecto compatible que el usuario elija, sin exigir que ese proyecto se cree dentro de este repositorio ni que se adapte para satisfacer al controlador.
-- El proyecto seleccionado se trata como entrada de trabajo. El sistema registra su origen e identidad cuando corresponda y crea una copia aislada para experimentar.
-- Las pruebas, demos y proyectos sandbox de este repositorio son fixtures desechables: sirven para verificar el controlador y **nunca son dependencias del juego del usuario**.
-- No se debe consultar, modificar, clonar ni publicar en otro repositorio por suposición. El destino siempre debe corresponder al proyecto que el usuario seleccionó.
-- Los cambios experimentales permanecen en la copia de trabajo. Exportar o publicar cambios al proyecto elegido requiere revisión y aprobación explícita.
-
-En resumen: **el laboratorio aporta las herramientas; el usuario decide qué juego se abre y trabaja.** Cambiar de proyecto no debe requerir modificar el código del laboratorio ni adaptar el juego para un repositorio específico.
+- El usuario selecciona explícitamente el proyecto Godot de cada sesión.
+- El proyecto elegido se trata como entrada de trabajo y se copia a un workspace aislado.
+- Las pruebas y demos son fixtures desechables, nunca dependencias del juego del usuario.
+- No se modifica el original ni se publica automáticamente. Exportar cambios requiere revisión y aprobación explícita.
 
 ## Arquitectura
 
-    Proyecto Godot elegido explícitamente por el usuario
-             |
-             v
-    Copia de trabajo aislada y verificable
-             |
-             +--> Godot Headless (Linux)
-             |      Importación, validación, scripts y pruebas automatizadas
-             |
-             +--> Godot Editor nativo
-             |      Headless Session Bridge: inspección y edición semántica
-             |
-             +--> Godot Web Editor (Chromium)
-                    Adaptador nativo integrado + extensión de transporte
-                    Inspección del editor y observación visual
-             |
-             v
-    Ejecución / vista previa / diagnóstico / evidencias
-             |
-             v
-    Diff revisado -> exportación aprobada al proyecto elegido
+    Proyecto Godot elegido por el usuario
+                |
+                v
+       Copia de trabajo aislada
+                |
+        +-------+--------+
+        |                |
+        v                v
+    Godot Headless    Godot Editor real
+    Linux             (inspección visual)
+        |                |
+        | archivos,      | árbol, Inspector,
+        | escenas,       | recursos, preview,
+        | scripts,       | capturas
+        | importación,   |
+        | ejecución      |
+        +-------+--------+
+                |
+         Corrección iterativa
+                |
+          Diff revisado
+                |
+       Exportación aprobada
 
-### Tres entornos, responsabilidades distintas
+### Responsabilidades por entorno
 
-| Entorno | Responsabilidad | Estado actual |
+| Entorno | Responsabilidad | Estado |
 |---|---|---|
-| Godot Headless en Linux | Importar proyectos, ejecutar scripts y pruebas técnicas | Runtime externo al repositorio; no es un editor visual |
-| Godot Editor nativo | Editar escenas, nodos, recursos y controlar la vista previa | Headless Session Bridge integrado en esta rama; capacidades acotadas |
-| Godot Web Editor en Chromium | Inspeccionar el editor y observar el juego en navegador | Agente C++ integrado en el binario; actualmente de solo lectura |
+| Godot Headless Linux | Autoría por archivos, importación, parseo, ejecución y pruebas técnicas | Flujo de trabajo definido; requiere un runtime compatible disponible en el entorno |
+| Godot Editor nativo | Inspección visual de escenas, nodos, Inspector, recursos y preview | Headless Session Bridge integrado en la rama de trabajo |
+| Godot Web Editor (Chromium) | Inspección del editor y revisión visual en navegador | Agente C++ integrado; actualmente de solo lectura |
 
-Los adaptadores nativo y Web no son dos implementaciones intercambiables: resuelven entornos distintos. Comparten el objetivo semántico, pero conservan transportes adecuados a cada plataforma.
+**Headless es el entorno principal de construcción.** Se crean y modifican scripts GDScript, escenas .tscn, recursos y datos directamente en la copia de trabajo. No se programa haciendo clic en el editor ni se automatizan coordenadas para colocar cada nodo.
+
+**El editor real es la estación de inspección visual.** Se abre la misma copia después de la validación Headless para comprobar presentación, jerarquía, Inspector y preview. El puente permite consultar el editor y solicitar operaciones acotadas; no es el mecanismo principal de autoría.
+
+Los adaptadores nativo y Web son distintos porque operan en runtimes diferentes. La extensión Chromium solo retransmite solicitudes; no implementa una segunda API del editor.
+
+## Flujo de trabajo
+
+1. El usuario selecciona explícitamente el proyecto.
+2. Registrar el origen, rama y SHA cuando exista.
+3. Crear una copia de trabajo aislada.
+4. Construir scripts, escenas, recursos y configuraciones desde Linux Headless.
+5. Importar y validar con Godot Headless; revisar código de salida y logs.
+6. Ejecutar pruebas automatizadas y el juego en modo Headless.
+7. Abrir la misma copia en el editor real para inspección visual.
+8. Corregir desde el workspace y repetir importación/pruebas/inspección.
+9. Presentar el diff para revisión.
+10. Exportar o publicar únicamente los cambios aprobados y al destino elegido.
+
+No se deben usar clics o coordenadas como método normal de construcción. Un proyecto que pasa pruebas Headless todavía necesita inspección visual para validar su presentación.
 
 ## Control semántico unificado
 
-- **Godot Web:** el agente C++ forma parte del binario del editor. Expone editor.list_capabilities, editor.get_state y scene.get_tree. La extensión Chromium solo retransmite solicitudes y respuestas.
-- **Editor nativo:** headless/native-editor/ contiene el complemento que escucha únicamente en 127.0.0.1, usa token aleatorio y verifica la identidad del proyecto. Permite un conjunto mayor de operaciones de edición y vista previa.
-- **Godot Headless:** se usa para importación, ejecución y pruebas no visuales; no sustituye el control del editor abierto.
+- **Godot Web:** el agente C++ forma parte del binario del editor. Expone editor.list_capabilities, editor.get_state y scene.get_tree. La extensión Chromium solo retransmite.
+- **Editor nativo:** headless/native-editor/ contiene el complemento que escucha únicamente en 127.0.0.1, usa token aleatorio y verifica la identidad del proyecto. Ofrece inspección, edición semántica acotada, preview y captura.
+- **Godot Headless:** crea/valida contenido por archivos, importa recursos, ejecuta el juego y corre pruebas. No es un editor visual ni requiere simular clics.
 
-No se inyectan complementos, cambios a project.godot ni archivos del controlador en el proyecto original. El complemento nativo se instala solamente en una copia aislada y desechable.
+El complemento nativo se instala solo en una copia aislada cuando se necesita inspección visual; nunca en el proyecto original.
 
-## Flujo de trabajo seguro
+## Seguridad y aislamiento
 
-1. El usuario selecciona explícitamente el proyecto Godot que quiere trabajar; no se asume ningún repositorio.
-2. Identificar el origen disponible y registrar repositorio, rama y SHA si el proyecto procede de Git.
-3. Crear una copia aislada para experimentar, sin alterar el original.
-4. Detectar qué entorno está disponible y consultar sus capacidades reales.
-5. Inspeccionar antes de modificar; validar rutas, tipos y argumentos.
-6. Aplicar cambios pequeños y recuperables.
-7. Ejecutar la vista previa o pruebas Headless según corresponda.
-8. Capturar errores, logs, capturas y vídeo disponibles.
-9. Corregir y repetir las pruebas.
-10. Presentar el diff para revisión; exportar o publicar únicamente los cambios aprobados por el usuario y en el destino que haya elegido.
+- Listener TCP limitado a loopback, token aleatorio y huella de proyecto.
+- JSON delimitado por línea y límite de recepción.
+- Lista explícita de comandos, tipos de nodos y propiedades editables.
+- Sin shell, eval, ejecución arbitraria de GDScript ni procesos recibidos como órdenes del puente.
+- Validación de rutas, tipos y tamaños.
+- Sin guardado/publicación automática.
+- Capturas transferidas por fragmentos y verificadas en las pruebas.
+- Los cambios experimentales se mantienen en la copia de trabajo.
 
-## API semántica y pruebas
+La autoría de scripts ocurre como cambios de archivos dentro del workspace aislado y se valida con el runtime Godot; no se expone una orden remota de ejecución arbitraria de código.
 
-El puente nativo publica un vocabulario canónico de comandos (`editor.*`, `scene.*`, `project.*`, `preview.*` y `capture.*`) y anuncia las capacidades reales de la sesión con `editor.list_capabilities`. Conserva alias internos anteriores por compatibilidad; los clientes nuevos deben usar los nombres canónicos. La API Web comparte los comandos de inspección que realmente soporta y declara el resto como pendiente, sin fingir paridad.
+## Estado real y límites
 
-La prueba E2E crea un proyecto Godot vacío desde Project Manager, crea una escena desde el editor real y ejercita el puente, la edición permitida, Undo/Redo, recursos, vista previa, capturas y vídeo. Ese proyecto es temporal y no depende de ningún juego externo.
-
-## Estado real
-
-- El agente Web tiene tres comandos de inspección probados en Chromium; todavía no edita proyectos.
-- El puente del editor nativo expone el vocabulario semántico canónico para inspección, edición acotada, recursos, Undo/Redo, vista previa y captura. La última E2E del proyecto vacío validó la creación del proyecto, la escena y las operaciones de edición/recursos; detectó un desajuste del test al confirmar la apertura de escena con el nombre canónico. El test y la respuesta diferida se corrigieron; falta completar una nueva ejecución para validar preview y capturas con esos cambios.
-- La extensión Chromium es transporte; no contiene una segunda implementación del editor.
-- El prototipo de complemento instalado dentro de proyectos (browser-extension/godot-addon) se retiró del flujo activo para evitar duplicar el agente Web integrado.
-- La vista previa nativa tiene inicio/parada y captura probados; depuración interactiva, pausa/reanudación y observación estructurada completa siguen pendientes.
-- No debe describirse el sistema como un desarrollador autónomo completo hasta superar pruebas con proyectos de distinta complejidad.
+- La integración de la rama contiene el agente Web de solo lectura y el puente nativo con vocabulario semántico canónico.
+- La prueba E2E del proyecto vacío ya ha validado creación del proyecto desde Project Manager, operaciones de escena, recursos, Undo/Redo, preview, capturas y transferencia exacta en ejecuciones anteriores.
+- Las últimas ejecuciones de CI para el commit b42589d completaron los workflows de proyecto vacío, compilación del editor Web y comprobaciones del repositorio.
+- La construcción de niveles/juegos completos en Headless y su ciclo de corrección visual siguen siendo una fase de integración que debe probarse con un proyecto sandbox real; no se declara terminada por las pruebas del puente.
+- El runtime Godot debe comprobarse en cada entorno antes de afirmar que se ejecutaron pruebas locales. Si no está disponible, usar CI como validación temporal y declarar esa limitación.
+- Las advertencias Vulkan/OpenGL, X11, audio y UID se investigarán después de completar el ciclo de desarrollo Headless + revisión visual.
 
 ## Documentación
 
@@ -102,15 +114,15 @@ La prueba E2E crea un proyecto Godot vacío desde Project Manager, crea una esce
 - python -m unittest discover -s tests -p 'test_*.py' -v
 - python -m unittest discover -s tests -p 'test_web_agent_patcher.py' -v
 - bash scripts/test-bridge-sandbox.sh
-- Workflow de Chromium: ejecutar manualmente indicando el ID de una compilación personalizada exitosa.
+- Workflow de Chromium: ejecutar indicando el ID de una compilación personalizada exitosa.
 
-La compilación del motor Godot Web y el runtime Linux Headless son dependencias externas versionadas. Este repositorio mantiene los parches, adaptadores, pruebas y la orquestación; no copia el motor completo.
+La compilación Godot Web y el runtime Linux Headless son dependencias externas versionadas. Este repositorio mantiene los parches, adaptadores, pruebas y orquestación; no copia el motor completo.
 
 ## Integridad
 
-- No modificar repositorios de juegos para que el controlador funcione.
 - No asumir ni seleccionar un repositorio de juego por defecto.
+- No modificar el proyecto original para que el controlador funcione.
 - No publicar automáticamente cambios experimentales.
-- No ejecutar GDScript arbitrario, shell ni procesos recibidos como comandos del agente.
-- Mantener los listeners TCP en loopback y las sesiones asociadas al proyecto concreto elegido.
+- No ejecutar código arbitrario mediante comandos del puente.
+- Mantener listeners TCP en loopback y sesiones asociadas al proyecto seleccionado.
 - No fusionar a main ni desplegar servicios sin revisión y autorización.
