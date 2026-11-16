@@ -18,13 +18,14 @@ Archivos del motor modificados por el patcher de producción:
 
 El adaptador recibe solicitudes en una cola acotada y procesa las operaciones desde el hilo del editor. La interfaz de página es window.__godotEditorAgent.
 
-## Comandos de la primera versión
+## Comandos Web disponibles
 
-- editor.list_capabilities
-- editor.get_state
-- scene.get_tree
+- `editor.list_capabilities`
+- `editor.get_state`
+- `scene.get_tree` (máximo 256 nodos y 16 niveles)
+- `scene.add_node` (creación de un nodo con clase allowlisted, nombre validado y padre dentro de la escena activa)
 
-scene.get_tree limita el recorrido a 256 nodos y 16 niveles. La API no ofrece ejecución arbitraria de GDScript, shell, procesos, acceso libre al filesystem ni mutaciones genéricas.
+`scene.add_node` usa `EditorUndoRedoManager`, queda disponible para deshacer y no guarda la escena automáticamente. La lista permitida incluye nodos comunes 2D/Control, no clases arbitrarias. No hay ejecución arbitraria de GDScript, shell, procesos ni acceso libre al filesystem. La edición general de propiedades, scripts y recursos sigue pendiente.
 
 ## Compatibilidad Web
 
@@ -48,4 +49,4 @@ No usar artefactos antiguos como evidencia de la rama actual. Para aceptar un ca
 
 ## Estado
 
-La versión actual es un agente Web de inspección, no un editor autónomo completo. La edición de escenas, recursos y scripts desde Chromium sigue pendiente. El control de edición más amplio corresponde por ahora al adaptador del editor nativo descrito en docs/HEADLESS_SESSION_BRIDGE.md.
+La versión actual combina inspección con una primera mutación acotada: crear nodos mediante `scene.add_node`. No es todavía un editor autónomo completo; editar propiedades, recursos y scripts desde Chromium sigue pendiente. El control de edición más amplio corresponde por ahora al adaptador del editor nativo descrito en docs/HEADLESS_SESSION_BRIDGE.md.
