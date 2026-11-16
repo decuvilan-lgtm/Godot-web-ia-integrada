@@ -185,9 +185,15 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\t}
 		} else if (command == "scene.add_node") {
 			Dictionary args = request.get("args", Dictionary());
-			String node_type = args.get("node_type", "");
-			String node_name = args.get("node_name", "");
-			String parent_path = args.get("parent_path", ".");
+			Variant node_type_value = args.get("node_type", Variant());
+			Variant node_name_value = args.get("node_name", Variant());
+			Variant parent_path_value = args.get("parent_path", ".");
+			bool argument_types_valid = node_type_value.get_type() == Variant::STRING &&
+				node_name_value.get_type() == Variant::STRING &&
+				parent_path_value.get_type() == Variant::STRING;
+			String node_type = node_type_value;
+			String node_name = node_name_value;
+			String parent_path = parent_path_value;
 			bool allowed_type = false;
 			static const char *allowed_node_types[] = {
 				"Node", "Node2D", "Sprite2D", "CharacterBody2D", "StaticBody2D",
@@ -201,13 +207,13 @@ void WebToolsEditorPlugin::_process_requests() {
 					break;
 				}
 			}
-			bool args_valid = args.size() >= 2 && args.size() <= 3 &&
+			bool args_valid = argument_types_valid && args.size() >= 2 && args.size() <= 3 &&
 				args.has("node_type") && args.has("node_name") &&
 				node_name.is_valid_identifier() && node_name.length() <= 48 &&
 				parent_path.length() <= 200 && !parent_path.is_empty() &&
 				!parent_path.begins_with("/") && parent_path.find("..") == -1 &&
 				parent_path.find("//") == -1 &&
-				(args.size() == 2 || args.has("parent_path"));
+				(args.size() == 2 || (args.size() == 3 && args.has("parent_path")));
 			if (!allowed_type || !args_valid) {
 				response["error"] = "INVALID_NODE_REQUEST";
 				response["message"] = "Node type, name, or parent path is outside the bounded creation allowlist.";
