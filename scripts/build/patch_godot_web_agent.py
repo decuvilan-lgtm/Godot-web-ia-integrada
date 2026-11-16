@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the built-in, read-only browser agent patch to Godot 4.7.2-stable.
+"""Apply the built-in, bounded semantic browser agent patch to Godot 4.7.2-stable.
 
 This patches engine-owned Web Editor sources only. It never reads or writes an
 imported game project. The patch is deliberately anchor-validated and fails closed.
@@ -400,7 +400,7 @@ def main() -> int:
     debugger_path.write_text(debugger_server)
     audio_path.write_text(audio_driver)
     debug_adapter_path.write_text(debug_adapter_server)
-    print("Applied built-in read-only Web Editor Agent and Web compatibility patches to engine sources.")
+    print("Applied built-in bounded semantic Web Editor Agent and Web compatibility patches to engine sources.")
     print("No imported project files were accessed.")
     return 0
 
