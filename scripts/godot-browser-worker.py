@@ -216,6 +216,7 @@ def main():
                     "gameplay_verified":False,
                     "note":"A visible Godot scene editor is not proof that the game runs; project resource errors are reported separately."
                 }
+                post_host_ready_comment(bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"), os.environ.get("GITHUB_TOKEN", ""), session_id, sha, inspection)
             try:
                 semantic_probe=execute_semantic_command(page,"editor.list_capabilities",timeout_ms=12000)
                 inspection["semantic_controller_probe"]={
@@ -236,11 +237,10 @@ def main():
             })""")
             probe_result=inspection.get("semantic_controller_probe",{}).get("result",{})
             if not probe_result.get("ok"):
-                failure=failure or "Built-in Godot editor semantic adapter did not pass its capability probe"
+                inspection["semantic_controller_probe"]["warning"]="Built-in Godot editor semantic adapter did not pass its capability probe; basic browser inspection remains available"
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
             if failure is None:
-                post_host_ready_comment(bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"), os.environ.get("GITHUB_TOKEN", ""), session_id, sha, inspection)
                 command_session=run_command_loop(
                     page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
                     os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
@@ -265,6 +265,18 @@ def main():
             z.write(OUT/artifact_name,"artifacts/"+artifact_name)
     payload=bundle.read_bytes()
     if len(payload)>32*1024*1024: raise ValueError("Evidence bundle exceeds 32 MiB")
+    if os.environ.get("SKIP_RELAY_ARTIFACT_UPLOAD","").lower() in {"1","true","yes"}:
+        (OUT/"worker-summary.json").write_text(json.dumps({
+            "backend":"GitHub Actions hosted runner",
+            "session_id":session_id,
+            "browser_session_scope":"this workflow job only",
+            "artifact_storage":"GitHub Actions workflow artifact",
+            "import_ok":failure is None,
+            "failure":failure,
+        },indent=2),encoding="utf-8")
+        if failure:
+            raise RuntimeError(failure)
+        return
     digest=hashlib.sha256(payload).hexdigest()
     upload_url=f"{RELAY_URL}/v1/persistent-sessions/worker-artifacts/{session_id}"
     upload_headers={"Authorization":"Bearer "+oidc_token(),"Content-Type":"application/zip","X-Artifact-SHA256":digest}
