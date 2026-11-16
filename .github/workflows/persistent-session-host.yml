@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   issues: write
   id-token: write
 
@@ -28,12 +29,15 @@ jobs:
           ref: ${{ github.ref_name }}
           persist-credentials: false
 
-      - name: Read and validate the host request
+      - name: Read and validate the host request and select a successful custom editor build
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, re
+          import json, os, re, urllib.parse, urllib.request
           from pathlib import Path
           request=json.loads(Path(".session-host-request.json").read_text(encoding="utf-8"))
           fields={
@@ -43,8 +47,8 @@ jobs:
               "BROWSER_SESSION_ID": request.get("session_id"),
               "SESSION_ISSUE_NUMBER": str(request.get("issue_number","")),
           }
-          if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",str(fields["REPOSITORY"] or "")):
-              raise SystemExit("Invalid repository")
+          if fields["REPOSITORY"] != os.environ["GITHUB_REPOSITORY"]:
+              raise SystemExit("Host request repository mismatch")
           if fields["BRANCH"]!="test/verdant-valley-development-benchmark":
               raise SystemExit("Host is restricted to the authorized test branch")
           if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",str(fields["BROWSER_SESSION_ID"] or "")):
@@ -54,10 +58,62 @@ jobs:
           project=str(fields["PROJECT_PATH"] or "")
           if project.startswith("/") or ".." in project.split("/") or "\\" in project:
               raise SystemExit("Invalid project path")
+
+          branch=urllib.parse.quote(fields["BRANCH"],safe="")
+          url=f"https://api.github.com/repos/{fields['REPOSITORY']}/actions/workflows/build-godot-web-agent-editor.yml/runs?branch={branch}&per_page=30"
+          req=urllib.request.Request(url,headers={
+              "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+              "Accept":"application/vnd.github+json",
+              "X-GitHub-Api-Version":"2022-11-28",
+              "User-Agent":"Godot-Web-Editor-Artifact-Selector",
+          })
+          with urllib.request.urlopen(req,timeout=30) as response:
+              runs=json.loads(response.read()).get("workflow_runs",[])
+          successful=[run for run in runs if run.get("head_branch")==fields["BRANCH"] and run.get("status")=="completed" and run.get("conclusion")=="success"]
+          requested=request.get("editor_artifact_run_id")
+          if requested is not None:
+              if not isinstance(requested,int) or isinstance(requested,bool) or requested<1:
+                  raise SystemExit("editor_artifact_run_id must be a positive integer")
+              selected=next((run for run in successful if run.get("id")==requested),None)
+              if selected is None:
+                  raise SystemExit("The requested custom editor build is not a successful run on the test branch")
+          else:
+              if not successful:
+                  raise SystemExit("No successful custom Godot Web editor build exists on the test branch yet")
+              selected=successful[0]
+          fields["EDITOR_ARTIFACT_RUN_ID"]=str(selected["id"])
+          fields["EDITOR_BUILD_SHA"]=str(selected["head_sha"])
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
               for key,value in fields.items():
                   env.write(f"{key}={value}" + chr(10))
           PY
+
+      - name: Download the selected successful custom Godot Web editor
+        uses: actions/download-artifact@v8
+        with:
+          name: godot-web-editor-agent-${{ env.EDITOR_ARTIFACT_RUN_ID }}
+          run-id: ${{ env.EDITOR_ARTIFACT_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded-editor-artifact
+
+      - name: Verify editor artifact source and build the local mobile wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_FILE="$(find downloaded-editor-artifact -maxdepth 1 -type f -name '*editor*.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          EXPECTED_SHA="$(awk -v f="artifacts/$(basename "$ZIP_FILE")" '$2 == f { print $1 }' downloaded-editor-artifact/SHA256SUMS)"
+          ACTUAL_SHA="$(sha256sum "$ZIP_FILE" | awk '{print $1}')"
+          test -n "$EXPECTED_SHA"
+          test "$EXPECTED_SHA" = "$ACTUAL_SHA"
+          git fetch --no-tags origin "$EDITOR_BUILD_SHA" --depth=1
+          BUILT_PATCHER_SHA="$(git show "$EDITOR_BUILD_SHA:scripts/build/patch_godot_web_agent.py" | sha256sum | awk '{print $1}')"
+          CURRENT_PATCHER_SHA="$(sha256sum scripts/build/patch_godot_web_agent.py | awk '{print $1}')"
+          BUILT_BRIDGE_SHA="$(git show "$EDITOR_BUILD_SHA:browser-extension/page-bridge.js" | sha256sum | awk '{print $1}')"
+          CURRENT_BRIDGE_SHA="$(sha256sum browser-extension/page-bridge.js | awk '{print $1}')"
+          test "$BUILT_PATCHER_SHA" = "$CURRENT_PATCHER_SHA"
+          test "$BUILT_BRIDGE_SHA" = "$CURRENT_BRIDGE_SHA"
+          GODOT_RELAY_URL="" GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$ACTUAL_SHA" bash scripts/build-web.sh
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -79,13 +135,14 @@ jobs:
       - name: Open Godot Web and hold the exact browser for Workflow B
         env:
           RELAY_URL: https://godot-web-ia-relay-test.onrender.com
-          EDITOR_URL: https://godot-web-ia-editor-test.onrender.com/
+          LOCAL_EDITOR_DIR: public
           COMMIT_SHA: ""
           WAIT_SECONDS: "10"
           IMPORT_TIMEOUT_SECONDS: "480"
           BROWSER_COMMAND_WINDOW_SECONDS: "600"
           SKIP_RELAY_ARTIFACT_UPLOAD: "1"
           BRIDGE_REPOSITORY: ${{ github.repository }}
+          EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/godot-browser-worker.py
 
