@@ -1,12 +1,12 @@
 # Persistent Godot Web session
 
-Workflow A owns one real Chromium browser on a GitHub Actions runner. That browser opens the deployed Godot Web editor, imports the exact project revision, and remains alive for a bounded command window. Workflow B sends commands to that same page through a temporary GitHub issue comment channel. B never launches another editor or browser.
+Workflow A owns one real Chromium browser on a GitHub Actions runner. That browser opens a custom Godot Web editor built from a verified GitHub Actions artifact, imports the exact project revision, and remains alive for a bounded command window. Workflow B sends commands to that same page through a temporary GitHub issue comment channel. B never launches another editor or browser.
 
 The Render Relay is not the browser host in this design. It supplies the project archive endpoint and validates the GitHub OIDC identity. Browser screenshots and task evidence are retained as GitHub Actions artifacts; the workflow does not depend on Neon Object Storage.
 
 ## Workflow roles
 
-- **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It starts Chromium on the GitHub runner, downloads and imports the exact branch revision, checks that the Godot scene editor and canvas are visible, publishes a ready marker to the issue channel, then keeps the same browser available for B.
+- **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It selects the latest successful custom-editor build (or a run ID explicitly supplied in the request), downloads and verifies its artifact, builds the mobile wrapper locally on the runner, serves that editor from the runner, imports the exact project revision through a same-origin Relay proxy, checks the editor surface, publishes a ready marker, then keeps the same browser available for B.
 - **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (coordinate-free state/capability/scene-tree queries) plus `semantic-edit` (currently only `scene.add_node`, with a fixed class allowlist, bounded identifiers and parent paths, and Godot Undo/Redo).
 - **Command loop — `scripts/bridge/browser_command_loop.py`:** runs inside A's Chromium process. It polls the issue comments, accepts only the repository owner and the GitHub Actions bot, validates command shape and sequence numbers, and executes allowlisted browser actions.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python, Relay session tests, editor patcher tests, and the A/B handoff configuration.
@@ -24,25 +24,20 @@ The Render Relay is not the browser host in this design. It supplies the project
 
 Both request files are temporary control inputs on the test branch:
 
-- `.session-host-request.json` supplies repository, branch, project path, session ID, and issue number to A.
+- `.session-host-request.json` supplies repository, branch, project path, session ID, and issue number to A. It may optionally include `editor_artifact_run_id`; if omitted, A selects the latest successful custom-editor build on the test branch.
 - `.session-operator-request.json` supplies the same session ID and issue number to B.
 
 The branch is restricted to `test/verdant-valley-development-benchmark`. The project archive is resolved to an immutable commit SHA before import. The request files do not change the project itself because the imported project path is `examples/verdant-valley`.
 
 ## Authentication and deployment
 
-The runner uses GitHub's OIDC token to authenticate with the test Relay. The Relay checks the repository, test branch, and explicit workflow allowlist. The editor and Relay endpoints are:
-
-- Editor: `https://godot-web-ia-editor-test.onrender.com/`
-- Relay: `https://godot-web-ia-relay-test.onrender.com`
-
-Do not use the legacy Render workspace or service. No paid Render plan or deployment to `main` is required.
+The runner uses GitHub's OIDC token to authenticate with the test Relay. The Relay checks the repository, test branch, and explicit workflow allowlist. The only Render endpoint used by A is the test Relay: `https://godot-web-ia-relay-test.onrender.com`. The editor itself is built and served locally inside the GitHub Actions runner; the page's GitHub archive request is proxied through that same origin to avoid changing Relay CORS settings. The Render editor static site is not required for this workflow. No Render editor deployment, paid resource, legacy workspace, or change to `main` is required.
 
 ## Current verification scope
 
 Workflow B supports coordinate-free inspection and one controlled scene mutation. The mutation creates a single allowlisted node inside the active scene, records the operation in Godot's Undo/Redo history, and leaves the scene unsaved for review. It does not accept arbitrary GDScript, shell commands, arbitrary class names, or external filesystem paths.
 
-The adapter is compiled into the custom Godot Web editor binary by `.github/workflows/build-godot-web-agent-editor.yml`; it is not an addon installed into the game project. The A/B host still points to the test Render editor URL. Before claiming end-to-end editing through A and B, that URL must serve the same custom editor build that passed the Chromium smoke test. A green Python/Relay validation alone does not prove the C++ agent was loaded by the active A session.
+The adapter is compiled into the custom Godot Web editor binary by `.github/workflows/build-godot-web-agent-editor.yml`; it is not an addon installed into the game project. Workflow A now downloads the custom editor artifact, checks its SHA-256, compares the build's patcher and page-bridge hashes with the current branch, builds the wrapper locally, and serves it from the Actions runner. This removes the dependency on the Render editor service. A green CI run still does not prove that a particular A session imported the requested project; that requires the A/B live session evidence. A green Python/Relay validation alone does not prove the C++ agent was loaded by the active A session.
 
 ## Semantic edit request
 
