@@ -12,6 +12,7 @@ API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=5
+SEMANTIC_ACTIONS={"editor.get_state","editor.list_capabilities","scene.get_tree"}
 ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
@@ -77,8 +78,8 @@ def _validate(command, session_id, last_seq):
     if action=="semantic_command":
         editor_action=command.get("editor_action")
         args=command.get("args",{})
-        if not isinstance(editor_action,str) or not isinstance(args,dict) or len(args)>4:
-            raise ValueError("semantic_command needs an editor_action and up to four named arguments")
+        if editor_action not in SEMANTIC_ACTIONS or not isinstance(args,dict) or args:
+            raise ValueError("semantic_command only permits zero-argument read-only editor inspection actions")
     if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
         raise ValueError("Key is not in the browser editing allowlist")
     return seq,action
