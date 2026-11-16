@@ -8,7 +8,7 @@ on:
         description: Operation to perform against the persistent editor session
         required: true
         type: choice
-        options: [status, inspect, screenshot, run_game, stop_game, click_text, complete]
+        options: [status, inspect, screenshot, click, click_text, type_text, press_key, scroll, drag, run_game, stop_game, complete]
       session_id:
         description: Existing session ID (leave empty to locate the matching active session)
         required: false
@@ -29,9 +29,39 @@ on:
         default: examples/verdant-valley
         type: string
       text:
-        description: Exact visible text for click_text
+        description: Text for click_text or type_text
         required: false
         type: string
+      key:
+        description: Keyboard key or allowed shortcut for press_key
+        required: false
+        type: string
+      x:
+        description: Mouse X coordinate in editor viewport pixels
+        required: false
+        type: number
+      y:
+        description: Mouse Y coordinate in editor viewport pixels
+        required: false
+        type: number
+      end_x:
+        description: Drag destination X coordinate in viewport pixels
+        required: false
+        type: number
+      end_y:
+        description: Drag destination Y coordinate in viewport pixels
+        required: false
+        type: number
+      delta_y:
+        description: Vertical scroll amount (positive down, negative up)
+        required: false
+        type: number
+      mouse_button:
+        description: Mouse button for click or drag
+        required: false
+        default: left
+        type: choice
+        options: [left, right, middle]
       task_id:
         description: Stable task identifier for complete (letters, digits, dash and underscore)
         required: false
@@ -60,6 +90,13 @@ jobs:
           BRANCH: ${{ inputs.branch }}
           PROJECT_PATH: ${{ inputs.project_path }}
           CLICK_TEXT: ${{ inputs.text }}
+          KEY: ${{ inputs.key }}
+          MOUSE_X: ${{ inputs.x }}
+          MOUSE_Y: ${{ inputs.y }}
+          END_X: ${{ inputs.end_x }}
+          END_Y: ${{ inputs.end_y }}
+          DELTA_Y: ${{ inputs.delta_y }}
+          MOUSE_BUTTON: ${{ inputs.mouse_button }}
           TASK_ID: ${{ inputs.task_id }}
           GH_RUN_ID: ${{ github.run_id }}
           GH_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -120,6 +157,34 @@ jobs:
               text=os.environ.get("CLICK_TEXT","")
               if not text: raise RuntimeError("text is required for click_text")
               result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
+          elif op=="click":
+              x=os.environ.get("MOUSE_X","").strip()
+              y=os.environ.get("MOUSE_Y","").strip()
+              if not x or not y: raise RuntimeError("x and y are required for click")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
+                          {"command":"click","x":float(x),"y":float(y),"button":os.environ.get("MOUSE_BUTTON","left")})
+          elif op=="type_text":
+              text=os.environ.get("CLICK_TEXT","")
+              if not text: raise RuntimeError("text is required for type_text")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"type_text","text":text})
+          elif op=="press_key":
+              key=os.environ.get("KEY","").strip()
+              if not key: raise RuntimeError("key is required for press_key")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
+          elif op=="scroll":
+              x=os.environ.get("MOUSE_X","").strip()
+              y=os.environ.get("MOUSE_Y","").strip()
+              delta_y=os.environ.get("DELTA_Y","").strip()
+              if not x or not y or not delta_y: raise RuntimeError("x, y and delta_y are required for scroll")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
+                          {"command":"scroll","x":float(x),"y":float(y),"delta_y":float(delta_y)})
+          elif op=="drag":
+              values=[os.environ.get(name,"").strip() for name in ("MOUSE_X","MOUSE_Y","END_X","END_Y")]
+              if not all(values): raise RuntimeError("x, y, end_x and end_y are required for drag")
+              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
+                          {"command":"drag","x":float(values[0]),"y":float(values[1]),
+                           "end_x":float(values[2]),"end_y":float(values[3]),
+                           "button":os.environ.get("MOUSE_BUTTON","left")})
           elif op=="complete":
               task=os.environ.get("TASK_ID","")[:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]
               if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
