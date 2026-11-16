@@ -21,6 +21,9 @@ on:
       - "scripts/bridge/browser_command_loop.py"
       - "scripts/bridge/test_browser_command_loop.py"
       - "scripts/bridge/native_editor_client.py"
+      - "scripts/test_godot_web_editor_adapter.py"
+      - "examples/verdant-valley/project.godot"
+      - "examples/verdant-valley/addons/godot_controller_bridge/**"
       - "tests/test_native_editor_client.py"
       - "headless/native-editor/tools/headless_bridge/README.md"
       - "docs/persistent-godot-session.md"
@@ -63,6 +66,7 @@ jobs:
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions test_native_remote)
           python scripts/test_patch_web_shell.py
+          python scripts/test_godot_web_editor_adapter.py
           python - <<'PY'
           from pathlib import Path
           import re, textwrap, yaml
@@ -99,6 +103,7 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           worker_source=Path("scripts/godot-browser-worker.py").read_text(encoding="utf-8")
           command_loop_source=Path("scripts/bridge/browser_command_loop.py").read_text(encoding="utf-8")
+          godot_adapter_source=Path("examples/verdant-valley/addons/godot_controller_bridge/plugin.gd").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
           editor_patcher=Path("scripts/patch-web-shell.py").read_text(encoding="utf-8")
