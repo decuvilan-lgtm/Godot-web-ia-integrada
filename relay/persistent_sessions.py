@@ -97,8 +97,15 @@ class OpenSessionRequest(BaseModel):
 
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=32)
-    text: str | None = Field(default=None, max_length=160)
+    text: str | None = Field(default=None, max_length=5000)
     key: str | None = Field(default=None, max_length=32)
+    x: float | None = Field(default=None, ge=0, le=10000)
+    y: float | None = Field(default=None, ge=0, le=10000)
+    end_x: float | None = Field(default=None, ge=0, le=10000)
+    end_y: float | None = Field(default=None, ge=0, le=10000)
+    delta_x: float = Field(default=0, ge=-10000, le=10000)
+    delta_y: float = Field(default=0, ge=-10000, le=10000)
+    button: str = Field(default="left", max_length=10)
     timeout_ms: int = Field(default=10000, ge=100, le=30000)
 
 class CompleteTaskRequest(BaseModel):
@@ -489,6 +496,15 @@ async def persistent_session_heartbeat(session_id: str, authorization: str | Non
     _touch(session)
     return {"ok": True, "session_id": session_id, "idle_ttl_seconds": IDLE_TTL}
 
+def _validate_mouse_point(page: Any, x: float | None, y: float | None) -> tuple[float, float]:
+    if x is None or y is None:
+        raise HTTPException(status_code=400, detail="Both x and y coordinates are required")
+    viewport = page.viewport_size or {"width": 1024, "height": 640}
+    if x >= viewport["width"] or y >= viewport["height"]:
+        raise HTTPException(status_code=400, detail="Mouse coordinates are outside the editor viewport")
+    return float(x), float(y)
+
+
 def _assert_profile_matches_session(profile: dict[str, Any], session: PersistentSession) -> None:
     declared_path = profile["manifest"].get("project", {}).get("project_path")
     if declared_path is not None and declared_path != session.project_path:
@@ -599,16 +615,56 @@ async def persistent_session_command(session_id: str, body: CommandRequest, auth
                 await locator.click(timeout=body.timeout_ms)
                 output = {"clicked_text": body.text}
             elif body.command == "press_key":
-                if body.key not in {"F5", "F6", "F7", "Escape", "Enter", "Tab", "Space", "Control+s", "Control+Shift+s"}:
+                allowed_keys = {
+                    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+                    "Escape", "Enter", "Tab", "Space", "Backspace", "Delete",
+                    "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown",
+                    "Control+s", "Control+Shift+s", "Control+z", "Control+y", "Control+a",
+                    "Control+c", "Control+v", "Control+x", "Control+f", "Control+p",
+                    "Shift+F10",
+                }
+                if body.key not in allowed_keys:
                     raise HTTPException(status_code=400, detail="Key is not in the safe allowlist")
                 await session.page.keyboard.press(body.key)
                 output = {"pressed_key": body.key}
+            elif body.command == "click":
+                x, y = _validate_mouse_point(session.page, body.x, body.y)
+                if body.button not in {"left", "right", "middle"}:
+                    raise HTTPException(status_code=400, detail="Mouse button is not allowed")
+                await session.page.mouse.click(x, y, button=body.button)
+                output = {"clicked": {"x": x, "y": y, "button": body.button}}
+            elif body.command == "type_text":
+                if not body.text:
+                    raise HTTPException(status_code=400, detail="text is required")
+                await session.page.keyboard.insert_text(body.text)
+                output = {"typed_characters": len(body.text)}
+            elif body.command == "scroll":
+                x, y = _validate_mouse_point(session.page, body.x, body.y)
+                if body.delta_x == 0 and body.delta_y == 0:
+                    raise HTTPException(status_code=400, detail="A non-zero scroll delta is required")
+                await session.page.mouse.move(x, y)
+                await session.page.mouse.wheel(body.delta_x, body.delta_y)
+                output = {"scrolled_at": {"x": x, "y": y}, "delta_x": body.delta_x, "delta_y": body.delta_y}
+            elif body.command == "drag":
+                x, y = _validate_mouse_point(session.page, body.x, body.y)
+                end_x, end_y = _validate_mouse_point(session.page, body.end_x, body.end_y)
+                if body.button not in {"left", "right", "middle"}:
+                    raise HTTPException(status_code=400, detail="Mouse button is not allowed")
+                await session.page.mouse.move(x, y)
+                await session.page.mouse.down(button=body.button)
+                try:
+                    await session.page.mouse.move(end_x, end_y, steps=12)
+                finally:
+                    await session.page.mouse.up(button=body.button)
+                output = {"dragged": {"from": [x, y], "to": [end_x, end_y], "button": body.button}}
             elif body.command == "inspect":
                 output = {
                     "url": session.page.url,
                     "title": await session.page.title(),
                     "visible_text": (await session.page.locator("body").inner_text(timeout=body.timeout_ms))[:12000],
                     "canvas_count": await session.page.locator("canvas").count(),
+                    "viewport_size": session.page.viewport_size,
+                    "canvas_bounds": await session.page.locator("canvas").evaluate_all("(items) => items.slice(0, 12).map((item) => { const r = item.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })"),
                     "connector_status": await session.page.evaluate("() => window.__godotGithubConnectorStatus || null"),
                 }
             else:
