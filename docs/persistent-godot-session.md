@@ -24,9 +24,9 @@ The API reports `created_at`, `expires_at`, `max_duration_seconds`, and `remaini
 
 ## Authentication and deployment
 
-The Relay validates GitHub OIDC claims against an explicit workflow allowlist and configured ref. Workflow A and Workflow B must be included in the allowlist and run from the configured ref (currently `refs/heads/main`).
+The Relay validates GitHub OIDC claims against an explicit workflow allowlist and configured ref. Workflow A and Workflow B must be included in the allowlist and run from the configured ref (currently `refs/heads/test/verdant-valley-development-benchmark`).
 
-The workflow and Relay changes are being prepared on the development branch. They do not become active until reviewed and deployed to the Relay's configured branch. The current Render Blueprint still targets `main`; this work has not been deployed.
+The test Relay is deployed at `https://godot-web-ia-relay-test.onrender.com` and its OIDC ref is pinned to `refs/heads/test/verdant-valley-development-benchmark`. Workflow A and B must use this test Relay URL; do not point them at the legacy service.
 
 ## Limits
 
