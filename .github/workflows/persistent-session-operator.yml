@@ -54,9 +54,15 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke"}:
+          if operation not in {"inspect","interaction-smoke","semantic-inspect"}:
               raise SystemExit("Unsupported operator verification operation")
 
+          semantic_action=request.get("editor_action","editor.get_state")
+          semantic_args=request.get("args",{})
+          semantic_allowlist={"editor.get_state","editor.list_capabilities","scene.get_tree"}
+          if operation=="semantic-inspect":
+              if semantic_action not in semantic_allowlist or semantic_args!={}:
+                  raise SystemExit("Semantic inspection only permits the three read-only, zero-argument editor commands")
           api="https://api.github.com"
           token=os.environ["GITHUB_TOKEN"]
           headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
@@ -137,6 +143,12 @@ jobs:
               after=send("status")
               extra={"screenshot":screenshot}
               commands_sent=3
+          elif operation=="semantic-inspect":
+              semantic=send("semantic_command",editor_action=semantic_action,args=semantic_args)
+              screenshot=send("screenshot")
+              after=send("status")
+              extra={"semantic":semantic,"screenshot":screenshot}
+              commands_sent=4
           else:
               canvas_click=send("canvas_click",x=0.02,y=0.02)
               escaped=send("press_key",key="Escape")
