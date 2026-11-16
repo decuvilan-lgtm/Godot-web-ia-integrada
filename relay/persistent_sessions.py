@@ -260,6 +260,9 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
         "imported_sha": "",
         "expected_sha": expected_sha,
         "canvas_count": 0,
+        "connector_error": "",
+        "connector_bytes": 0,
+        "connector_filename": "",
     }
     try:
         while time.monotonic() - started < 480:
@@ -273,6 +276,9 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
                 "imported_sha": (connector or {}).get("commitSha", ""),
                 "expected_sha": expected_sha,
                 "canvas_count": canvas_count,
+                "connector_error": (connector or {}).get("error", ""),
+                "connector_bytes": (connector or {}).get("bytes", 0),
+                "connector_filename": (connector or {}).get("filename", ""),
                 "elapsed_seconds": round(time.monotonic() - started, 1),
             }
             if readiness["phase"] == "started" and readiness["imported_sha"] == expected_sha and canvas_count >= 1:
