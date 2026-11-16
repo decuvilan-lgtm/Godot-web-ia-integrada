@@ -1,175 +1,114 @@
 name: Persistent Godot Session Host (Workflow A)
-run-name: Godot Web host — ${{ inputs.duration_minutes || 10 }} min
+run-name: Godot Web shared browser host — ${{ github.run_id }}
 
 on:
   push:
     branches:
       - test/verdant-valley-development-benchmark
     paths:
-      - ".github/workflows/persistent-session-host.yml"
-  workflow_dispatch:
-    inputs:
-      duration_minutes:
-        description: How long Workflow A keeps the same Godot Web session open (default 10; allowed 1-340)
-        required: true
-        default: 10
-        type: number
-      repository:
-        description: Project repository (owner/name)
-        required: true
-        default: decuvilan-lgtm/Godot-web-ia-integrada
-        type: string
-      branch:
-        description: Project branch
-        required: true
-        default: test/verdant-valley-development-benchmark
-        type: string
-      project_path:
-        description: Folder containing project.godot
-        required: false
-        default: examples/verdant-valley
-        type: string
+      - ".session-host-request.json"
 
 permissions:
   contents: read
+  issues: write
   id-token: write
-  actions: write
 
 concurrency:
-  group: godot-session-host-${{ inputs.repository }}
+  group: godot-session-host-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   host:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 25
     steps:
-      - name: Open and hold the shared Godot Web editor session
-        env:
-          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
-          DURATION_MINUTES: ${{ inputs.duration_minutes || '10' }}
-          REPOSITORY: ${{ inputs.repository || 'decuvilan-lgtm/Godot-web-ia-integrada' }}
-          BRANCH: ${{ inputs.branch || 'test/verdant-valley-development-benchmark' }}
-          PROJECT_PATH: ${{ inputs.project_path || 'examples/verdant-valley' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          # Empty by default: pin the latest branch SHA at session creation.
-          # Verify the editor's updated ZIP input and DOM diagnostics on this run.
-          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha || '' }}
+      - name: Check out the test-branch controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+
+      - name: Read and validate the host request
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json, os, re, time, urllib.error, urllib.parse, urllib.request
-
-          relay=os.environ["RELAY_URL"].rstrip("/")
-          raw_duration=os.environ.get("DURATION_MINUTES","10").strip()
-          numeric_duration=float(raw_duration)
-          if not numeric_duration.is_integer():
-              raise RuntimeError("duration_minutes must be a whole number")
-          duration=int(numeric_duration)
-          if not 1 <= duration <= 340:
-              raise RuntimeError("duration_minutes must be between 1 and 340")
-
-          def get_oidc_token():
-              token_url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
-              token_req=urllib.request.Request(token_url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
-              with urllib.request.urlopen(token_req,timeout=20) as response:
-                  return json.load(response)["value"]
-
-          auth={"token":get_oidc_token()}
-          def call(path,method="GET",payload=None,timeout=120):
-              data=None if payload is None else json.dumps(payload).encode()
-              for attempt in range(2):
-                  headers={"Authorization":"Bearer "+auth["token"],"Accept":"application/json","Content-Type":"application/json"}
-                  req=urllib.request.Request(relay+path,data=data,headers=headers,method=method)
-                  try:
-                      with urllib.request.urlopen(req,timeout=timeout) as response:
-                          raw=response.read()
-                          return json.loads(raw) if raw else {}
-                  except urllib.error.HTTPError as exc:
-                      if exc.code==401 and attempt==0:
-                          auth["token"]=get_oidc_token()
-                          continue
-                      detail=exc.read().decode("utf-8","replace")[:1200]
-                      if exc.code in (404,410) and method=="DELETE":
-                          return {"closed":True,"already_expired":True,"http_status":exc.code}
-                      raise RuntimeError(f"Relay HTTP {exc.code}: {detail}") from exc
-
-          # Use an explicitly pinned SHA for this verification session when supplied;
-          # otherwise resolve the selected branch to an immutable SHA on the GitHub runner.
-          api="https://api.github.com/repos/"+os.environ["REPOSITORY"]
-          requested_sha=os.environ.get("REQUESTED_COMMIT_SHA","").strip().lower()
-          if requested_sha:
-              effective_sha=requested_sha
-          else:
-              github_headers={"Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
-                              "Accept":"application/vnd.github+json",
-                              "X-GitHub-Api-Version":"2022-11-28"}
-              branch_url=api+"/branches/"+urllib.parse.quote(os.environ["BRANCH"],safe="")
-              branch_req=urllib.request.Request(branch_url,headers=github_headers)
-              with urllib.request.urlopen(branch_req,timeout=30) as response:
-                  effective_sha=str(json.load(response).get("commit",{}).get("sha","")).lower()
-          if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})",effective_sha):
-              raise RuntimeError("The selected project revision is not a full Git object SHA")
-
-          opened=call("/v1/persistent-sessions","POST",{
-              "repository":os.environ["REPOSITORY"],
-              "branch":os.environ["BRANCH"],
-              "project_path":os.environ.get("PROJECT_PATH",""),
-              "commit_sha":effective_sha,
-              "reuse_existing":True,
-              "reimport_existing":False,
-              "duration_seconds":duration*60,
-          },timeout=180)
-          sid=opened["session_id"]
-          status=opened
-          while status.get("state") == "loading":
-              print(json.dumps({"session_id":sid,"editor_state":"loading","message":"Waiting for exact project SHA and editor canvas"}))
-              time.sleep(5)
-              try:
-                  status=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}")
-              except RuntimeError as exc:
-                  if "HTTP 404" in str(exc) or "HTTP 410" in str(exc):
-                      raise RuntimeError("Relay closed the session because the Godot project did not become ready or the host was lost") from exc
-                  raise
-          if status.get("state") != "open" or not status.get("ready"):
-              raise RuntimeError(f"Godot editor did not become ready: {status}")
-          expires_at=float(status["expires_at"])
-          print(json.dumps({
-              "workflow":"A-host",
-              "session_id":sid,
-              "reused":opened.get("reused",False),
-              "configured_duration_seconds":status.get("max_duration_seconds"),
-              "remaining_seconds":status.get("remaining_seconds"),
-              "expires_at":expires_at,
-              "editor_state":"ready",
-              "commit_sha":effective_sha,
-          },indent=2))
-
-          # Workflow B is triggered independently by a short-lived request file on this test branch.
-          # Keep A alive while B connects to this exact Relay session.
-          # Keep this workflow alive and ping the same Relay-owned page.
-          # Heartbeats keep the hosting service warm; they never extend session expiry.
-          while True:
-              remaining=expires_at-time.time()
-              if remaining <= 0:
-                  break
-              time.sleep(min(30,max(1,remaining)))
-              remaining=expires_at-time.time()
-              if remaining > 0:
-                  try:
-                      heartbeat=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}/heartbeat","POST",timeout=25)
-                      print(json.dumps({"session_id":sid,"heartbeat":"ok","remaining_seconds":int(remaining)}))
-                  except RuntimeError as exc:
-                      if "HTTP 404" in str(exc) or "HTTP 410" in str(exc):
-                          print(f"Session ended before its scheduled expiry: {exc}")
-                          break
-                      raise
-
-          # The Relay's own reaper is the fallback if this workflow is cancelled.
-          # At the deadline the server may already have closed the page.
-          closed=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}","DELETE",timeout=25)
-          print(json.dumps({"workflow":"A-host","session_id":sid,"host_finished":True,"close_result":closed},indent=2))
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, re
+          from pathlib import Path
+          request=json.loads(Path(".session-host-request.json").read_text(encoding="utf-8"))
+          fields={
+              "REPOSITORY": request.get("repository"),
+              "BRANCH": request.get("branch"),
+              "PROJECT_PATH": request.get("project_path"),
+              "BROWSER_SESSION_ID": request.get("session_id"),
+              "SESSION_ISSUE_NUMBER": str(request.get("issue_number","")),
+          }
+          if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",str(fields["REPOSITORY"] or "")):
+              raise SystemExit("Invalid repository")
+          if fields["BRANCH"]!="test/verdant-valley-development-benchmark":
+              raise SystemExit("Host is restricted to the authorized test branch")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",str(fields["BROWSER_SESSION_ID"] or "")):
+              raise SystemExit("Invalid browser session ID")
+          if not re.fullmatch(r"[1-9][0-9]*",fields["SESSION_ISSUE_NUMBER"]):
+              raise SystemExit("A valid issue_number is required for the command channel")
+          project=str(fields["PROJECT_PATH"] or "")
+          if project.startswith("/") or ".." in project.split("/") or "\\" in project:
+              raise SystemExit("Invalid project path")
+          for key,value in fields.items():
+              print(f"{key}={value}")
           PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: godot-session-playwright-chromium-${{ runner.os }}-1.52.0
+
+      - name: Install the runner-owned browser
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Open Godot Web and hold the exact browser for Workflow B
+        env:
+          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
+          EDITOR_URL: https://godot-web-ia-editor-test.onrender.com/
+          COMMIT_SHA: ""
+          WAIT_SECONDS: "10"
+          IMPORT_TIMEOUT_SECONDS: "480"
+          BROWSER_COMMAND_WINDOW_SECONDS: "600"
+          BRIDGE_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/godot-browser-worker.py
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-session-host-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Close the temporary command channel
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ env.SESSION_ISSUE_NUMBER }}
+        with:
+          script: |
+            const issue = Number(process.env.ISSUE_NUMBER);
+            if (Number.isInteger(issue) && issue > 0) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue,
+                state: 'closed'
+              });
+            }
