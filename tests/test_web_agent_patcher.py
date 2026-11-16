@@ -42,7 +42,7 @@ void WebToolsEditorPlugin::_download_zip() {
 
 
 class WebAgentPatcherTests(unittest.TestCase):
-    def test_patches_engine_plugin_and_exposes_only_read_only_commands(self):
+    def test_patches_engine_plugin_and_exposes_bounded_semantic_commands(self):
         header, source = PATCHER.patch(HEADER, SOURCE)
         self.assertIn("void _process_requests();", header)
         self.assertIn("godot_web_agent_install();", source)
@@ -55,6 +55,13 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("editor.list_capabilities", source)
         self.assertIn("editor.get_state", source)
         self.assertIn("scene.get_tree", source)
+        self.assertIn("scene.add_node", source)
+        self.assertIn("EditorUndoRedoManager *undo_redo = get_undo_redo();", source)
+        self.assertIn("undo_redo->create_action", source)
+        self.assertIn("undo_redo->add_do_reference(created)", source)
+        self.assertIn("allowed_node_types", source)
+        self.assertIn("node_name.is_valid_identifier()", source)
+        self.assertIn("saved_automatically", source)
         self.assertIn("r_count < 256", source)
         self.assertIn("p_depth < 16", source)
         self.assertIn("payload.length > 16384", source)
@@ -64,6 +71,7 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertNotIn(chr(92) + "tif", source)
         self.assertNotIn("GDScript", source)
         self.assertNotIn("execute_string", source)
+        self.assertNotIn("run_shell", source)
 
     def test_web_compatibility_avoids_unstartable_threads_and_tcp_listener(self):
         project_list = """\tscan_data->thread->start(_scan_thread, scan_data);
