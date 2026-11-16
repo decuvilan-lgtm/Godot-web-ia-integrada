@@ -84,6 +84,7 @@ jobs:
           WAIT_SECONDS: "10"
           IMPORT_TIMEOUT_SECONDS: "480"
           BROWSER_COMMAND_WINDOW_SECONDS: "600"
+          SKIP_RELAY_ARTIFACT_UPLOAD: "1"
           BRIDGE_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/godot-browser-worker.py
