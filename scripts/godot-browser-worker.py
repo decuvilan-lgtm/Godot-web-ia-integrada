@@ -36,6 +36,31 @@ def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, ret
         time.sleep(min(delay, max(1,deadline-time.monotonic())))
         delay=min(delay+5,25)
 
+def post_host_ready_comment(repo, issue_number, token, session_id, sha, inspection):
+    """Publish a readiness marker so Workflow B never races the import."""
+    if not issue_number or not token:
+        return
+    body="<!-- godot-browser-host-ready -->\\n"+json.dumps({
+        "session_id":session_id,
+        "commit_sha":sha,
+        "visual_status":inspection.get("visual_validation",{}).get("status"),
+        "scene_title":inspection.get("visual_validation",{}).get("scene_title"),
+        "visible_canvases":inspection.get("visual_surface",{}).get("canvases",[]),
+    },ensure_ascii=False)
+    payload=json.dumps({"body":body}).encode()
+    req=urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/issues/{int(issue_number)}/comments",
+        data=payload,method="POST",headers={
+            "Authorization":"Bearer "+token,
+            "Accept":"application/vnd.github+json",
+            "X-GitHub-Api-Version":"2022-11-28",
+            "Content-Type":"application/json",
+            "User-Agent":"Godot-Web-IA-Browser-Host",
+        })
+    with urllib.request.urlopen(req,timeout=30) as response:
+        response.read()
+
+
 def oidc_token():
     url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
     req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
@@ -215,6 +240,7 @@ def main():
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
             if failure is None:
+                post_host_ready_comment(bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"), os.environ.get("GITHUB_TOKEN", ""), session_id, sha, inspection)
                 command_session=run_command_loop(
                     page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
                     os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
