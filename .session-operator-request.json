@@ -7,6 +7,6 @@
   "editor_action": "scene.add_node",
   "args": {
     "node_type": "Node2D",
-    "node_name": "AgentVerifiedNode"
+    "node_name": "AgentVerifiedNode2"
   }
 }
