@@ -491,6 +491,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "commit_sha": effective_sha,
             "duration_seconds": body.duration_seconds,
         })
+        session.loading_started_at = time.time()
         _sessions[session_id] = session
         asyncio.create_task(_wait_for_editor_ready(session, effective_sha))
     except HTTPException:
