@@ -95,12 +95,12 @@ jobs:
               "Readiness monitor runs independently": 'asyncio.create_task(_wait_for_editor_ready(session, effective_sha))' in relay_source,
               "Operator commands require ready editor": 'session.created_at is None' in relay_source and 'still importing' in relay_source,
               "Workflow A waits for loading state": 'while status.get("state") == "loading"' in host_source,
-              "Workflow A allows import readiness timeout": '},timeout=600)' in host_source,
+              "Workflow A allows open request timeout": '},timeout=180)' in host_source,
               "Workflow A keeps a host heartbeat": 'heartbeat","POST' in host_source,
               "Workflow A closes its session at deadline": '"DELETE"' in host_source,
               "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
               "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
-              "docs explain duration can be changed": "change" in docs and "350 minutes" in docs,
+              "docs explain duration can be changed": "change" in docs and "340 minutes" in docs,
           }
           for label, passed in required_checks.items():
               if not passed:
