@@ -1,5 +1,5 @@
 name: Persistent Godot Session Operator (Workflow B)
-run-name: Godot session operator — ${{ inputs.operation || 'inspect' }}
+run-name: Godot browser operator — ${{ github.run_id }}
 
 on:
   push:
@@ -7,78 +7,13 @@ on:
       - test/verdant-valley-development-benchmark
     paths:
       - ".session-operator-request.json"
-  workflow_dispatch:
-    inputs:
-      operation:
-        description: Operation to perform against the persistent editor session
-        required: true
-        type: choice
-        options: [status, inspect, screenshot, click, click_text, type_text, press_key, scroll, drag, run_game, stop_game, complete]
-      session_id:
-        description: Existing session ID (leave empty to locate the matching active session)
-        required: false
-        type: string
-      repository:
-        description: Project repository (owner/name)
-        required: false
-        default: decuvilan-lgtm/Godot-web-ia-integrada
-        type: string
-      branch:
-        description: Project branch
-        required: false
-        default: test/verdant-valley-development-benchmark
-        type: string
-      project_path:
-        description: Folder containing project.godot (empty for repository root)
-        required: false
-        default: examples/verdant-valley
-        type: string
-      text:
-        description: Text for click_text or type_text
-        required: false
-        type: string
-      key:
-        description: Keyboard key or allowed shortcut for press_key
-        required: false
-        type: string
-      x:
-        description: Mouse X coordinate in editor viewport pixels
-        required: false
-        type: number
-      y:
-        description: Mouse Y coordinate in editor viewport pixels
-        required: false
-        type: number
-      end_x:
-        description: Drag destination X coordinate in viewport pixels
-        required: false
-        type: number
-      end_y:
-        description: Drag destination Y coordinate in viewport pixels
-        required: false
-        type: number
-      delta_y:
-        description: Vertical scroll amount (positive down, negative up)
-        required: false
-        type: number
-      mouse_button:
-        description: Mouse button for click or drag
-        required: false
-        default: left
-        type: choice
-        options: [left, right, middle]
-      task_id:
-        description: Stable task identifier for complete (letters, digits, dash and underscore)
-        required: false
-        default: operator-checkpoint
-        type: string
 
 permissions:
   contents: read
-  id-token: write
+  issues: write
 
 concurrency:
-  group: godot-session-operator-${{ inputs.session_id || inputs.repository }}
+  group: godot-session-operator-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -86,153 +21,113 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - name: Operate the existing Relay-hosted browser and editor session
+      - name: Check out the test-branch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+
+      - name: Send commands to A's existing Chromium session and verify it remains open
         env:
-          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
-          OPERATION: ${{ inputs.operation || 'inspect' }}
-          SESSION_ID: ${{ inputs.session_id || '' }}
-          REPOSITORY: ${{ inputs.repository }}
-          BRANCH: ${{ inputs.branch }}
-          PROJECT_PATH: ${{ inputs.project_path }}
-          CLICK_TEXT: ${{ inputs.text }}
-          KEY: ${{ inputs.key }}
-          MOUSE_X: ${{ inputs.x }}
-          MOUSE_Y: ${{ inputs.y }}
-          END_X: ${{ inputs.end_x }}
-          END_Y: ${{ inputs.end_y }}
-          DELTA_Y: ${{ inputs.delta_y }}
-          MOUSE_BUTTON: ${{ inputs.mouse_button }}
-          TASK_ID: ${{ inputs.task_id }}
-          GH_RUN_ID: ${{ github.run_id }}
-          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
-        shell: bash
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, os, re, time, urllib.error, urllib.parse, urllib.request
           from pathlib import Path
 
-          relay=os.environ["RELAY_URL"].rstrip("/")
-          if os.environ.get("GITHUB_EVENT_NAME")=="push":
-              request_path=Path(".session-operator-request.json")
-              if not request_path.is_file():
-                  print("No operator request file; ignoring request-file deletion event")
-                  raise SystemExit(0)
-              request=json.loads(request_path.read_text(encoding="utf-8"))
-              if request.get("operation")!="inspect":
-                  raise RuntimeError("Push-triggered operator requests are limited to inspect")
-              for env_key, key in (("OPERATION","operation"),("SESSION_ID","session_id"),
-                                   ("REPOSITORY","repository"),("BRANCH","branch"),
-                                   ("PROJECT_PATH","project_path")):
-                  value=request.get(key,"")
-                  if not isinstance(value,str):
-                      raise RuntimeError(f"Invalid operator request field: {key}")
-                  os.environ[env_key]=value
-          def oidc():
-              url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
-              req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
-              with urllib.request.urlopen(req,timeout=20) as r: return json.load(r)["value"]
-          auth={"token":oidc()}
-          def call(path,method="GET",payload=None,timeout=90):
+          request_path=Path(".session-operator-request.json")
+          if not request_path.is_file():
+              print("No operator request file; ignoring request-file deletion event")
+              raise SystemExit(0)
+          request=json.loads(request_path.read_text(encoding="utf-8"))
+          repo=os.environ["REPOSITORY"]
+          if request.get("repository")!=repo:
+              raise SystemExit("Operator request repository mismatch")
+          if request.get("branch")!="test/verdant-valley-development-benchmark":
+              raise SystemExit("Operator is restricted to the authorized test branch")
+          session_id=request.get("session_id")
+          issue_number=request.get("issue_number")
+          operation=request.get("operation","inspect")
+          if not isinstance(session_id,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",session_id):
+              raise SystemExit("Invalid browser session ID")
+          if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
+              raise SystemExit("Invalid command-channel issue number")
+          if operation!="inspect":
+              raise SystemExit("This verification run only permits the read-only inspect operation")
+
+          api="https://api.github.com"
+          token=os.environ["GITHUB_TOKEN"]
+          headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
+                   "X-GitHub-Api-Version":"2022-11-28","Content-Type":"application/json",
+                   "User-Agent":"Godot-Session-Operator"}
+          def api_call(path,method="GET",payload=None):
               data=None if payload is None else json.dumps(payload).encode()
-              for attempt in range(2):
-                  h={"Authorization":"Bearer "+auth["token"],"Accept":"application/json"}
-                  if data is not None: h["Content-Type"]="application/json"
-                  req=urllib.request.Request(relay+path,data=data,headers=h,method=method)
-                  try:
-                      with urllib.request.urlopen(req,timeout=timeout) as r:
-                          raw=r.read()
-                          ctype=r.headers.get("Content-Type","")
-                          return json.loads(raw) if "json" in ctype else raw
-                  except urllib.error.HTTPError as e:
-                      if e.code==401 and attempt==0:
-                          auth["token"]=oidc()
+              req=urllib.request.Request(api+path,data=data,headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  raw=response.read()
+                  return json.loads(raw) if raw else {}
+
+          issue_path=f"/repos/{repo}/issues/{issue_number}/comments"
+          comments=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
+          if not isinstance(comments,list):
+              raise RuntimeError("Could not read the browser command channel")
+          last_seq=0
+          for item in comments:
+              body=(item.get("body") or "").strip()
+              if not body.startswith("{") or not body.endswith("}"):
+                  continue
+              try: command=json.loads(body)
+              except Exception: continue
+              if command.get("protocol")==1 and command.get("session_id")==session_id:
+                  seq=command.get("seq")
+                  if isinstance(seq,int) and not isinstance(seq,bool):
+                      last_seq=max(last_seq,seq)
+
+          def send(action, **fields):
+              nonlocal_seq[0]+=1
+              command={"protocol":1,"session_id":session_id,"seq":nonlocal_seq[0],"action":action,**fields}
+              created=api_call(issue_path,"POST",{"body":json.dumps(command,ensure_ascii=False)})
+              command_id=created["id"]
+              deadline=time.monotonic()+150
+              while time.monotonic()<deadline:
+                  current=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
+                  for comment in current:
+                      body=comment.get("body") or ""
+                      marker="<!-- godot-browser-result -->"
+                      if marker not in body:
                           continue
-                      detail=e.read().decode("utf-8","replace")[:1500]
-                      raise RuntimeError(f"Relay HTTP {e.code}: {detail}") from e
+                      try: result=json.loads(body.split(marker,1)[1].strip())
+                      except Exception: continue
+                      if result.get("command_id")==command_id:
+                          value=result.get("result",{})
+                          if not value.get("ok",False):
+                              raise RuntimeError("Browser command failed: "+str(value.get("error","unknown error")))
+                          return value
+                  time.sleep(5)
+              raise TimeoutError(f"Timed out waiting for browser command {action}")
 
-          op=os.environ["OPERATION"]
-          sid=os.environ.get("SESSION_ID","").strip()
-          if not sid:
-              sessions=call("/v1/persistent-sessions").get("sessions",[])
-              matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
-                       and s["branch"]==os.environ["BRANCH"]
-                       and s["project_path"]==os.environ.get("PROJECT_PATH","")]
-              if len(matches)!=1:
-                  raise RuntimeError(f"Expected exactly one matching active session; found {len(matches)}. Supply session_id explicitly.")
-              sid=matches[0]["session_id"]
-          if op=="status":
-              result=call("/v1/persistent-sessions/"+urllib.parse.quote(sid,safe=""))
-          elif op=="inspect":
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"inspect"})
-          elif op=="screenshot":
-              call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"screenshot"})
-              result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
-                          {"task_id":(os.environ["TASK_ID"][:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]),
-                           "summary":"Operator screenshot checkpoint","result":{"operation":"screenshot"}})
-              artifact=call(result["artifact_url"])
-              Path("artifacts").mkdir(exist_ok=True)
-              Path("artifacts/session-evidence.zip").write_bytes(artifact)
-          elif op in ("run_game","stop_game"):
-              key="F5" if op=="run_game" else "Escape"
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
-          elif op=="click_text":
-              text=os.environ.get("CLICK_TEXT","")
-              if not text: raise RuntimeError("text is required for click_text")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
-          elif op=="click":
-              x=os.environ.get("MOUSE_X","").strip()
-              y=os.environ.get("MOUSE_Y","").strip()
-              if not x or not y: raise RuntimeError("x and y are required for click")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
-                          {"command":"click","x":float(x),"y":float(y),"button":os.environ.get("MOUSE_BUTTON","left")})
-          elif op=="type_text":
-              text=os.environ.get("CLICK_TEXT","")
-              if not text: raise RuntimeError("text is required for type_text")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"type_text","text":text})
-          elif op=="press_key":
-              key=os.environ.get("KEY","").strip()
-              if not key: raise RuntimeError("key is required for press_key")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
-          elif op=="scroll":
-              x=os.environ.get("MOUSE_X","").strip()
-              y=os.environ.get("MOUSE_Y","").strip()
-              delta_y=os.environ.get("DELTA_Y","").strip()
-              if not x or not y or not delta_y: raise RuntimeError("x, y and delta_y are required for scroll")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
-                          {"command":"scroll","x":float(x),"y":float(y),"delta_y":float(delta_y)})
-          elif op=="drag":
-              values=[os.environ.get(name,"").strip() for name in ("MOUSE_X","MOUSE_Y","END_X","END_Y")]
-              if not all(values): raise RuntimeError("x, y, end_x and end_y are required for drag")
-              result=call(f"/v1/persistent-sessions/{sid}/commands","POST",
-                          {"command":"drag","x":float(values[0]),"y":float(values[1]),
-                           "end_x":float(values[2]),"end_y":float(values[3]),
-                           "button":os.environ.get("MOUSE_BUTTON","left")})
-          elif op=="complete":
-              task=os.environ.get("TASK_ID","")[:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]
-              if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
-              result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
-                          {"task_id":task,"summary":"Operator checkpoint","result":{"workflow_run":os.environ["GH_RUN_ID"]}})
-              artifact=call(result["artifact_url"])
-              Path("artifacts").mkdir(exist_ok=True)
-              Path("artifacts/session-evidence.zip").write_bytes(artifact)
-          else:
-              raise RuntimeError("Unsupported operation")
-
-          summary={"operation":op,"session_id":sid,"session_kept_open":True,
-                   "configured_duration_seconds":result.get("max_duration_seconds") if isinstance(result,dict) else None,
-                   "remaining_seconds":result.get("remaining_seconds") if isinstance(result,dict) else None,
-                   "result":result}
-          Path("artifacts").mkdir(exist_ok=True)
-          Path("artifacts/operator-result.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
-          print(json.dumps(summary,indent=2))
+          nonlocal_seq=[last_seq]
+          initial=send("status")
+          screenshot=send("screenshot")
+          after=send("status")
+          if initial.get("title")!=after.get("title") or initial.get("url")!=after.get("url"):
+              raise RuntimeError("The browser page changed while Workflow B was operating it")
+          if not after.get("visible_canvases"):
+              raise RuntimeError("The same browser session no longer exposes a visible canvas")
+          result={"workflow":"B-operator","operation":"inspect","session_id":session_id,
+                  "issue_number":issue_number,"commands_sent":3,"screenshot":screenshot,
+                  "initial_status":initial,"final_status":after,"session_kept_open":True}
+          Path("operator-result.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
+          print(json.dumps(result,ensure_ascii=False,indent=2))
           PY
-      - name: Upload operator result and session evidence
+
+      - name: Upload operator result
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: godot-session-operator-${{ github.run_id }}
-          path: artifacts/
+          path: operator-result.json
           if-no-files-found: warn
           retention-days: 14
