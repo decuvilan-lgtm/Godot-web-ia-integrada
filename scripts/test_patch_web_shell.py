@@ -38,7 +38,7 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn('archiveUrl.searchParams.set("branch", branch)', result)
         self.assertIn('archiveUrl.searchParams.set("path", projectPath)', result)
         self.assertIn("validProjectPath", result)
-        self.assertIn("startButton.click()", result)
+        self.assertIn("readyStartButton.click()", result)
         self.assertIn('get("manual") === "1"', result)
         self.assertIn("async function waitForElement(selector, predicate, timeoutMs)", result)
         self.assertIn('await waitForElement("#startButton", element => !element.disabled, 240000)', result)
