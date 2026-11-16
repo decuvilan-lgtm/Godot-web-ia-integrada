@@ -21,16 +21,23 @@ func run() -> void:
 	check(world.gate!=null and not world.gate.get("opened"),"exit gate starts closed")
 	check(world.player.health==5,"player starts with five health points")
 	check(world.player.shards==0,"collectible counter starts at zero")
-	world.player.collect_shard()
-	check(world.player.shards==1,"collectible updates player state")
+	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
+	world.player.global_position = first_pickup.global_position
+	await physics_frame
+	check(world.player.shards==1,"touching a pickup updates the shard counter")
 	world.player.take_damage(1)
 	check(world.player.health==4,"hazard damage reduces health")
 	world.player.take_damage(1)
 	check(world.player.health==4,"invulnerability prevents immediate repeated damage")
 	var switch := world.get_tree().get_nodes_in_group("interactables")[0]
-	switch.activate(world.player)
+	world.player.global_position = switch.global_position
+	world.player.interact_nearby()
 	check(switch.is_active,"crystal switch changes to active")
-	check(world.gate.get("opened"),"switch opens the exit gate")
+	check(world.gate.get("opened"),"nearby interaction opens the exit gate")
+	world.player.global_position = Vector2(3780,608)
+	world.player.velocity = Vector2.ZERO
+	await physics_frame
+	check(world.finished,"entering the portal completes the level")
 	world.player.set_checkpoint(Vector2(1800,646))
 	world.player.health=2
 	world.player.invulnerable=0.0
@@ -57,5 +64,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [17-failures.size(),failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [19-failures.size(),failures.size()])
 	quit(1 if not failures.is_empty() else 0)
