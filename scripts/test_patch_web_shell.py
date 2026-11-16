@@ -5,7 +5,13 @@ import runpy
 import unittest
 
 PATCHER = Path(__file__).with_name("patch-web-shell.py")
-patch_html = runpy.run_path(str(PATCHER))["patch_html"]
+_previous_relay = os.environ.pop("GODOT_RELAY_URL", None)
+try:
+    PATCHER_NAMESPACE = runpy.run_path(str(PATCHER))
+finally:
+    if _previous_relay is not None:
+        os.environ["GODOT_RELAY_URL"] = _previous_relay
+patch_html = PATCHER_NAMESPACE["patch_html"]
 
 FIXTURE = """<!doctype html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Godot</title></head>
