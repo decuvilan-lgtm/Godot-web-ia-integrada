@@ -60,8 +60,17 @@ func _dispatch(arguments: Array) -> Dictionary:
 	var args: Variant = request.get("args", {})
 	if not args is Dictionary:
 		return _error("INVALID_ARGUMENTS", "Arguments must be an object.")
-	if not args.is_empty():
-		return _error("INVALID_ARGUMENTS", "This adapter version accepts no arguments.")
+	if action in ["editor.get_state", "editor.list_capabilities", "scene.get_tree"] and not args.is_empty():
+		return _error("INVALID_ARGUMENTS", "This inspection action accepts no arguments.")
+	if action == "scene.add_node":
+		if not {"node_type", "node_name"}.all(func(key): return args.has(key)) or args.size() > 3:
+			return _error("INVALID_ARGUMENTS", "scene.add_node requires node_type and node_name, with optional parent_path.")
+		for key in args:
+			if key not in ["node_type", "node_name", "parent_path"] or not args[key] is String or str(args[key]).is_empty() or str(args[key]).length() > 200:
+				return _error("INVALID_ARGUMENTS", "scene.add_node received an unsupported or unbounded argument.")
+		var requested_parent := str(args.get("parent_path", "."))
+		if requested_parent.begins_with("/") or requested_parent.split("/").has("..") or requested_parent.contains("//"):
+			return _error("INVALID_PARENT_PATH", "Parent path must stay inside the edited scene.")
 
 	match action:
 		"editor.get_state":
@@ -157,7 +166,7 @@ func _add_node(args: Dictionary) -> Dictionary:
 		return _error("NODE_TYPE_NOT_ALLOWED", "This node type is not in the safe creation list.")
 	if not node_name.is_valid_identifier() or node_name.length() > 48:
 		return _error("INVALID_NODE_NAME", "Node names must be valid identifiers of at most 48 characters.")
-	if parent_path.is_empty() or parent_path.length() > 200 or parent_path.begins_with("/"):
+	if parent_path.is_empty() or parent_path.length() > 200 or parent_path.begins_with("/") or parent_path.split("/").has("..") or parent_path.contains("//"):
 		return _error("INVALID_PARENT_PATH", "Parent path must be a bounded path relative to the edited scene.")
 	var parent: Node = root if parent_path == "." else root.get_node_or_null(NodePath(parent_path))
 	if parent == null or not root.is_ancestor_of(parent) and parent != root:
