@@ -112,7 +112,7 @@ def main():
     bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
     oidc_preflight=relay_oidc_preflight()
     url=EDITOR_URL.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
-    errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None
+    errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None; browser_ready=False
     shot=OUT/"editor-final.png"; started=time.time()
     # Keep the browser process alive through evidence upload; the runner owns its lifetime.
     p = sync_playwright().start()
@@ -155,6 +155,7 @@ def main():
             if not(readiness["phase"]=="started" and readiness["imported_sha"]==sha and readiness["canvas_count"]>=1):
                 failure="Exact project SHA was not confirmed before import timeout"
             else:
+                browser_ready=True
                 # The published web app has separate Loader, Editor and Game tabs.
                 # Import completion leaves Loader selected; explicitly open Editor
                 # before judging the project's visual state.
@@ -179,7 +180,7 @@ def main():
                     inspection["install_dialog_action"]="attempted Godot Install action"
                     inspection["post_install_title"]=page.title()
                     if "Project Manager" in page.title():
-                        failure="Godot remained in Project Manager after the project Install action"
+                        inspection["project_manager_warning"]="Godot remained in Project Manager after the Install action; B can still inspect and interact with this page"
                 inspection["visual_surface"]=page.evaluate("""() => {
                     const visible = el => {
                         const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -240,14 +241,14 @@ def main():
                 inspection["semantic_controller_probe"]["warning"]="Built-in Godot editor semantic adapter did not pass its capability probe; basic browser inspection remains available"
             page.screenshot(path=str(shot),full_page=False,timeout=30000)
             # Keep this real Chromium session available for a short, bounded command window.
-            if failure is None:
+            if browser_ready and not page.is_closed():
                 command_session=run_command_loop(
                     page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
                     os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
                     duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
                 )
             else:
-                command_session={"status":"skipped","reason":"Import or semantic adapter acceptance check failed"}
+                command_session={"status":"skipped","reason":"The exact project revision and editor canvas were not confirmed"}
             inspection["command_session"]=command_session
         except Exception as exc:
             failure=f"{type(exc).__name__}: {str(exc)[:1000]}"
