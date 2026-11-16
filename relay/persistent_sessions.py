@@ -251,6 +251,43 @@ async def _close_session(session: PersistentSession) -> None:
         logger.exception("Could not close expired browser context")
     _sessions.pop(session.session_id, None)
 
+
+async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) -> None:
+    """Mark a session ready only after the exact project revision and canvas exist."""
+    started = time.monotonic()
+    readiness: dict[str, Any] = {
+        "phase": "waiting",
+        "imported_sha": "",
+        "expected_sha": expected_sha,
+        "canvas_count": 0,
+    }
+    try:
+        while time.monotonic() - started < 480:
+            if session.page is None or session.page.is_closed():
+                await _close_session(session)
+                return
+            connector = await session.page.evaluate("() => window.__godotGithubConnectorStatus || null")
+            canvas_count = await session.page.locator("canvas").count()
+            readiness = {
+                "phase": (connector or {}).get("phase", "unknown"),
+                "imported_sha": (connector or {}).get("commitSha", ""),
+                "expected_sha": expected_sha,
+                "canvas_count": canvas_count,
+                "elapsed_seconds": round(time.monotonic() - started, 1),
+            }
+            if readiness["phase"] == "started" and readiness["imported_sha"] == expected_sha and canvas_count >= 1:
+                session.created_at = time.time()
+                session.last_activity = session.created_at
+                session.events.append({"type": "session.editor_ready", "at": session.created_at, **readiness})
+                logger.info("Godot editor session %s is ready for %s", session.session_id, expected_sha)
+                return
+            await session.page.wait_for_timeout(5000)
+        logger.error("Godot editor session %s did not become ready: %s", session.session_id, readiness)
+    except Exception:
+        logger.exception("Godot editor readiness monitor failed for session %s", session.session_id)
+    await _close_session(session)
+
+
 async def _expire_loop() -> None:
     while True:
         now = time.time()
@@ -335,8 +372,10 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
     effective_sha = body.commit_sha or await resolve_repository_commit_sha(body.repository, body.branch)
     now = time.time()
     for existing in list(_sessions.values()):
+        loading_expired = existing.created_at is None and now - existing.loading_started_at > 480
+        duration_expired = existing.created_at is not None and now - existing.created_at >= existing.max_duration_seconds
         if (existing.page is None or existing.page.is_closed()
-                or now - existing.created_at >= existing.max_duration_seconds
+                or loading_expired or duration_expired
                 or now - existing.last_activity > IDLE_TTL):
             await _close_session(existing)
             continue
@@ -351,7 +390,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             existing.events.append({"type": "session.reused", "at": time.time(), "task_repository": body.repository})
             return {
                 "session_id": existing.session_id,
-                "state": "open",
+                "state": "loading" if existing.created_at is None else "open",
+                "ready": existing.created_at is not None,
                 "editor_url": EDITOR_URL,
                 "repository": existing.repository,
                 "branch": existing.branch,
@@ -359,7 +399,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "commit_sha": existing.commit_sha,
                 "idle_ttl_seconds": IDLE_TTL,
                 "max_duration_seconds": existing.max_duration_seconds,
-                "expires_at": existing.created_at + existing.max_duration_seconds,
+                "expires_at": existing.created_at + existing.max_duration_seconds if existing.created_at is not None else None,
                 "remaining_seconds": _session_remaining_seconds(existing),
                 "reused": True,
                 "reimported": False,
@@ -367,6 +407,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "note": "The existing browser and editor page were reused; the session remains open.",
             }
         if body.reuse_existing and body.reimport_existing and existing.repository == body.repository:
+            if existing.created_at is None:
+                raise HTTPException(status_code=409, detail="The existing editor session is still importing its project")
             previous = {
                 "branch": existing.branch,
                 "project_path": existing.project_path,
@@ -439,37 +481,6 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         session.page = await session.context.new_page()
         await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, effective_sha), wait_until="domcontentloaded", timeout=90000)
 
-        # Wait for the exact project revision to finish importing and expose
-        # the editor canvas before starting the user's selected time window.
-        readiness_started = time.monotonic()
-        readiness = {"phase": "waiting", "imported_sha": "", "expected_sha": effective_sha, "canvas_count": 0}
-        while time.monotonic() - readiness_started < 480:
-            connector = await session.page.evaluate("() => window.__godotGithubConnectorStatus || null")
-            canvas_count = await session.page.locator("canvas").count()
-            readiness = {
-                "phase": (connector or {}).get("phase", "unknown"),
-                "imported_sha": (connector or {}).get("commitSha", ""),
-                "expected_sha": effective_sha,
-                "canvas_count": canvas_count,
-                "elapsed_seconds": round(time.monotonic() - readiness_started, 1),
-            }
-            if readiness["phase"] == "started" and readiness["imported_sha"] == effective_sha and canvas_count >= 1:
-                break
-            await session.page.wait_for_timeout(5000)
-        if not (
-            readiness["phase"] == "started"
-            and readiness["imported_sha"] == effective_sha
-            and readiness["canvas_count"] >= 1
-        ):
-            raise HTTPException(
-                status_code=504,
-                detail="Godot Web editor did not confirm the exact project revision and canvas within 480 seconds",
-            )
-
-        # The selected duration begins only when the exact project is ready.
-        session.created_at = time.time()
-        session.last_activity = session.created_at
-        session.events.append({"type": "session.editor_ready", "at": session.created_at, **readiness})
         session.events.append({
             "type": "session.opened",
             "at": time.time(),
@@ -481,6 +492,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "duration_seconds": body.duration_seconds,
         })
         _sessions[session_id] = session
+        asyncio.create_task(_wait_for_editor_ready(session, effective_sha))
     except HTTPException:
         await _close_session(session)
         raise
@@ -490,7 +502,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         raise HTTPException(status_code=502, detail=f"Could not open deployed Godot Web editor: {type(exc).__name__}") from exc
     return {
         "session_id": session_id,
-        "state": "open",
+        "state": "loading",
+        "ready": False,
         "editor_url": EDITOR_URL,
         "repository": body.repository,
         "branch": body.branch,
@@ -498,11 +511,11 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "commit_sha": effective_sha,
         "idle_ttl_seconds": IDLE_TTL,
         "max_duration_seconds": session.max_duration_seconds,
-        "expires_at": session.created_at + session.max_duration_seconds,
-        "remaining_seconds": _session_remaining_seconds(session),
+        "expires_at": None,
+        "remaining_seconds": None,
         "reused": False,
         "reused_for_follow_up_tasks": True,
-        "note": "This browser/editor session closes automatically after its configured lifetime; activity and task completion do not extend it.",
+        "note": "The session is importing the selected project. Its configured lifetime starts only after the exact commit and editor canvas are confirmed.",
     }
 
 @router.get("/{session_id}")
