@@ -28,10 +28,6 @@ on:
         required: false
         default: examples/verdant-valley
         type: string
-      commit_sha:
-        description: Optional immutable commit SHA for a new session
-        required: false
-        type: string
       text:
         description: Exact visible text for click_text
         required: false
@@ -63,7 +59,6 @@ jobs:
           REPOSITORY: ${{ inputs.repository }}
           BRANCH: ${{ inputs.branch }}
           PROJECT_PATH: ${{ inputs.project_path }}
-          COMMIT_SHA: ${{ inputs.commit_sha }}
           CLICK_TEXT: ${{ inputs.text }}
           TASK_ID: ${{ inputs.task_id }}
           GH_RUN_ID: ${{ github.run_id }}
@@ -97,9 +92,9 @@ jobs:
                   raise RuntimeError(f"Relay HTTP {e.code}: {detail}") from e
 
           op=os.environ["OPERATION"]
-          sessions=call("/v1/persistent-sessions").get("sessions",[])
           sid=os.environ.get("SESSION_ID","").strip()
           if not sid:
+              sessions=call("/v1/persistent-sessions").get("sessions",[])
               matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
                        and s["branch"]==os.environ["BRANCH"]
                        and s["project_path"]==os.environ.get("PROJECT_PATH","")]
