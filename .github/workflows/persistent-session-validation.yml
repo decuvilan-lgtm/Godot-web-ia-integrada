@@ -91,6 +91,8 @@ jobs:
               "Relay validates mouse bounds": "_validate_mouse_point" in relay_source and "outside the editor viewport" in relay_source,
               "Workflow A exposes configurable duration": "duration_minutes:" in host_source and "default: 10" in host_source,
               "Workflow A sends selected duration": '"duration_seconds":duration*60' in host_source,
+              "Relay waits for exact project import": 'readiness["imported_sha"] == effective_sha' in relay_source and 'readiness["canvas_count"] >= 1' in relay_source,
+              "Workflow A allows import readiness timeout": '},timeout=600)' in host_source,
               "Workflow A keeps a host heartbeat": 'heartbeat","POST' in host_source,
               "Workflow A closes its session at deadline": '"DELETE"' in host_source,
               "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
