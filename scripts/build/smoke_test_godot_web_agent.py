@@ -610,8 +610,6 @@ def main() -> int:
                     "node_creation_probe": node_creation_probe,
                     "tree_after_creation_probe": tree_after_creation_probe,
                     "invalid_node_probe": invalid_node_probe,
-                    "node_creation_probe": node_creation_probe,
-                    "tree_after_creation_probe": tree_after_creation_probe,
                     "pending_requests_after_probes": pending,
                     "pending_requests_after_denial": pending_after_denial,
                     "read_only_rejection_probe": denied_write_probe,
@@ -629,7 +627,7 @@ def main() -> int:
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
                     "workers": worker_urls[-20:],
-                    "note": "The built editor imported a clean project, answered semantic queries, created one allowlisted node through the editor undo manager, and left the scene unsaved for review. This does not yet validate the deployed Render wrapper.",
+                    "note": "The built editor imported a clean project, answered semantic queries, created one allowlisted scene node through the editor undo manager, and rejected an unapproved node class. The scene remains unsaved for review.",
                 }
                 result, report_redactions = redact_sensitive_payload(result)
                 result["report_redactions_applied"] = report_redactions
