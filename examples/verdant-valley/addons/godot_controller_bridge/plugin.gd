@@ -14,9 +14,6 @@ var _window: JavaScriptObject
 func _enter_tree() -> void:
 	if not OS.has_feature("web"):
 		return
-	if not Engine.has_singleton("JavaScriptBridge"):
-		return
-
 	_window = JavaScriptBridge.get_interface("window")
 	_adapter = JavaScriptBridge.create_object("Object")
 	_dispatch_callback = JavaScriptBridge.create_callback(_dispatch)
