@@ -50,6 +50,20 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(cmd,SESSION,0)
 
+    def test_semantic_add_node_accepts_allowlisted_arguments(self):
+        cmd=self.command("semantic_command",editor_action="scene.add_node",args={"node_type":"Node2D","node_name":"NewNode"})
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_add_node_rejects_untrusted_node_type(self):
+        cmd=self.command("semantic_command",editor_action="scene.add_node",args={"node_type":"EditorPlugin","node_name":"Injected"})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
+    def test_semantic_add_node_rejects_invalid_identifier(self):
+        cmd=self.command("semantic_command",editor_action="scene.add_node",args={"node_type":"Node2D","node_name":"Bad/Path"})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_press_key_uses_allowlist(self):
         self.assertEqual(_validate(self.command("press_key",key="Escape"),SESSION,0),(1,"press_key"))
         with self.assertRaises(ValueError):
