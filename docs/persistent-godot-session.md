@@ -7,7 +7,7 @@ The Render Relay is not the browser host in this design. It supplies the project
 ## Workflow roles
 
 - **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It starts Chromium on the GitHub runner, downloads and imports the exact branch revision, checks that the Godot scene editor and canvas are visible, publishes a ready marker to the issue channel, then keeps the same browser available for B.
-- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (a coordinate-free request through the extension bridge for one of three read-only actions: `editor.get_state`, `editor.list_capabilities`, or `scene.get_tree`). Semantic inspection accepts no arguments and cannot mutate the project.
+- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (coordinate-free state/capability/scene-tree queries) plus `semantic-edit` (currently only `scene.add_node`, with a fixed node-class allowlist, bounded names and parent paths, and Godot undo history). Node creation is not automatically saved; the project remains reviewable before saving.
 - **Command loop — `scripts/bridge/browser_command_loop.py`:** runs inside A's Chromium process. It polls the issue comments, accepts only the repository owner and the GitHub Actions bot, validates command shape and sequence numbers, and executes allowlisted browser actions.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python, Relay session tests, editor patcher tests, and the A/B handoff configuration.
 
@@ -40,7 +40,7 @@ Do not use the legacy Render workspace or service. No paid Render plan or deploy
 
 ## Current verification scope
 
-Workflow B currently verifies read-only control of the existing editor page: status, screenshot capture, and a second status check. The lower-level command loop still supports bounded browser UI diagnostics, but the semantic route is intentionally read-only. The extension currently requires `window.__godotEditorAgent`; the deployed Godot Web build has not yet been shown to provide that adapter. Until that adapter is implemented and verified, `semantic-inspect` is a wired transport test and may return `GODOT_ADAPTER_UNAVAILABLE`; it is not proof of headless editing. The optional native desktop bridge in `docs/native-remote-editor.md` is separate and is not required for the mobile workflow.
+Workflow B currently verifies read-only control of the existing editor page: status, screenshot capture, and a second status check. The lower-level command loop still supports bounded browser UI diagnostics, but the semantic route is intentionally read-only. The project now enables `addons/godot_controller_bridge`, an `EditorPlugin` that registers `window.__godotEditorAgent` through Godot’s Web `JavaScriptBridge`. It exposes bounded editor/scene inspection and one undoable node-creation operation. Static contract tests cover the registration and allowlists, but a live GitHub Actions browser session must still verify that this exact Godot Web editor build loads the plugin and returns real editor data before we claim end-to-end operation. The optional native desktop bridge in `docs/native-remote-editor.md` is separate and is not required for the mobile workflow.
 
 A visible Godot scene editor confirms that the browser/editor opened; it does not by itself prove that the game runs correctly. Project resource errors and gameplay validation are reported separately.
 
@@ -60,4 +60,8 @@ To ask B to inspect the editor without sending mouse or keyboard input, the requ
 }
 ```
 
-Only the three read-only actions listed above are accepted. The request remains scoped to the active A session and test branch.
+For inspection, only the three read-only actions listed above are accepted. The request remains scoped to the active A session and test branch. A controlled node-creation request uses `operation: "semantic-edit"`, `editor_action: "scene.add_node"`, and `args` such as `{"node_type":"Node2D","node_name":"VisualRoot","parent_path":"."}`. This is the only enabled mutation for now; it creates the node through Godot’s undo manager and does not save the scene automatically.
+
+## Godot Web EditorPlugin bridge
+
+The project enables `addons/godot_controller_bridge` in `project.godot`. The addon runs as an `EditorPlugin` inside the actual Godot Web editor, retains its JavaScript callback references, and registers the bounded API consumed by the browser extension. Its first write operation creates a node from a fixed class allowlist through `EditorUndoRedoManager`, selects the new node, and leaves the scene unsaved for review. The bridge does not accept shell commands, arbitrary GDScript, arbitrary class names, filesystem paths, or script execution. A static CI contract test exists; live A/B validation is still required.
