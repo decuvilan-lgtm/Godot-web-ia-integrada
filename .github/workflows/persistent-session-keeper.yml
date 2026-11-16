@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, urllib.error, urllib.request
           relay=os.environ["RELAY_URL"].rstrip("/")
           token_url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
           token_req=urllib.request.Request(token_url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
@@ -38,7 +38,12 @@ jobs:
           refreshed=[]
           for session in sessions:
               sid=session["session_id"]
-              state=request(f"/v1/persistent-sessions/{sid}/heartbeat","POST")
-              refreshed.append({"session_id":sid,"state":session["state"],"idle_ttl_seconds":state["idle_ttl_seconds"]})
+              try:
+                  state=request(f"/v1/persistent-sessions/{sid}/heartbeat","POST")
+                  refreshed.append({"session_id":sid,"state":session["state"],"idle_ttl_seconds":state["idle_ttl_seconds"]})
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (404, 410):
+                      raise
+                  refreshed.append({"session_id":sid,"state":"expired_before_heartbeat","http_status":exc.code})
           print(json.dumps({"active_sessions":len(refreshed),"heartbeats":refreshed},indent=2))
           PY
