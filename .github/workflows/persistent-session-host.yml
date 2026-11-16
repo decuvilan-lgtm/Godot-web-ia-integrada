@@ -52,7 +52,11 @@ jobs:
           import json, os, time, urllib.error, urllib.parse, urllib.request
 
           relay=os.environ["RELAY_URL"].rstrip("/")
-          duration=int(float(os.environ.get("DURATION_MINUTES","10")))
+          raw_duration=os.environ.get("DURATION_MINUTES","10").strip()
+          numeric_duration=float(raw_duration)
+          if not numeric_duration.is_integer():
+              raise RuntimeError("duration_minutes must be a whole number")
+          duration=int(numeric_duration)
           if not 1 <= duration <= 350:
               raise RuntimeError("duration_minutes must be between 1 and 350")
 
