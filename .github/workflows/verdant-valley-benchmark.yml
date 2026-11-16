@@ -1,0 +1,99 @@
+name: Verdant Valley — Full Development Benchmark
+
+on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - "examples/verdant-valley/**"
+      - "headless/native-editor/addons/headless_session_bridge/**"
+      - ".github/workflows/verdant-valley-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-runtime-and-editor-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare isolated benchmark project and original artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg
+          PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
+          python3 "$PROJECT/tools/generate_assets.py"
+          mkdir -p "$PROJECT/addons"
+          cp -R "$GITHUB_WORKSPACE/headless/native-editor/addons/headless_session_bridge" "$PROJECT/addons/headless_session_bridge"
+          cat >> "$PROJECT/project.godot" <<'PROJECT_SETTINGS'
+
+          [editor_plugins]
+          enabled=PackedStringArray("res://addons/headless_session_bridge/plugin.cfg")
+          PROJECT_SETTINGS
+          mkdir -p artifacts
+
+      - name: Download and verify the custom Godot 4.7.2 Linux runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/godot-runtime
+          URL="https://github.com/decuvilan-lgtm/Godot-engine4-v4.7.2-stable-difusion-modificado/releases/download/godot-linux-headless-agent-v0.1.0"
+          curl --fail --location --retry 3 "$URL/godot-linux-headless-agent.tar.gz" -o /tmp/godot-runtime/runtime.tar.gz
+          printf '%s  %s\n' "87243b7b1d1384900907a2ee52811f2dab414fe485e1ee911ee527e693a0a9f4" "/tmp/godot-runtime/runtime.tar.gz" | sha256sum --check
+          tar -xzf /tmp/godot-runtime/runtime.tar.gz -C /tmp/godot-runtime
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          chmod +x "$GODOT"
+          "$GODOT" --headless --version | tee artifacts/godot-version.txt
+
+      - name: Import and run full gameplay suite in Actions Headless
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
+          export GODOT_SILENCE_ROOT_WARNING=1
+          "$GODOT" --headless --path "$PROJECT" --editor --import --quit 2>&1 | tee artifacts/import.log
+          "$GODOT" --headless --path "$PROJECT" --script res://tests/test_suite.gd 2>&1 | tee artifacts/functional-tests.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' artifacts/import.log artifacts/functional-tests.log
+
+      - name: Start real editor, connect through bridge and capture editor plus game video
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
+          PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
+          export GODOT_SILENCE_ROOT_WARNING=1 GODOT PROJECT
+          mkdir -p artifacts
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
+          "$GODOT" --editor --path "$PROJECT" --scene res://scenes/main.tscn --resolution 1500x900 --position 20,20 --rendering-method gl_compatibility --audio-driver Dummy > artifacts/editor.log 2>&1 &
+          editor_pid=$!
+          editor_cleanup() { kill "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true; }
+          trap editor_cleanup EXIT
+          BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
+          ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
+          editor_cleanup
+          trap - EXIT
+          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --audio-driver Dummy -- --demo > artifacts/game.log 2>&1 &
+          game_pid=$!
+          game_cleanup() { kill "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true; }
+          trap game_cleanup EXIT
+          sleep 2
+          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 24 -i "$DISPLAY" -t 9 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
+          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
+          game_cleanup
+          trap - EXIT
+          SCRIPT
+
+      - name: Upload full development evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verdant-valley-full-development-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
