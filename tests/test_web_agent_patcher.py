@@ -56,6 +56,14 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("editor.get_state", source)
         self.assertIn("scene.get_tree", source)
         self.assertIn("scene.add_node", source)
+        self.assertIn("EditorUndoRedoManager *undo_redo = get_undo_redo()", source)
+        self.assertIn("undo_redo->create_action", source)
+        self.assertIn("undo_redo->add_do_reference(created)", source)
+        self.assertIn("allowed_node_types", source)
+        self.assertIn("node_name.is_valid_identifier()", source)
+        self.assertIn("args: request.args || {}", source)
+        self.assertIn("saved_automatically", source)
+        self.assertIn("scene.add_node", source)
         self.assertIn("EditorUndoRedoManager *undo_redo = get_undo_redo();", source)
         self.assertIn("undo_redo->create_action", source)
         self.assertIn("undo_redo->add_do_reference(created)", source)
@@ -71,6 +79,7 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertNotIn(chr(92) + "tif", source)
         self.assertNotIn("GDScript", source)
         self.assertNotIn("execute_string", source)
+        self.assertNotIn("run_shell", source)
         self.assertNotIn("run_shell", source)
 
     def test_web_compatibility_avoids_unstartable_threads_and_tcp_listener(self):
