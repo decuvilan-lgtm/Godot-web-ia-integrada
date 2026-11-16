@@ -53,6 +53,9 @@ OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
 _oidc_jwks_client = None
 _oidc_jwks_lock = threading.Lock()
 IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
+# A browser/editor session has a hard wall-clock lifetime. Activity and heartbeats
+# may refresh the idle lease, but can never extend this ten-minute window.
+MAX_SESSION_DURATION_SECONDS = max(60, int(os.environ.get("PERSISTENT_SESSION_MAX_DURATION_SECONDS", "600")))
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_SESSION_ARTIFACT_BYTES = 24 * 1024 * 1024
@@ -164,11 +167,19 @@ def _store_session_artifact(session: PersistentSession, name: str, data: bytes) 
 def _touch(session: PersistentSession) -> None:
     session.last_activity = time.time()
 
+def _session_remaining_seconds(session: PersistentSession, now: float | None = None) -> int:
+    current = time.time() if now is None else now
+    return max(0, int(MAX_SESSION_DURATION_SECONDS - (current - session.created_at)))
+
+
 def _get_session(session_id: str) -> PersistentSession:
     session = _sessions.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Persistent session not found")
-    if time.time() - session.last_activity > IDLE_TTL:
+    now = time.time()
+    if now - session.created_at >= MAX_SESSION_DURATION_SECONDS:
+        raise HTTPException(status_code=410, detail="Persistent session reached its fixed ten-minute lifetime")
+    if now - session.last_activity > IDLE_TTL:
         raise HTTPException(status_code=410, detail="Persistent session expired after inactivity")
     return session
 
@@ -229,9 +240,11 @@ async def _expire_loop() -> None:
     while True:
         now = time.time()
         for session in list(_sessions.values()):
-            if now - session.last_activity > IDLE_TTL:
+            if (now - session.created_at >= MAX_SESSION_DURATION_SECONDS
+                    or now - session.last_activity > IDLE_TTL):
                 await _close_session(session)
-        await asyncio.sleep(30)
+        # Check frequently so the fixed ten-minute close is not delayed materially.
+        await asyncio.sleep(5)
 
 @router.on_event("startup")
 async def start_session_reaper():
@@ -268,6 +281,9 @@ async def list_persistent_sessions(authorization: str | None = Header(default=No
                 "commit_sha": session.commit_sha,
                 "created_at": session.created_at,
                 "last_activity_at": session.last_activity,
+                "created_at": session.created_at,
+                "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
+                "remaining_seconds": _session_remaining_seconds(session),
                 "state": "open" if session.page is not None and not session.page.is_closed() else "disconnected",
             }
             for session in _sessions.values()
@@ -418,9 +434,12 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "project_path": body.project_path,
         "commit_sha": effective_sha,
         "idle_ttl_seconds": IDLE_TTL,
+        "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
+        "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
+        "remaining_seconds": _session_remaining_seconds(session),
         "reused": False,
         "reused_for_follow_up_tasks": True,
-        "note": "Completing a task does not close this browser session.",
+        "note": "This browser/editor session closes automatically after its fixed ten-minute lifetime; activity and task completion do not extend it.",
     }
 
 @router.get("/{session_id}")
@@ -436,6 +455,10 @@ async def persistent_session_status(session_id: str, authorization: str | None =
         "project_path": session.project_path,
         "commit_sha": session.commit_sha,
         "last_activity_at": session.last_activity,
+        "created_at": session.created_at,
+        "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
+        "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
+        "remaining_seconds": _session_remaining_seconds(session),
         "idle_ttl_seconds": IDLE_TTL,
         "completed_tasks": list(session.completed_tasks.values()),
         "artifact_count": len(session.artifacts),
