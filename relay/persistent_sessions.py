@@ -45,6 +45,7 @@ OIDC_ADDITIONAL_WORKFLOWS = tuple(
         "PERSISTENT_SESSION_OIDC_ADDITIONAL_WORKFLOWS",
         ".github/workflows/chatgpt-browser-bridge.yml,"
         ".github/workflows/persistent-session-operator.yml,"
+        ".github/workflows/persistent-session-host.yml,"
         ".github/workflows/persistent-session-keeper.yml",
     ).split(",")
     if item.strip()
