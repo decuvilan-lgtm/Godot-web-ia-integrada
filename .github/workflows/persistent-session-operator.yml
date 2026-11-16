@@ -188,8 +188,10 @@ jobs:
               after=send("status")
               extra={"canvas_click":canvas_click,"escape_key":escaped,"screenshot":screenshot}
               commands_sent=5
-          if initial.get("title")!=after.get("title") or initial.get("url")!=after.get("url"):
-              raise RuntimeError("The browser page changed while Workflow B was operating it")
+          def stable_title(value):
+              return re.sub(r"^\\(\\*\\)\\s*","",str(value or ""))
+          if stable_title(initial.get("title"))!=stable_title(after.get("title")) or initial.get("url")!=after.get("url"):
+              raise RuntimeError("The browser page or local editor URL changed while Workflow B was operating it")
           if not after.get("visible_canvases"):
               raise RuntimeError("The same browser session no longer exposes a visible canvas")
           result={"workflow":"B-operator","operation":operation,"session_id":session_id,
