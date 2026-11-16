@@ -1,66 +1,91 @@
-# Flujo de desarrollo: Godot Headless Linux + editor visual
+# Tres entornos Godot: desarrollo local, Actions y editor visual
 
-## Principio de trabajo
+## Distinción obligatoria: son tres instancias diferentes
 
-**Godot Headless Linux es el entorno principal de construcción y prueba.** El agente trabaja sobre una copia aislada del proyecto mediante archivos, escenas .tscn, recursos, scripts y configuraciones. No necesita manejar la interfaz para crear contenido ni depende de coordenadas, clics o automatización de ventanas para programar el juego.
+Este proyecto utiliza tres entornos separados. No deben confundirse ni sustituirse entre sí.
 
-**Godot Editor real es la estación de inspección visual.** Se utiliza después de que Headless haya importado y validado el proyecto para comprobar cómo se ven las escenas, la jerarquía, el Inspector, los recursos y el juego en ejecución. El Headless Session Bridge permite consultar el estado del editor y solicitar operaciones acotadas desde el proceso operador; no convierte la interfaz en el mecanismo principal de autoría.
+### A. Godot Headless local del agente — entorno principal de desarrollo
 
-El proyecto es la unidad de trabajo. No se depende de un repositorio de juego predeterminado: el usuario elige el proyecto y el sistema crea una copia de trabajo aislada.
+Es una instalación Linux de Godot que debe ejecutarse directamente en el entorno de trabajo del agente (no dentro de GitHub Actions y no en el editor real).
 
-## Ciclo de desarrollo obligatorio
+Aquí se realiza el trabajo cotidiano:
+- Crear y editar scripts GDScript, escenas .tscn, recursos y configuraciones mediante archivos.
+- Importar recursos y validar proyectos.
+- Ejecutar el juego en modo headless.
+- Ejecutar pruebas automatizadas, revisar logs, localizar fallos y corregirlos.
+- Construir niveles y prototipos completos sin manejar la interfaz gráfica.
 
-1. **Seleccionar y aislar el proyecto.** Registrar origen/commit cuando exista y crear una copia de trabajo sin modificar el original.
-2. **Construir desde Linux Headless.** Crear y editar scripts GDScript, escenas .tscn, recursos, datos y configuraciones directamente en la copia de trabajo. Mantener cambios pequeños, organizados y reutilizables.
-3. **Importar y validar.** Ejecutar Godot con --headless --editor --path <proyecto> --quit para importar recursos y detectar errores de parseo/importación. Revisar el código de salida y los logs; no basta con que el proceso se haya iniciado.
-4. **Probar comportamiento.** Ejecutar pruebas automatizadas y el juego con --headless --path <proyecto> (con límite de tiempo cuando corresponda). Añadir pruebas reproducibles para mecánicas, escenas, datos y regresiones.
-5. **Revisar visualmente en el editor real.** Abrir la misma copia de trabajo en Godot Editor. Consultar la escena activa, árbol de nodos, selección, Inspector, recursos y preview mediante el puente. Capturar evidencia visual cuando ayude.
-6. **Corregir y repetir.** Si la inspección visual revela problemas, corregir los archivos desde el flujo Headless, volver a importar y ejecutar pruebas; después repetir la inspección. No resolver problemas de diseño a base de hacer clics a ciegas.
-7. **Revisar el diff.** Confirmar exactamente qué archivos cambiaron y que pertenecen al proyecto seleccionado.
-8. **Sincronizar/publicar solo con aprobación.** Reflejar los archivos probados en la rama de trabajo correspondiente. El original permanece intacto; exportar o publicar cambios requiere revisión explícita.
+Esta instancia trabaja sobre una copia aislada del proyecto que el usuario haya elegido. Es la fuente principal para autoría y validación técnica.
 
-## Responsabilidades separadas
+**Requisito operativo:** antes de declarar una prueba local, comprobar que el binario existe en el entorno del agente, registrar su ruta y versión, y ejecutar realmente los comandos. Si no existe, la etapa local todavía no está disponible: no se debe fingir que Actions equivale a ella.
 
-| Componente | Responsabilidad principal |
-|---|---|
-| Godot Headless Linux | Autoría por archivos, importación, parseo, ejecución y pruebas automatizadas |
-| Copia de trabajo local | Fuente de verdad durante el ciclo de desarrollo |
-| Godot Editor real | Inspección visual de escenas, nodos, Inspector, recursos y preview |
-| Headless Session Bridge | Consultas y operaciones acotadas sobre la instancia del editor; nunca automatización por coordenadas |
-| Integración GitHub | Sincronizar archivos y commits de forma controlada |
-| Godot Web/Chromium | Revisión visual/sincronización web cuando sea necesario; no reemplaza Headless |
+### B. Godot Headless de GitHub Actions — integración del editor real
 
-## Reglas de automatización
+Es otra instalación, dentro de los runners de GitHub Actions. Pertenece al pipeline de integración del repositorio.
 
-- No usar clics, coordenadas ni automatización de ventanas como método normal para crear niveles o programar.
-- No exigir que la IA manipule manualmente cada nodo desde el editor cuando el archivo de escena puede generarse y validarse de forma determinista.
-- No asumir que un proyecto headless válido se ve bien: la revisión visual sigue siendo obligatoria para cambios de presentación.
-- No afirmar que una prueba visual se realizó si solo se ejecutó Headless.
-- No afirmar que una prueba Headless se realizó si el ejecutable no estaba disponible.
-- No instalar el puente en el proyecto original: solo en una copia aislada y cuando se necesite inspección desde el editor.
-- No ejecutar GDScript arbitrario recibido como comando del puente. La autoría de scripts ocurre como cambios de archivos en el workspace aislado y se valida con el runtime Godot.
+Su cometido es ejecutar pruebas automatizadas del Headless Session Bridge y comprobar que puede comunicarse con la instancia del editor real levantada en ese runner. Sirve para verificar el puente, sus protocolos, las operaciones permitidas y la integración CI.
+
+No es el Godot Headless local del agente. No es el entorno cotidiano de autoría. No debe usarse como sustituto del desarrollo local ni asumirse que los archivos que existen en el runner están disponibles automáticamente en el workspace del agente.
+
+### C. Godot Editor real — inspección visual
+
+Es la instancia gráfica del editor, normalmente abierta sobre la misma copia de trabajo o sobre una copia de inspección sincronizada.
+
+Se usa principalmente para:
+- Ver la composición visual del nivel y las escenas.
+- Revisar árbol de nodos, Inspector, recursos, animaciones y preview.
+- Capturar imágenes o vídeo para evaluar presentación.
+- Confirmar visualmente que lo construido por archivos se representa correctamente.
+
+No debe ser necesario colocar manualmente cada plataforma, nodo o recurso haciendo clics. El agente construye desde Headless local y después inspecciona el resultado en el editor. El puente puede consultar y operar sobre el editor para las pruebas de integración, pero no convierte la automatización de coordenadas en el método de autoría.
+
+## Flujo correcto de trabajo
+
+1. El usuario selecciona el proyecto; nunca se presupone un repositorio de juego.
+2. Crear una copia de trabajo aislada, manteniendo intacto el original.
+3. El agente desarrolla en esa copia usando **su Godot Headless local**.
+4. Importar, ejecutar el juego y correr pruebas locales; corregir los fallos.
+5. Sincronizar la copia validada con el entorno de inspección visual.
+6. Abrirla en **Godot Editor real** y revisar composición, jerarquía, recursos y comportamiento visual.
+7. Si aparece un defecto visual, corregir los archivos en el entorno local y repetir el ciclo.
+8. En paralelo, **GitHub Actions** ejecuta sus propias pruebas con su propio Godot Headless para verificar el puente y la integración del editor.
+9. Revisar el diff y publicar únicamente con aprobación explícita.
+
+## Matriz de responsabilidades
+
+| Capacidad | Headless local del agente | Headless de Actions | Editor real |
+|---|---:|---:|---:|
+| Crear scripts y escenas por archivos | Principal | Solo fixtures de pruebas | No como método normal |
+| Construir niveles y contenido | Principal | No | Inspección |
+| Importar y validar el proyecto | Sí | Sí, en su fixture/runner | Puede mostrar estado |
+| Ejecutar juego headless | Sí | Sí, para CI | No es su función |
+| Ejecutar pruebas automatizadas | Sí | Sí, integración | No |
+| Ver composición visual | No | No por sí solo | Principal |
+| Probar Headless Session Bridge | No es su objetivo | Principal | Es el editor conectado |
+| Verificar conexión con editor real | No | Sí | Es el extremo editor |
+
+## Reglas que no deben romperse
+
+- Nunca describir el Godot de Actions como “mi Godot local”.
+- Nunca afirmar que el agente ha ejecutado el juego localmente basándose únicamente en un workflow de Actions.
+- Nunca asumir que el éxito de CI demuestra que el nivel se ve bien.
+- Nunca asumir que una captura del editor demuestra que las pruebas locales pasaron.
+- No usar clics, coordenadas ni automatización de ventanas como método habitual de construcción.
+- No instalar el puente en el proyecto original; solo en una copia aislada.
+- No ejecutar GDScript arbitrario recibido como comando del puente.
 - No publicar automáticamente ni modificar main.
+- No vincular el sistema a un repositorio de juego fijo: el usuario elige el proyecto de cada sesión.
 
-## Disponibilidad del runtime
+## Disponibilidad del Headless local
 
-Antes de iniciar una tarea, comprobar que existe un ejecutable Godot compatible y registrar su versión. Si no está instalado en el entorno de trabajo, no fingir que las pruebas locales se ejecutaron: preparar los cambios y usar el workflow Linux de CI como validación temporal, o detener la fase de ejecución hasta disponer del runtime. La inspección del editor real es una etapa distinta y no sustituye esa validación.
+En cada sesión, comprobar la presencia del binario Godot local con la ruta disponible y registrar su versión. Si no está instalado, informar claramente que el entorno local aún no está listo. El workflow de Actions puede seguir validando la integración, pero es una validación separada y no reemplaza el requisito local. No crear relays, servidores o proxies para confundir o fusionar los entornos.
 
-El entorno Linux de trabajo puede no tener salida directa a Internet. En ese caso, recuperar los archivos mediante la integración GitHub de ChatGPT y no crear relays, proxies o servicios nuevos para sortear esa limitación.
+## Evidencia por iteración
 
-## Pruebas y reporte
+Registrar por separado:
+- **Local:** ruta/versión del Godot Headless del agente, comandos ejecutados, código de salida, pruebas y logs.
+- **Visual:** editor abierto, proyecto inspeccionado, escenas revisadas y capturas.
+- **Actions:** URL del workflow, SHA probado, resultado de bridge/integración y artefactos.
+- Archivos modificados y diff final.
 
-Cada iteración debe dejar evidencia verificable de:
-- versión y ruta del ejecutable Godot utilizado;
-- importación/parseo y código de salida;
-- pruebas ejecutadas y sus resultados;
-- logs y errores relevantes;
-- inspección visual realizada en el editor real, si se hizo;
-- diff exacto de archivos.
-
-Al terminar, informar qué se construyó, qué se probó en Headless, qué se inspeccionó visualmente y qué limitaciones quedaron pendientes.
-
-## Sincronización con GitHub
-
-Para transferencias iniciales o amplias se puede usar .github/workflows/export-headless-workspace.yml y verificar commit/SHA-256. Para cambios pequeños, recuperar y actualizar solo los archivos necesarios. Como el entorno Linux puede no tener salida a Internet, las operaciones remotas se realizan mediante la integración GitHub disponible en ChatGPT. Nunca sobrescribir cambios remotos sin leer la versión actual y respetar SHA/concurrencia.
-
-**Principio clave:** construir y probar primero en Godot Headless; inspeccionar después en el editor real; corregir desde el workspace sin depender de clics; sincronizar únicamente los cambios revisados.
+**Principio clave:** el agente construye y prueba con su Godot Headless local; el editor real permite mirar y revisar visualmente; el Godot Headless de Actions verifica por separado la integración del puente con ese editor.
