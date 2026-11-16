@@ -1,9 +1,12 @@
 {
-  "operation": "interaction-smoke",
-  "session_id": "godot-gha-43955294908-retry3",
-  "issue_number": 57,
+  "operation": "semantic-edit",
+  "session_id": "godot-web-agent-43969932360",
+  "issue_number": 59,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark",
-  "project_path": "examples/verdant-valley",
-  "attempt": 4
+  "editor_action": "scene.add_node",
+  "args": {
+    "node_type": "Node2D",
+    "node_name": "AgentSemanticSmokeNode"
+  }
 }
