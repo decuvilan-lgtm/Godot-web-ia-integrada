@@ -7,7 +7,7 @@ The Render Relay is not the browser host in this design. It supplies the project
 ## Workflow roles
 
 - **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It starts Chromium on the GitHub runner, downloads and imports the exact branch revision, checks that the Godot scene editor and canvas are visible, publishes a ready marker to the issue channel, then keeps the same browser available for B.
-- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The current B workflow supports two verification operations: `inspect` (status, screenshot, and a second status check) and `interaction-smoke` (normalized canvas click, Escape key, screenshot, and final status check).
+- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (a coordinate-free request through the extension bridge for one of three read-only actions: `editor.get_state`, `editor.list_capabilities`, or `scene.get_tree`). Semantic inspection accepts no arguments and cannot mutate the project.
 - **Command loop — `scripts/bridge/browser_command_loop.py`:** runs inside A's Chromium process. It polls the issue comments, accepts only the repository owner and the GitHub Actions bot, validates command shape and sequence numbers, and executes allowlisted browser actions.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python, Relay session tests, editor patcher tests, and the A/B handoff configuration.
 
@@ -40,6 +40,24 @@ Do not use the legacy Render workspace or service. No paid Render plan or deploy
 
 ## Current verification scope
 
-Workflow B currently verifies read-only control of the existing editor page: status, screenshot capture, and a second status check. The lower-level command loop already validates additional bounded actions such as visible-text clicks, typing, allowlisted keys, canvas clicks/drags/scrolls, and semantic commands, but those are not yet exposed by the current B request workflow.
+Workflow B currently verifies read-only control of the existing editor page: status, screenshot capture, and a second status check. The lower-level command loop still supports bounded browser UI diagnostics, but the semantic route is intentionally read-only. The extension currently requires `window.__godotEditorAgent`; the deployed Godot Web build has not yet been shown to provide that adapter. Until that adapter is implemented and verified, `semantic-inspect` is a wired transport test and may return `GODOT_ADAPTER_UNAVAILABLE`; it is not proof of headless editing. The optional native desktop bridge in `docs/native-remote-editor.md` is separate and is not required for the mobile workflow.
 
 A visible Godot scene editor confirms that the browser/editor opened; it does not by itself prove that the game runs correctly. Project resource errors and gameplay validation are reported separately.
+
+## Semantic inspection request
+
+To ask B to inspect the editor without sending mouse or keyboard input, the request file may use:
+
+```json
+{
+  "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
+  "branch": "test/verdant-valley-development-benchmark",
+  "session_id": "the-active-A-session-id",
+  "issue_number": 123,
+  "operation": "semantic-inspect",
+  "editor_action": "scene.get_tree",
+  "args": {}
+}
+```
+
+Only the three read-only actions listed above are accepted. The request remains scoped to the active A session and test branch.
