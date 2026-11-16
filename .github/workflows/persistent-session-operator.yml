@@ -70,9 +70,28 @@ jobs:
                   return json.loads(raw) if raw else {}
 
           issue_path=f"/repos/{repo}/issues/{issue_number}/comments"
-          comments=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
-          if not isinstance(comments,list):
-              raise RuntimeError("Could not read the browser command channel")
+          ready_marker="<!-- godot-browser-host-ready -->"
+          ready_deadline=time.monotonic()+480
+          comments=[]
+          while time.monotonic()<ready_deadline:
+              comments=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
+              if not isinstance(comments,list):
+                  raise RuntimeError("Could not read the browser command channel")
+              ready=False
+              for item in comments:
+                  body=item.get("body") or ""
+                  if ready_marker not in body:
+                      continue
+                  try: marker=json.loads(body.split(ready_marker,1)[1].strip())
+                  except Exception: continue
+                  if marker.get("session_id")==session_id and marker.get("commit_sha"):
+                      ready=True
+                      break
+              if ready:
+                  break
+              time.sleep(5)
+          else:
+              raise TimeoutError("Workflow A did not publish a ready marker for this browser session")
           last_seq=0
           for item in comments:
               body=(item.get("body") or "").strip()
