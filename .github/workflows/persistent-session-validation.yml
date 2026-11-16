@@ -10,6 +10,8 @@ on:
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
       - "relay/test_persistent_sessions.py"
+      - "scripts/patch-web-shell.py"
+      - "scripts/test_patch_web_shell.py"
       - "docs/persistent-godot-session.md"
       - "render-relay.yaml"
   pull_request:
@@ -42,6 +44,7 @@ jobs:
           python -m compileall -q relay/persistent_sessions.py
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions)
+          python scripts/test_patch_web_shell.py
           python - <<'PY'
           from pathlib import Path
           import re, textwrap, yaml
@@ -78,6 +81,7 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
+          editor_patcher=Path("scripts/patch-web-shell.py").read_text(encoding="utf-8")
           relay_url="https://godot-web-ia-relay-test.onrender.com"
           required_checks = {
               "configurable per-session API duration": "duration_seconds: int = Field(default=DEFAULT_SESSION_DURATION_SECONDS" in relay_source,
@@ -105,6 +109,7 @@ jobs:
               "Workflow A closes its session at deadline": '"DELETE"' in host_source,
               "Workflow A targets the deployed test Relay": relay_url in host_source and "godot-web-ia-relay.onrender.com" not in host_source,
               "Workflow B targets the deployed test Relay": relay_url in operator_source and "godot-web-ia-relay.onrender.com" not in operator_source,
+              "Godot editor connector targets the deployed test Relay": relay_url in editor_patcher and "godot-web-ia-relay.onrender.com" not in editor_patcher,
               "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
               "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
               "docs explain duration can be changed": "change" in docs and "340 minutes" in docs,
