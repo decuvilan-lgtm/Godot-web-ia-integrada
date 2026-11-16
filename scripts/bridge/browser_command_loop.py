@@ -116,7 +116,7 @@ def _canvas_coordinates(canvas,x,y):
 def _bounded_duration_seconds(value):
     if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError("duration_seconds must be an integer")
-    return max(0, min(value, 600))
+    return max(0, min(value, 3600))
 
 
 def _ordered_comments(items):
