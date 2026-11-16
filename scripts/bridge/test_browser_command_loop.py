@@ -40,9 +40,10 @@ class BrowserCommandValidationTests(unittest.TestCase):
         cmd=self.command("semantic_command",editor_action="scene.get_tree",args={})
         self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
 
-    def test_semantic_command_rejects_unknown_editor_action_shape(self):
+    def test_semantic_command_rejects_unknown_editor_action(self):
         cmd=self.command("semantic_command",editor_action="execute_script",args={"code":"print(1)"})
-        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
 
     def test_semantic_command_rejects_too_many_arguments(self):
         cmd=self.command("semantic_command",editor_action="scene.get_tree",args={"a":1,"b":2,"c":3,"d":4,"e":5})
