@@ -3,7 +3,10 @@
 from __future__ import annotations
 import json, os, re, time, urllib.request
 from pathlib import Path
-from bridge.semantic_controller import execute_semantic_command
+try:
+    from .semantic_controller import execute_semantic_command
+except ImportError:  # Support unittest discovery with scripts/bridge as the start directory.
+    from semantic_controller import execute_semantic_command
 
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm"}
@@ -98,20 +101,46 @@ def _largest_visible_canvas(page):
 def _canvas_coordinates(canvas,x,y):
     return canvas["x"]+x*canvas["width"],canvas["y"]+y*canvas["height"]
 
+def _bounded_duration_seconds(value):
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("duration_seconds must be an integer")
+    return max(0, min(value, 600))
+
+
+def _ordered_comments(items):
+    return sorted(items, key=lambda item: int(item.get("id", 0)))
+
+
+def _fetch_new_comments(comments_url, token, last_comment_id):
+    page = 1
+    fresh = []
+    while True:
+        batch = _api(f"{comments_url}&page={page}", token)
+        if not isinstance(batch, list) or not batch:
+            break
+        fresh.extend(item for item in batch if int(item.get("id", 0)) > last_comment_id)
+        if any(int(item.get("id", 0)) <= last_comment_id for item in batch) or len(batch) < 100:
+            break
+        page += 1
+    return _ordered_comments(fresh)
+
+
 def run_command_loop(page, repo, issue_number, token, session_id, out_dir, duration_seconds=180):
     if not token or not issue_number:
         return {"enabled":False,"reason":"Missing issue-scoped GitHub token or issue number"}
+    duration_seconds = _bounded_duration_seconds(duration_seconds)
+    started_at = time.monotonic()
+    deadline = started_at + duration_seconds
     issue=int(issue_number)
-    deadline=time.monotonic()+max(600,min(int(duration_seconds),600))
     last_comment_id=0
     last_seq=0
     processed=0
     stopped=False
     log=[]
-    comments_url=f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=asc"
+    comments_url=f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc"
     while time.monotonic()<deadline and not stopped:
         try:
-            comments=_api(comments_url,token)
+            comments=_fetch_new_comments(comments_url,token,last_comment_id)
             for item in comments:
                 comment_id=int(item.get("id",0))
                 if comment_id<=last_comment_id:
@@ -198,6 +227,8 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                     except Exception: pass
         except Exception as exc:
             log.append({"poll_error":f"{type(exc).__name__}: {str(exc)[:300]}"})
-        time.sleep(POLL_SECONDS)
+        remaining = max(0, deadline - time.monotonic())
+        if remaining:
+            time.sleep(min(POLL_SECONDS, remaining))
     Path(out_dir,"browser-command-log.json").write_text(json.dumps(log,ensure_ascii=False,indent=2),encoding="utf-8")
-    return {"enabled":True,"processed_commands":processed,"last_sequence":last_seq,"stopped_by_command":stopped,"duration_seconds":int(max(0,duration_seconds-(deadline-time.monotonic()))),"log_file":"browser-command-log.json"}
+    return {"enabled":True,"processed_commands":processed,"last_sequence":last_seq,"stopped_by_command":stopped,"duration_seconds":int(max(0,time.monotonic()-started_at)),"log_file":"browser-command-log.json"}

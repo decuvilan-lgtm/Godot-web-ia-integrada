@@ -1,0 +1,107 @@
+name: Test Godot Web wrapper with custom editor artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful custom editor build workflow run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: godot-web-wrapper-smoke-${{ inputs.run_id || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  wrapper-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Validate the originating custom build run
+        id: validate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUN_ID}" =~ ^[0-9]+$ ]] || { echo "run_id must be numeric" >&2; exit 1; }
+          gh run view "${RUN_ID}" --repo "${GITHUB_REPOSITORY}" --json name,conclusion,headSha,headBranch > /tmp/wrapper-build-run.json
+          jq -e '
+            .name == "Build Godot Web Editor with Built-in Agent" and
+            .conclusion == "success" and
+            .headBranch == "feature/builtin-web-editor-agent"
+          ' /tmp/wrapper-build-run.json >/dev/null || {
+            echo "The selected run is not a successful custom build from the expected branch." >&2
+            cat /tmp/wrapper-build-run.json
+            exit 1
+          }
+          echo "source_sha=$(jq -r .headSha /tmp/wrapper-build-run.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out controller repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.validate.outputs.source_sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Download the selected custom editor artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: godot-web-editor-agent-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: downloaded
+
+      - name: Verify custom editor and build the wrapper
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ZIP="downloaded/godot.web.editor.wasm32.zip"
+          SUMS="downloaded/SHA256SUMS"
+          META="downloaded/BUILD-METADATA.txt"
+          test -s "$ZIP"
+          test -s "$SUMS"
+          test -s "$META"
+          grep -qx 'project_overlay=false' "$META"
+          EXPECTED="$(awk '$2 == "artifacts/godot.web.editor.wasm32.zip" {print $1}' "$SUMS")"
+          test -n "$EXPECTED" || { echo "Editor archive checksum missing from SHA256SUMS"; exit 1; }
+          ACTUAL="$(sha256sum "$ZIP" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP" GODOT_WEB_EDITOR_SHA256="$EXPECTED" bash scripts/build-web.sh
+          test -s public/index.html
+          test -s public/godot.editor.wasm
+          grep -q 'godot-github-connector' public/index.html
+          echo "Custom editor archive SHA-256: $ACTUAL"
+
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+
+      - name: Launch the patched wrapper in Chromium and probe the native agent
+        run: |
+          python scripts/build/smoke_test_godot_web_agent.py \
+            --editor-dir public \
+            --entrypoint 'index.html?manual=1' \
+            --timeout-seconds 600 \
+            --screenshot artifacts/wrapper-browser-smoke.png \
+            --diagnostics artifacts/wrapper-browser-smoke-diagnostics.json
+
+      - name: Upload wrapper output for inspection
+        uses: actions/upload-artifact@v7
+        with:
+          name: godot-web-wrapper-smoke-${{ github.run_id }}
+          path: |
+            public/
+            artifacts/wrapper-browser-smoke.png
+            artifacts/wrapper-browser-smoke-diagnostics.json
+          if-no-files-found: error
+          retention-days: 7

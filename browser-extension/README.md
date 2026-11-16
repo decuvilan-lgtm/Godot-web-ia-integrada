@@ -1,27 +1,25 @@
-# Godot Controller Bridge (experimental)
+# Godot Web Controller Extension
 
-Chromium Manifest V3 extension for semantic control of the Godot Web editor already open in the GitHub Actions browser session.
+Chromium Manifest V3 extension that relays semantic requests from the Actions worker to the native agent embedded in the Godot Web Editor.
 
 ## Separation
 
-- This is not the Godot engine Linux Headless runtime.
+- This is not the Linux Headless runtime.
 - It does not replace Chromium or Playwright in GitHub Actions.
 - It does not start a second browser or editor.
-- It does not use coordinates, mouse clicks, keyboard simulation, arbitrary JavaScript, shell commands, or filesystem access.
-- Chromium in Actions remains responsible for screenshots, video, console output, and visual review.
+- It does not install an EditorPlugin into an imported game project.
+- It does not implement editor operations itself; the built-in Godot Web agent does.
+- It does not expose shell, arbitrary scripts, filesystem access or general-purpose JavaScript execution.
 
 ## Current implementation
 
-- MAIN-world page dispatcher with a strict semantic action allowlist.
-- Isolated content-script relay between the Actions page and the editor adapter.
+- MAIN-world page dispatcher with a strict allowlist.
+- Isolated content-script relay between the Actions worker and the page adapter.
 - Python request client in scripts/bridge/semantic_controller.py.
-- The Actions worker loads this extension in its existing Chromium instance through a persistent Playwright context.
+- The Actions worker loads the extension in its existing Chromium instance through a persistent Playwright context.
 - The trusted issue command loop accepts semantic_command and routes it through the extension.
+- The built-in editor adapter currently exposes read-only capability discovery, editor state and scene tree inspection.
 
-## Temporary editor adapter
+The previous project-installed addon prototype was retired. Its history is documented in godot-addon/README.md; the plugin files were removed so they cannot accidentally be injected into game projects.
 
-The lab-owned Godot EditorPlugin lives under godot-addon/. The Actions worker injects it into the GitHub ZIP response in memory and enables it only in the temporary Godot Web import. The selected project repository and its source ZIP are not changed. The sandbox project intentionally does not ship this add-on.
-
-The archive overlay has a passing local smoke test, but the first Actions end-to-end run (issue #50) returned GODOT_ADAPTER_UNAVAILABLE. Issue #51 adds browser-side diagnostics to determine whether the transformed ZIP reached Godot and whether the adapter initialized. Until that is resolved, editor operations remain unverified and must never fall back to coordinate automation.
-
-See ../docs/CHROMIUM_GODOT_CONTROLLER.md for the protocol, security boundaries, and acceptance tests.
+See ../docs/CHROMIUM_GODOT_CONTROLLER.md and ../docs/UNIFIED_EDITOR_CONTROL.md for the contract, security boundaries and acceptance tests.
