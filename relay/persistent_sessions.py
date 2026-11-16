@@ -316,8 +316,11 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
     if body.commit_sha and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", body.commit_sha):
         raise HTTPException(status_code=400, detail="commit_sha must be a full 40- or 64-character hexadecimal Git object ID")
     effective_sha = body.commit_sha or await resolve_repository_commit_sha(body.repository, body.branch)
+    now = time.time()
     for existing in list(_sessions.values()):
-        if existing.page is None or existing.page.is_closed():
+        if (existing.page is None or existing.page.is_closed()
+                or now - existing.created_at >= MAX_SESSION_DURATION_SECONDS
+                or now - existing.last_activity > IDLE_TTL):
             await _close_session(existing)
             continue
         same_project = (
@@ -417,6 +420,9 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         )
         session.page = await session.context.new_page()
         await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, effective_sha), wait_until="domcontentloaded", timeout=90000)
+        # Start the ten-minute window only after the editor page has loaded.
+        session.created_at = time.time()
+        session.last_activity = session.created_at
         session.events.append({
             "type": "session.opened",
             "at": time.time(),
