@@ -50,6 +50,16 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertNotIn('if (!startButton || startButton.disabled) return;', result)
         self.assertNotIn("Compartir proyectos", result)
 
+    def test_can_use_same_origin_archive_proxy_for_runner_hosted_editor(self):
+        previous = __import__("runpy").run_path(str(PATCHER))["RELAY_URL"]
+        namespace = __import__("runpy").run_path(str(PATCHER))
+        try:
+            namespace["RELAY_URL"] = ""
+            result = namespace["patch_html"](FIXTURE)
+            self.assertIn('const relay = "";', result)
+        finally:
+            namespace["RELAY_URL"] = previous
+
     def test_patch_is_idempotent(self):
         once = patch_html(FIXTURE)
         twice = patch_html(once)
