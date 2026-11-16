@@ -1,0 +1,119 @@
+name: Persistent Godot Session Host (Workflow A)
+run-name: Godot Web host — ${{ inputs.duration_minutes }} min
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: How long Workflow A keeps the same Godot Web session open (default 10; allowed 1-350)
+        required: true
+        default: 10
+        type: number
+      repository:
+        description: Project repository (owner/name)
+        required: true
+        default: decuvilan-lgtm/Godot-web-ia-integrada
+        type: string
+      branch:
+        description: Project branch
+        required: true
+        default: test/verdant-valley-development-benchmark
+        type: string
+      project_path:
+        description: Folder containing project.godot
+        required: false
+        default: examples/verdant-valley
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: godot-session-host-${{ inputs.repository }}
+  cancel-in-progress: false
+
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Open and hold the shared Godot Web editor session
+        env:
+          RELAY_URL: https://godot-web-ia-relay.onrender.com
+          DURATION_MINUTES: ${{ inputs.duration_minutes }}
+          REPOSITORY: ${{ inputs.repository }}
+          BRANCH: ${{ inputs.branch }}
+          PROJECT_PATH: ${{ inputs.project_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, time, urllib.error, urllib.parse, urllib.request
+
+          relay=os.environ["RELAY_URL"].rstrip("/")
+          duration=int(float(os.environ.get("DURATION_MINUTES","10")))
+          if not 1 <= duration <= 350:
+              raise RuntimeError("duration_minutes must be between 1 and 350")
+
+          token_url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
+          token_req=urllib.request.Request(token_url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+          with urllib.request.urlopen(token_req,timeout=20) as response:
+              token=json.load(response)["value"]
+          headers={"Authorization":"Bearer "+token,"Accept":"application/json","Content-Type":"application/json"}
+
+          def call(path,method="GET",payload=None,timeout=120):
+              data=None if payload is None else json.dumps(payload).encode()
+              req=urllib.request.Request(relay+path,data=data,headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=timeout) as response:
+                      raw=response.read()
+                      return json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as exc:
+                  detail=exc.read().decode("utf-8","replace")[:1200]
+                  if exc.code in (404,410) and method=="DELETE":
+                      return {"closed":True,"already_expired":True,"http_status":exc.code}
+                  raise RuntimeError(f"Relay HTTP {exc.code}: {detail}") from exc
+
+          opened=call("/v1/persistent-sessions","POST",{
+              "repository":os.environ["REPOSITORY"],
+              "branch":os.environ["BRANCH"],
+              "project_path":os.environ.get("PROJECT_PATH",""),
+              "reuse_existing":True,
+              "reimport_existing":False,
+              "duration_seconds":duration*60,
+          })
+          sid=opened["session_id"]
+          expires_at=float(opened["expires_at"])
+          print(json.dumps({
+              "workflow":"A-host",
+              "session_id":sid,
+              "reused":opened.get("reused",False),
+              "configured_duration_seconds":opened.get("max_duration_seconds"),
+              "remaining_seconds":opened.get("remaining_seconds"),
+              "expires_at":expires_at,
+          },indent=2))
+
+          # Keep this workflow alive and ping the same Relay-owned page.
+          # Heartbeats keep the hosting service warm; they never extend session expiry.
+          while True:
+              remaining=expires_at-time.time()
+              if remaining <= 0:
+                  break
+              time.sleep(min(30,max(1,remaining)))
+              remaining=expires_at-time.time()
+              if remaining > 0:
+                  try:
+                      heartbeat=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}/heartbeat","POST",timeout=25)
+                      print(json.dumps({"session_id":sid,"heartbeat":"ok","remaining_seconds":int(remaining)}))
+                  except RuntimeError as exc:
+                      if "HTTP 404" in str(exc) or "HTTP 410" in str(exc):
+                          print(f"Session ended before its scheduled expiry: {exc}")
+                          break
+                      raise
+
+          # The Relay's own reaper is the fallback if this workflow is cancelled.
+          # At the deadline the server may already have closed the page.
+          closed=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}","DELETE",timeout=25)
+          print(json.dumps({"workflow":"A-host","session_id":sid,"host_finished":True,"close_result":closed},indent=2))
+          PY
