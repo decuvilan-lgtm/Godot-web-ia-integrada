@@ -1,0 +1,161 @@
+name: Persistent Godot Session Operator
+run-name: Godot session ${{ inputs.operation }} — ${{ inputs.session_id || inputs.repository }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operation to perform against the persistent editor session
+        required: true
+        type: choice
+        options: [open, status, inspect, screenshot, run_game, stop_game, click_text, complete]
+      session_id:
+        description: Existing session ID (leave empty to locate the matching active session)
+        required: false
+        type: string
+      repository:
+        description: Project repository (owner/name)
+        required: false
+        default: decuvilan-lgtm/Godot-web-ia-integrada
+        type: string
+      branch:
+        description: Project branch
+        required: false
+        default: test/verdant-valley-development-benchmark
+        type: string
+      project_path:
+        description: Folder containing project.godot (empty for repository root)
+        required: false
+        default: examples/verdant-valley
+        type: string
+      commit_sha:
+        description: Optional immutable commit SHA for a new session
+        required: false
+        type: string
+      text:
+        description: Exact visible text for click_text
+        required: false
+        type: string
+      task_id:
+        description: Stable task identifier for complete (letters, digits, dash and underscore)
+        required: false
+        default: operator-checkpoint
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: godot-session-operator-${{ inputs.session_id || inputs.repository }}
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Operate the existing Relay-hosted browser and editor session
+        env:
+          RELAY_URL: https://godot-web-ia-relay.onrender.com
+          OPERATION: ${{ inputs.operation }}
+          SESSION_ID: ${{ inputs.session_id }}
+          REPOSITORY: ${{ inputs.repository }}
+          BRANCH: ${{ inputs.branch }}
+          PROJECT_PATH: ${{ inputs.project_path }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          CLICK_TEXT: ${{ inputs.text }}
+          TASK_ID: ${{ inputs.task_id }}
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, time, urllib.error, urllib.parse, urllib.request
+          from pathlib import Path
+
+          relay=os.environ["RELAY_URL"].rstrip("/")
+          def oidc():
+              url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
+              req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+              with urllib.request.urlopen(req,timeout=20) as r: return json.load(r)["value"]
+          token=oidc()
+          headers={"Authorization":"Bearer "+token,"Accept":"application/json"}
+          def call(path,method="GET",payload=None,timeout=90):
+              data=None if payload is None else json.dumps(payload).encode()
+              h=dict(headers)
+              if data is not None: h["Content-Type"]="application/json"
+              req=urllib.request.Request(relay+path,data=data,headers=h,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=timeout) as r:
+                      raw=r.read()
+                      ctype=r.headers.get("Content-Type","")
+                      return json.loads(raw) if "json" in ctype else raw
+              except urllib.error.HTTPError as e:
+                  detail=e.read().decode("utf-8","replace")[:1500]
+                  raise RuntimeError(f"Relay HTTP {e.code}: {detail}") from e
+
+          op=os.environ["OPERATION"]
+          sessions=call("/v1/persistent-sessions").get("sessions",[])
+          sid=os.environ.get("SESSION_ID","").strip()
+          if op=="open":
+              body={"repository":os.environ["REPOSITORY"],"branch":os.environ["BRANCH"],
+                    "project_path":os.environ.get("PROJECT_PATH",""),"reuse_existing":True,
+                    "reimport_existing":False}
+              sha=os.environ.get("COMMIT_SHA","").strip()
+              if sha: body["commit_sha"]=sha
+              result=call("/v1/persistent-sessions","POST",body,timeout=120)
+              sid=result["session_id"]
+          else:
+              if not sid:
+                  matches=[s for s in sessions if s["repository"]==os.environ["REPOSITORY"]
+                           and s["branch"]==os.environ["BRANCH"]
+                           and s["project_path"]==os.environ.get("PROJECT_PATH","")]
+                  if len(matches)!=1:
+                      raise RuntimeError(f"Expected exactly one matching active session; found {len(matches)}. Supply session_id explicitly.")
+                  sid=matches[0]["session_id"]
+              if op=="status":
+                  result=call("/v1/persistent-sessions/"+urllib.parse.quote(sid,safe=""))
+              elif op=="inspect":
+                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"inspect"})
+              elif op=="screenshot":
+                  call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"screenshot"})
+                  result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
+                              {"task_id":os.environ["TASK_ID"]+"-"+os.environ["GH_RUN_ID"],
+                               "summary":"Operator screenshot checkpoint","result":{"operation":"screenshot"}})
+                  artifact=call(result["artifact_url"])
+                  Path("artifacts").mkdir(exist_ok=True)
+                  Path("artifacts/session-evidence.zip").write_bytes(artifact)
+              elif op in ("run_game","stop_game"):
+                  key="F5" if op=="run_game" else "Escape"
+                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"press_key","key":key})
+              elif op=="click_text":
+                  text=os.environ.get("CLICK_TEXT","")
+                  if not text: raise RuntimeError("text is required for click_text")
+                  result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
+              elif op=="complete":
+                  task=os.environ.get("TASK_ID","")
+                  if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
+                  result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
+                              {"task_id":task,"summary":"Operator checkpoint","result":{"workflow_run":os.environ["GH_RUN_ID"]}})
+                  artifact=call(result["artifact_url"])
+                  Path("artifacts").mkdir(exist_ok=True)
+                  Path("artifacts/session-evidence.zip").write_bytes(artifact)
+              else:
+                  raise RuntimeError("Unsupported operation")
+
+          summary={"operation":op,"session_id":sid,"session_kept_open":op not in ("open",),
+                   "result":result}
+          Path("artifacts").mkdir(exist_ok=True)
+          Path("artifacts/operator-result.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Upload operator result and session evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-session-operator-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
