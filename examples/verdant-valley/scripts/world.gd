@@ -16,9 +16,17 @@ var message_timer := 0.0
 var finished := false
 var demo_mode := false
 var demo_elapsed := 0.0
+var playtest_mode := false
+var playtest_elapsed := 0.0
+var playtest_reported := false
+const PLAYTEST_JUMP_WINDOWS := [
+	[0.55, 0.69], [2.0, 2.14], [3.04, 3.18], [4.3, 4.44],
+	[5.3, 5.44], [6.7, 6.84], [8.0, 8.14], [10.35, 10.49], [11.0, 11.14]
+]
 
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
+	playtest_mode = OS.get_cmdline_user_args().has("--playtest")
 	_setup_input()
 	_build_backdrop()
 	_build_terrain()
@@ -278,8 +286,33 @@ func show_message(message:String) -> void:
 		status_label.text = message
 		message_timer = 4.0
 
+func _process_playtest(delta:float) -> void:
+	playtest_elapsed += delta
+	if playtest_elapsed < 13.94:
+		Input.action_press("move_right")
+	else:
+		Input.action_release("move_right")
+	var jump_now := false
+	for window in PLAYTEST_JUMP_WINDOWS:
+		if playtest_elapsed >= window[0] and playtest_elapsed < window[1]:
+			jump_now = true
+			break
+	if jump_now:
+		Input.action_press("jump")
+	else:
+		Input.action_release("jump")
+	if playtest_elapsed >= 10.0 and playtest_elapsed < 10.12:
+		Input.action_press("interact")
+	else:
+		Input.action_release("interact")
+	if playtest_elapsed >= 14.1 and not playtest_reported:
+		playtest_reported = true
+		print("PLAYTEST RESULT: position=", player.global_position, " health=", player.health, " shards=", player.shards, " finished=", finished)
+
 func _process(delta:float) -> void:
 	if Engine.is_editor_hint(): return
+	if playtest_mode and is_instance_valid(player):
+		_process_playtest(delta)
 	if demo_mode and is_instance_valid(player):
 		demo_elapsed += delta
 		if demo_elapsed < 7.0: Input.action_press("move_right")
