@@ -19,6 +19,7 @@ var demo_elapsed := 0.0
 var playtest_mode := false
 var playtest_elapsed := 0.0
 var playtest_reported := false
+var playtest_last_trace_second := -1
 const PLAYTEST_JUMP_WINDOWS := [
 	[0.55, 0.69], [2.0, 2.14], [3.04, 3.18], [4.3, 4.44],
 	[5.3, 5.44], [6.7, 6.84], [8.0, 8.14], [10.35, 10.49], [11.0, 11.14]
@@ -27,6 +28,7 @@ const PLAYTEST_JUMP_WINDOWS := [
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
 	playtest_mode = OS.get_cmdline_user_args().has("--playtest")
+	print("PLAYTEST INIT: args=", OS.get_cmdline_user_args(), " enabled=", playtest_mode)
 	_setup_input()
 	_build_backdrop()
 	_build_terrain()
@@ -288,6 +290,10 @@ func show_message(message:String) -> void:
 
 func _process_playtest(delta:float) -> void:
 	playtest_elapsed += delta
+	var trace_second := int(floor(playtest_elapsed))
+	if trace_second != playtest_last_trace_second:
+		playtest_last_trace_second = trace_second
+		print("PLAYTEST TRACE: t=", snappedf(playtest_elapsed, 0.1), " position=", player.global_position, " velocity=", player.velocity, " grounded=", player.is_on_floor(), " health=", player.health, " shards=", player.shards, " finished=", finished)
 	if playtest_elapsed < 13.94:
 		Input.action_press("move_right")
 	else:
