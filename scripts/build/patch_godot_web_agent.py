@@ -25,6 +25,8 @@ BRIDGE_BLOCK = r'''
 #include "core/io/json.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_undo_redo_manager.h"
+#include "core/object/class_db.h"
 #include "scene/main/node.h"
 #include "scene/main/timer.h"
 
@@ -40,13 +42,13 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tgetCapabilities() {
 \t\t\treturn {
 \t\t\t\tprotocol: 1,
-\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree"]
+\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.add_node"]
 \t\t\t};
 \t\t},
 \t\tdispatch(request) {
 \t\t\treturn new Promise((resolve, reject) => {
 \t\t\t\tif (!request || typeof request.id !== "string" || !request.id || request.id.length > 128 ||
-\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64 || (request.args != null && (typeof request.args !== "object" || Array.isArray(request.args) || Object.keys(request.args).length > 0))) {
+\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64 || (request.args != null && (typeof request.args !== "object" || Array.isArray(request.args) || Object.keys(request.args).length > 3))) {
 \t\t\t\t\treject(new Error("Invalid agent request"));
 \t\t\t\t\treturn;
 \t\t\t\t}
@@ -154,6 +156,7 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tcommands.push_back("editor.list_capabilities");
 \t\t\tcommands.push_back("editor.get_state");
 \t\t\tcommands.push_back("scene.get_tree");
+			commands.push_back("scene.add_node");
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = Dictionary();
 \t\t\tDictionary result;
@@ -179,10 +182,78 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\t\tresponse["ok"] = true;
 \t\t\t\tresponse["result"] = godot_web_agent_node_to_dict(root, count, 0);
 \t\t\t}
-\t\t} else {
-\t\t\tresponse["error"] = "COMMAND_NOT_ALLOWED";
-\t\t\tresponse["message"] = "The requested command is not in the built-in read-only allowlist.";
-\t\t}
+		} else if (command == "scene.add_node") {
+			Dictionary args = request.get("args", Dictionary());
+			String node_type = args.get("node_type", "");
+			String node_name = args.get("node_name", "");
+			String parent_path = args.get("parent_path", ".");
+			bool allowed_type = false;
+			static const char *allowed_node_types[] = {
+				"Node", "Node2D", "Sprite2D", "CharacterBody2D", "StaticBody2D",
+				"Area2D", "CollisionShape2D", "Camera2D", "Marker2D", "CanvasLayer",
+				"Control", "Label", "TextureRect", "AnimationPlayer", "Timer",
+				"AudioStreamPlayer2D"
+			};
+			for (const char *allowed_type_name : allowed_node_types) {
+				if (node_type == allowed_type_name) {
+					allowed_type = true;
+					break;
+				}
+			}
+			bool args_valid = args.size() >= 2 && args.size() <= 3 &&
+				args.has("node_type") && args.has("node_name") &&
+				node_name.is_valid_identifier() && node_name.length() <= 48 &&
+				parent_path.length() <= 200 && !parent_path.is_empty() &&
+				!parent_path.begins_with("/") && parent_path.find("..") == -1 &&
+				parent_path.find("//") == -1 &&
+				(args.size() == 2 || args.has("parent_path"));
+			if (!allowed_type || !args_valid) {
+				response["error"] = "INVALID_NODE_REQUEST";
+				response["message"] = "Node type, name, or parent path is outside the bounded creation allowlist.";
+			} else {
+				Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+				Node *parent = root ? (parent_path == "." ? root : root->get_node_or_null(NodePath(parent_path))) : nullptr;
+				if (root == nullptr || parent == nullptr || (parent != root && !root->is_ancestor_of(parent))) {
+					response["error"] = "INVALID_PARENT";
+					response["message"] = "The requested parent is not inside the active edited scene.";
+				} else if (parent->has_node(NodePath(node_name))) {
+					response["error"] = "NODE_ALREADY_EXISTS";
+					response["message"] = "A child with that name already exists.";
+				} else {
+					Object *instance = ClassDB::instantiate(node_type);
+					Node *created = Object::cast_to<Node>(instance);
+					if (created == nullptr) {
+						if (instance != nullptr) {
+							memdelete(instance);
+						}
+						response["error"] = "NODE_CREATION_FAILED";
+						response["message"] = "Godot could not instantiate the requested node class.";
+					} else {
+						created->set_name(node_name);
+						EditorUndoRedoManager *undo_redo = get_undo_redo();
+						undo_redo->create_action("AI: Add " + node_type);
+						undo_redo->add_do_method(parent, "add_child", created);
+						undo_redo->add_do_method(created, "set_owner", root);
+						undo_redo->add_undo_method(parent, "remove_child", created);
+						undo_redo->add_do_reference(created);
+						undo_redo->commit_action();
+						Dictionary result;
+						Dictionary created_info;
+						created_info["name"] = node_name;
+						created_info["type"] = node_type;
+						created_info["path"] = root->get_path_to(created);
+						result["created"] = created_info;
+						result["undo_available"] = true;
+						result["saved_automatically"] = false;
+						response["ok"] = true;
+						response["result"] = result;
+					}
+				}
+			}
+		} else {
+			response["error"] = "COMMAND_NOT_ALLOWED";
+			response["message"] = "The requested command is not in the built-in semantic allowlist.";
+		}
 \t\tgodot_web_agent_publish(JSON::stringify(response).utf8().get_data());
 \t}
 }
