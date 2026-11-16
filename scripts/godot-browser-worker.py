@@ -25,6 +25,44 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
 
+    def do_GET(self):
+        parsed=urllib.parse.urlsplit(self.path)
+        parts=parsed.path.split("/")
+        if parsed.path.startswith("/v1/github/"):
+            if len(parts)!=6 or parts[1:3]!=["v1","github"] or parts[5]!="archive":
+                self.send_error(404)
+                return
+            target=RELAY_URL+self.path
+            request=urllib.request.Request(target,headers={
+                "Accept":"application/zip, application/json",
+                "User-Agent":"Godot-Web-Local-Archive-Proxy",
+                "Cache-Control":"no-store",
+            })
+            try:
+                with urllib.request.urlopen(request,timeout=90) as response:
+                    body=response.read(128*1024*1024+1)
+                    if len(body)>128*1024*1024:
+                        self.send_error(413,"GitHub project archive exceeds 128 MiB")
+                        return
+                    self.send_response(response.status)
+                    for header in ("Content-Type","X-GitHub-Ref","X-GitHub-Commit-SHA","Cache-Control"):
+                        if response.headers.get(header):
+                            self.send_header(header,response.headers[header])
+                    self.send_header("Content-Length",str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+            except urllib.error.HTTPError as exc:
+                detail=exc.read(4096)
+                self.send_response(exc.code)
+                self.send_header("Content-Type","application/json")
+                self.send_header("Content-Length",str(len(detail)))
+                self.end_headers()
+                self.wfile.write(detail)
+            except Exception as exc:
+                self.send_error(502,str(exc)[:200])
+            return
+        super().do_GET()
+
 
 def start_local_editor(directory):
     editor_dir=Path(directory).resolve()
@@ -49,7 +87,7 @@ def prepare_extension(source_dir, target_dir, origin):
     manifest["host_permissions"]=[match]
     for item in manifest.get("content_scripts",[]):
         item["matches"]=[match]
-    (target_dir/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
+    (target_dir/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 
 def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, retry_seconds=360):
     """Retry only transient startup/deploy failures while Render rolls out the API."""
