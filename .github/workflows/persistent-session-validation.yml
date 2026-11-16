@@ -9,7 +9,12 @@ on:
       - ".github/workflows/persistent-session-host.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
+      - "relay/native_remote.py"
+      - "relay/test_native_remote.py"
+      - "scripts/bridge/native_remote_agent.py"
       - "relay/test_persistent_sessions.py"
+      - "relay/native_remote.py"
+      - "relay/test_native_remote.py"
       - "scripts/patch-web-shell.py"
       - "scripts/test_patch_web_shell.py"
       - "scripts/godot-browser-worker.py"
@@ -50,11 +55,11 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
-          python -m compileall -q relay/persistent_sessions.py
-          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/native_editor_client.py
+          python -m compileall -q relay/persistent_sessions.py relay/native_remote.py
+          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/native_editor_client.py scripts/bridge/native_remote_agent.py
           python -m unittest -v tests.test_native_editor_client
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
-          (cd relay && python -m unittest -v test_persistent_sessions)
+          (cd relay && python -m unittest -v test_persistent_sessions test_native_remote)
           python scripts/test_patch_web_shell.py
           python - <<'PY'
           from pathlib import Path
