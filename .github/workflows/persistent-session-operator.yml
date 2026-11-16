@@ -122,7 +122,7 @@ jobs:
               elif op=="screenshot":
                   call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"screenshot"})
                   result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
-                              {"task_id":os.environ["TASK_ID"]+"-"+os.environ["GH_RUN_ID"],
+                              {"task_id":(os.environ["TASK_ID"][:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]),
                                "summary":"Operator screenshot checkpoint","result":{"operation":"screenshot"}})
                   artifact=call(result["artifact_url"])
                   Path("artifacts").mkdir(exist_ok=True)
@@ -135,7 +135,7 @@ jobs:
                   if not text: raise RuntimeError("text is required for click_text")
                   result=call(f"/v1/persistent-sessions/{sid}/commands","POST",{"command":"click_text","text":text})
               elif op=="complete":
-                  task=os.environ.get("TASK_ID","")
+                  task=os.environ.get("TASK_ID","")[:55]+"-"+os.environ["GH_RUN_ID"]+"-"+os.environ["GH_RUN_ATTEMPT"]
                   if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}",task): raise RuntimeError("Invalid task_id")
                   result=call(f"/v1/persistent-sessions/{sid}/tasks/complete","POST",
                               {"task_id":task,"summary":"Operator checkpoint","result":{"workflow_run":os.environ["GH_RUN_ID"]}})
