@@ -56,7 +56,7 @@ jobs:
               raise SystemExit("Invalid project path")
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
               for key,value in fields.items():
-                  env.write(f"{key}={value}\\n")
+                  env.write(f"{key}={value}" + chr(10))
           PY
 
       - name: Set up Python
@@ -100,11 +100,11 @@ jobs:
       - name: Close the temporary command channel
         if: always()
         uses: actions/github-script@v7
-        env:
-          ISSUE_NUMBER: ${{ env.SESSION_ISSUE_NUMBER }}
         with:
           script: |
-            const issue = Number(process.env.ISSUE_NUMBER);
+            const fs = require('fs');
+            const request = JSON.parse(fs.readFileSync('.session-host-request.json', 'utf8'));
+            const issue = Number(request.issue_number);
             if (Number.isInteger(issue) && issue > 0) {
               await github.rest.issues.update({
                 owner: context.repo.owner,
