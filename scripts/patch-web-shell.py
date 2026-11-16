@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Patch the official Godot Web shell without replacing its editor UI."""
 from pathlib import Path
+import os
 import re
 
 
-RELAY_URL = "https://godot-web-ia-relay-test.onrender.com"
+RELAY_URL = os.environ.get("GODOT_RELAY_URL", "https://godot-web-ia-relay-test.onrender.com").rstrip("/")
 def patch_html(html: str) -> str:
     """Apply mobile metadata and connector; validate structure, not private Godot APIs."""
     if not re.search(r"<html\b", html, flags=re.I):
