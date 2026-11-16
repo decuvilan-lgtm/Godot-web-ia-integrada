@@ -21,8 +21,8 @@ var playtest_elapsed := 0.0
 var playtest_reported := false
 var playtest_last_trace_second := -1
 const PLAYTEST_JUMP_WINDOWS := [
-	[2.0, 2.14], [3.04, 3.18], [4.3, 4.44], [5.4, 5.54],
-	[6.9, 7.04], [8.0, 8.14], [10.63, 10.77]
+	[2.0, 2.14], [3.15, 3.29], [4.3, 4.44], [5.4, 5.54],
+	[7.05, 7.19], [8.1, 8.24], [10.65, 10.79]
 ]
 
 func _ready() -> void:
@@ -115,7 +115,7 @@ func _build_decor() -> void:
 		add_child(crystal)
 
 func _build_objects() -> void:
-	for p in [Vector2(270,585),Vector2(470,470),Vector2(960,450),Vector2(1190,375),Vector2(1540,465),Vector2(1945,445),Vector2(2200,365),Vector2(2550,465),Vector2(2840,400),Vector2(3300,455),Vector2(3560,375)]:
+	for p in [Vector2(270,610),Vector2(470,470),Vector2(960,450),Vector2(1190,375),Vector2(1540,465),Vector2(1945,445),Vector2(2200,365),Vector2(2550,465),Vector2(2840,400),Vector2(3300,455),Vector2(3560,375)]:
 		_add_pickup(p)
 	_add_critter(Vector2(1370,625),1250,1570)
 	_add_critter(Vector2(2390,625),2260,2690)
@@ -278,8 +278,8 @@ func _on_hazard_entered(body:Node2D) -> void:
 		body.velocity.y = -300
 
 func _on_exit_entered(body:Node2D) -> void:
-	print("PLAYTEST EVENT: portal body_entered body=", body.name, " type=", body.get_class())
 	if body is ValleyPlayer and not finished:
+		print("PLAYTEST EVENT: portal body_entered body=Player")
 		finished = true
 		show_message("¡LO LOGRASTE!  •  Fragmentos: %d / 11" % player.shards)
 
@@ -307,7 +307,7 @@ func _process_playtest(delta:float) -> void:
 		Input.action_press("jump")
 	else:
 		Input.action_release("jump")
-	if playtest_elapsed >= 10.0 and playtest_elapsed < 10.12:
+	if playtest_elapsed >= 10.1 and playtest_elapsed < 10.22:
 		Input.action_press("interact")
 	else:
 		Input.action_release("interact")
