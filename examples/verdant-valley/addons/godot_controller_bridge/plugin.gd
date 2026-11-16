@@ -183,7 +183,7 @@ func _add_node(args: Dictionary) -> Dictionary:
 	undo_redo.add_do_method(parent, "add_child", created)
 	undo_redo.add_do_method(created, "set_owner", root)
 	undo_redo.add_undo_method(parent, "remove_child", created)
-	undo_redo.add_undo_reference(created)
+	undo_redo.add_do_reference(created)
 	undo_redo.commit_action()
 
 	var selection := EditorInterface.get_selection()
