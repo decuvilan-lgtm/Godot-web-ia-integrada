@@ -34,7 +34,7 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         import re
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}", args["node_name"]):
             raise ValueError("node_name must be a valid bounded identifier")
-        if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"", ".."}):
+        if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"", ".."} or ".." in args["parent_path"].split("/") or "//" in args["parent_path"]):
             raise ValueError("parent_path must be relative to the edited scene root")
 def execute_semantic_command(page: Any, action: str, args: dict[str, Any] | None = None,
                              timeout_ms: int = 10000) -> dict[str, Any]:
