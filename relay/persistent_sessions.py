@@ -53,9 +53,10 @@ OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
 _oidc_jwks_client = None
 _oidc_jwks_lock = threading.Lock()
 IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
-# A browser/editor session has a hard wall-clock lifetime. Activity and heartbeats
-# may refresh the idle lease, but can never extend this ten-minute window.
-MAX_SESSION_DURATION_SECONDS = max(60, int(os.environ.get("PERSISTENT_SESSION_MAX_DURATION_SECONDS", "600")))
+# Default wall-clock lifetime; each session can override this when opened.
+DEFAULT_SESSION_DURATION_SECONDS = max(60, min(86400, int(os.environ.get("PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS", "600"))))
+MIN_SESSION_DURATION_SECONDS = 60
+MAX_SESSION_DURATION_SECONDS = 86400
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_SESSION_ARTIFACT_BYTES = 24 * 1024 * 1024
@@ -69,6 +70,7 @@ class PersistentSession:
     branch: str
     project_path: str
     commit_sha: str | None = None
+    max_duration_seconds: int = DEFAULT_SESSION_DURATION_SECONDS
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     context: Any = None
@@ -90,6 +92,7 @@ class OpenSessionRequest(BaseModel):
     commit_sha: str | None = Field(default=None, min_length=40, max_length=64)
     reuse_existing: bool = True
     reimport_existing: bool = False
+    duration_seconds: int = Field(default=DEFAULT_SESSION_DURATION_SECONDS, ge=MIN_SESSION_DURATION_SECONDS, le=MAX_SESSION_DURATION_SECONDS)
 
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=32)
@@ -169,7 +172,7 @@ def _touch(session: PersistentSession) -> None:
 
 def _session_remaining_seconds(session: PersistentSession, now: float | None = None) -> int:
     current = time.time() if now is None else now
-    return max(0, int(MAX_SESSION_DURATION_SECONDS - (current - session.created_at)))
+    return max(0, int(session.max_duration_seconds - (current - session.created_at)))
 
 
 def _get_session(session_id: str) -> PersistentSession:
@@ -177,8 +180,8 @@ def _get_session(session_id: str) -> PersistentSession:
     if session is None:
         raise HTTPException(status_code=404, detail="Persistent session not found")
     now = time.time()
-    if now - session.created_at >= MAX_SESSION_DURATION_SECONDS:
-        raise HTTPException(status_code=410, detail="Persistent session reached its fixed ten-minute lifetime")
+    if now - session.created_at >= session.max_duration_seconds:
+        raise HTTPException(status_code=410, detail="Persistent session reached its configured maximum lifetime")
     if now - session.last_activity > IDLE_TTL:
         raise HTTPException(status_code=410, detail="Persistent session expired after inactivity")
     return session
@@ -240,10 +243,10 @@ async def _expire_loop() -> None:
     while True:
         now = time.time()
         for session in list(_sessions.values()):
-            if (now - session.created_at >= MAX_SESSION_DURATION_SECONDS
+            if (now - session.created_at >= session.max_duration_seconds
                     or now - session.last_activity > IDLE_TTL):
                 await _close_session(session)
-        # Check frequently so the fixed ten-minute close is not delayed materially.
+        # Check frequently so the configured close is not delayed materially.
         await asyncio.sleep(5)
 
 @router.on_event("startup")
@@ -281,8 +284,8 @@ async def list_persistent_sessions(authorization: str | None = Header(default=No
                 "commit_sha": session.commit_sha,
                 "created_at": session.created_at,
                 "last_activity_at": session.last_activity,
-                "created_at": session.created_at,
-                "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
+                "expires_at": session.created_at + session.max_duration_seconds,
+                "max_duration_seconds": session.max_duration_seconds,
                 "remaining_seconds": _session_remaining_seconds(session),
                 "state": "open" if session.page is not None and not session.page.is_closed() else "disconnected",
             }
@@ -341,8 +344,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "project_path": existing.project_path,
                 "commit_sha": existing.commit_sha,
                 "idle_ttl_seconds": IDLE_TTL,
-                "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
-                "expires_at": existing.created_at + MAX_SESSION_DURATION_SECONDS,
+                "max_duration_seconds": existing.max_duration_seconds,
+                "expires_at": existing.created_at + existing.max_duration_seconds,
                 "remaining_seconds": _session_remaining_seconds(existing),
                 "reused": True,
                 "reimported": False,
@@ -386,8 +389,8 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
                 "project_path": existing.project_path,
                 "commit_sha": existing.commit_sha,
                 "idle_ttl_seconds": IDLE_TTL,
-                "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
-                "expires_at": existing.created_at + MAX_SESSION_DURATION_SECONDS,
+                "max_duration_seconds": existing.max_duration_seconds,
+                "expires_at": existing.created_at + existing.max_duration_seconds,
                 "remaining_seconds": _session_remaining_seconds(existing),
                 "reused": True,
                 "reimported": True,
@@ -408,6 +411,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         branch=body.branch,
         project_path=body.project_path,
         commit_sha=effective_sha,
+        max_duration_seconds=body.duration_seconds,
     )
     try:
         # Keep the Web editor's raster surfaces modest on Render's 512 MiB
@@ -431,6 +435,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             "branch": body.branch,
             "project_path": body.project_path,
             "commit_sha": effective_sha,
+            "duration_seconds": body.duration_seconds,
         })
         _sessions[session_id] = session
     except Exception as exc:
@@ -446,12 +451,12 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         "project_path": body.project_path,
         "commit_sha": effective_sha,
         "idle_ttl_seconds": IDLE_TTL,
-        "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
-        "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
+        "max_duration_seconds": session.max_duration_seconds,
+        "expires_at": session.created_at + session.max_duration_seconds,
         "remaining_seconds": _session_remaining_seconds(session),
         "reused": False,
         "reused_for_follow_up_tasks": True,
-        "note": "This browser/editor session closes automatically after its fixed ten-minute lifetime; activity and task completion do not extend it.",
+        "note": "This browser/editor session closes automatically after its configured lifetime; activity and task completion do not extend it.",
     }
 
 @router.get("/{session_id}")
@@ -468,8 +473,8 @@ async def persistent_session_status(session_id: str, authorization: str | None =
         "commit_sha": session.commit_sha,
         "last_activity_at": session.last_activity,
         "created_at": session.created_at,
-        "expires_at": session.created_at + MAX_SESSION_DURATION_SECONDS,
-        "max_duration_seconds": MAX_SESSION_DURATION_SECONDS,
+        "expires_at": session.created_at + session.max_duration_seconds,
+        "max_duration_seconds": session.max_duration_seconds,
         "remaining_seconds": _session_remaining_seconds(session),
         "idle_ttl_seconds": IDLE_TTL,
         "completed_tasks": list(session.completed_tasks.values()),
