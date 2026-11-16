@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg xdotool mesa-vulkan-drivers libvulkan1
+          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg /usr/bin/xdotool mesa-vulkan-drivers libvulkan1
           PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
           python3 "$PROJECT/tools/generate_assets.py"
           mkdir -p "$PROJECT/addons"
@@ -92,8 +92,8 @@ jobs:
           trap 'kill -TERM "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true' EXIT
           BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
           # Zoom out the 2D viewport so the full 3,900 px level is framed.
-          xdotool mousemove --sync 800 380
-          xdotool click --repeat 20 --delay 80 5
+          /usr/bin/xdotool mousemove --sync 800 380
+          /usr/bin/xdotool click --repeat 20 --delay 80 5
           sleep 1
           ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
           kill -TERM "$editor_pid" 2>/dev/null || true
@@ -108,24 +108,25 @@ jobs:
           game_pid=$!
           trap 'kill -TERM "$game_pid" 2>/dev/null || true; sleep 2; kill -KILL "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
           sleep 3
-          game_window=$(xdotool search --onlyvisible --name "Verdant Valley" | head -n 1 || true)
-          if [ -z "$game_window" ]; then xdotool search --onlyvisible --name "." > artifacts/x11-windows.txt || true; cat artifacts/x11-windows.txt; echo "Game window not found"; exit 1; fi
-          xdotool windowfocus --sync "$game_window" || true
+          test -x /usr/bin/xdotool
+          game_window=$(/usr/bin/xdotool search --onlyvisible --name "Verdant Valley" | head -n 1 || true)
+          if [ -z "$game_window" ]; then /usr/bin/xdotool search --onlyvisible --name "." > artifacts/x11-windows.txt || true; cat artifacts/x11-windows.txt; echo "Game window not found"; exit 1; fi
+          /usr/bin/xdotool windowfocus --sync "$game_window" || true
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 &
           capture_pid=$!
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
-          xdotool keydown Right
-          sleep 0.55; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.31; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 0.90; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.12; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 0.86; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.26; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.16; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.86; xdotool key e
-          sleep 0.35; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 0.51; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 2.80; xdotool keyup Right
+          /usr/bin/xdotool keydown Right
+          sleep 0.55; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 1.31; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 0.90; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 1.12; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 0.86; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 1.26; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 1.16; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 1.86; /usr/bin/xdotool key e
+          sleep 0.35; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 0.51; /usr/bin/xdotool keydown space; sleep 0.14; /usr/bin/xdotool keyup space
+          sleep 2.80; /usr/bin/xdotool keyup Right
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
           wait "$capture_pid"
           kill -TERM "$game_pid" 2>/dev/null || true
