@@ -24,6 +24,7 @@ on:
       - "tests/test_native_editor_client.py"
       - "headless/native-editor/tools/headless_bridge/README.md"
       - "docs/persistent-godot-session.md"
+      - "docs/native-remote-editor.md"
       - "scripts/bridge/native_editor_client.py"
       - "tests/test_native_editor_client.py"
       - "headless/native-editor/tools/headless_bridge/README.md"
