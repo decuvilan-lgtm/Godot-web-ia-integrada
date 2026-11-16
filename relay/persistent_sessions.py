@@ -263,6 +263,12 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
         "connector_error": "",
         "connector_bytes": 0,
         "connector_filename": "",
+        "connector_start_button_disabled": None,
+        "connector_start_button_text": "",
+        "connector_zip_input_files": 0,
+        "connector_buttons": [],
+        "connector_inputs": [],
+        "connector_body_text": "",
     }
     try:
         while time.monotonic() - started < 480:
@@ -280,6 +286,12 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
                 "connector_error": (connector or {}).get("error", ""),
                 "connector_bytes": (connector or {}).get("bytes", 0),
                 "connector_filename": (connector or {}).get("filename", ""),
+                "connector_start_button_disabled": (connector or {}).get("startButtonDisabled"),
+                "connector_start_button_text": (connector or {}).get("startButtonText", ""),
+                "connector_zip_input_files": (connector or {}).get("zipInputFiles", 0),
+                "connector_buttons": (connector or {}).get("buttons", []),
+                "connector_inputs": (connector or {}).get("inputs", []),
+                "connector_body_text": (connector or {}).get("bodyText", "")[:1200],
                 "elapsed_seconds": round(time.monotonic() - started, 1),
             }
             if readiness["phase"] == "failed":
