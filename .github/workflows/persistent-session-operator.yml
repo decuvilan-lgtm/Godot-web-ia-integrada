@@ -83,7 +83,7 @@ jobs:
     steps:
       - name: Operate the existing Relay-hosted browser and editor session
         env:
-          RELAY_URL: https://godot-web-ia-relay.onrender.com
+          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
           OPERATION: ${{ inputs.operation }}
           SESSION_ID: ${{ inputs.session_id }}
           REPOSITORY: ${{ inputs.repository }}
