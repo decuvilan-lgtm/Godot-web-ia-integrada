@@ -86,6 +86,7 @@ _sessions: dict[str, PersistentSession] = {}
 _browser: Any = None
 _browser_lock = asyncio.Lock()
 _reaper_task: asyncio.Task | None = None
+_readiness_tasks: set[asyncio.Task] = set()
 
 class OpenSessionRequest(BaseModel):
     repository: str = Field(min_length=3, max_length=140)
@@ -311,6 +312,12 @@ async def stop_session_reaper():
     _reaper_task = None
     if task:
         task.cancel()
+    readiness_tasks = list(_readiness_tasks)
+    for readiness_task in readiness_tasks:
+        readiness_task.cancel()
+    if readiness_tasks:
+        await asyncio.gather(*readiness_tasks, return_exceptions=True)
+    _readiness_tasks.clear()
     for session in list(_sessions.values()):
         await _close_session(session)
     global _browser
@@ -492,7 +499,9 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
         })
         session.loading_started_at = time.time()
         _sessions[session_id] = session
-        asyncio.create_task(_wait_for_editor_ready(session, effective_sha))
+        readiness_task = asyncio.create_task(_wait_for_editor_ready(session, effective_sha))
+        _readiness_tasks.add(readiness_task)
+        readiness_task.add_done_callback(_readiness_tasks.discard)
     except HTTPException:
         await _close_session(session)
         raise
