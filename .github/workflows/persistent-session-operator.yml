@@ -8,7 +8,7 @@ on:
         description: Operation to perform against the persistent editor session
         required: true
         type: choice
-        options: [open, status, inspect, screenshot, run_game, stop_game, click_text, complete]
+        options: [status, inspect, screenshot, run_game, stop_game, click_text, complete]
       session_id:
         description: Existing session ID (leave empty to locate the matching active session)
         required: false
@@ -28,11 +28,6 @@ on:
         required: false
         default: examples/verdant-valley
         type: string
-      duration_minutes:
-        description: Session lifetime in minutes (default 10; allowed 1-350). Used only by open.
-        required: false
-        default: 10
-        type: number
       commit_sha:
         description: Optional immutable commit SHA for a new session
         required: false
@@ -69,7 +64,6 @@ jobs:
           BRANCH: ${{ inputs.branch }}
           PROJECT_PATH: ${{ inputs.project_path }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
-          DURATION_MINUTES: ${{ inputs.duration_minutes }}
           CLICK_TEXT: ${{ inputs.text }}
           TASK_ID: ${{ inputs.task_id }}
           GH_RUN_ID: ${{ github.run_id }}
@@ -105,19 +99,7 @@ jobs:
           op=os.environ["OPERATION"]
           sessions=call("/v1/persistent-sessions").get("sessions",[])
           sid=os.environ.get("SESSION_ID","").strip()
-          if op=="open":
-              duration_minutes=int(float(os.environ.get("DURATION_MINUTES","10")))
-              if not 1 <= duration_minutes <= 350:
-                  raise RuntimeError("duration_minutes must be between 1 and 350")
-              body={"repository":os.environ["REPOSITORY"],"branch":os.environ["BRANCH"],
-                    "project_path":os.environ.get("PROJECT_PATH",""),"reuse_existing":True,
-                    "reimport_existing":False,"duration_seconds":duration_minutes*60}
-              sha=os.environ.get("COMMIT_SHA","").strip()
-              if sha: body["commit_sha"]=sha
-              result=call("/v1/persistent-sessions","POST",body,timeout=120)
-              sid=result["session_id"]
-          else:
-              if not sid:
+          if not sid:
                   matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
                            and s["branch"]==os.environ["BRANCH"]
                            and s["project_path"]==os.environ.get("PROJECT_PATH","")]
