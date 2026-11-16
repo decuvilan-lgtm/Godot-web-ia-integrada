@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import os
 import runpy
 import unittest
 
 PATCHER = Path(__file__).with_name("patch-web-shell.py")
-PATCHER_NAMESPACE = runpy.run_path(str(PATCHER))
-patch_html = PATCHER_NAMESPACE["patch_html"]
+patch_html = runpy.run_path(str(PATCHER))["patch_html"]
 
 FIXTURE = """<!doctype html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Godot</title></head>
@@ -52,14 +52,18 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertNotIn("Compartir proyectos", result)
 
     def test_can_use_same_origin_archive_proxy_for_runner_hosted_editor(self):
-        previous = PATCHER_NAMESPACE["RELAY_URL"]
+        previous = os.environ.get("GODOT_RELAY_URL")
         try:
-            PATCHER_NAMESPACE["RELAY_URL"] = ""
-            result = PATCHER_NAMESPACE["patch_html"](FIXTURE)
+            os.environ["GODOT_RELAY_URL"] = ""
+            namespace = runpy.run_path(str(PATCHER))
+            result = namespace["patch_html"](FIXTURE)
             self.assertIn('const relay = "";', result)
             self.assertIn("window.location.href", result)
         finally:
-            PATCHER_NAMESPACE["RELAY_URL"] = previous
+            if previous is None:
+                os.environ.pop("GODOT_RELAY_URL", None)
+            else:
+                os.environ["GODOT_RELAY_URL"] = previous
 
     def test_patch_is_idempotent(self):
         once = patch_html(FIXTURE)
