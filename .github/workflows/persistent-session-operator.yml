@@ -1,4 +1,4 @@
-name: Persistent Godot Session Operator
+name: Persistent Godot Session Operator (Workflow B)
 run-name: Godot session ${{ inputs.operation }} — ${{ inputs.session_id || inputs.repository }}
 
 on:
