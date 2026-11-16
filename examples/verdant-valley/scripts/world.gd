@@ -1,3 +1,4 @@
+@tool
 extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
@@ -275,6 +276,7 @@ func show_message(message:String) -> void:
 		message_timer = 4.0
 
 func _process(delta:float) -> void:
+	if Engine.is_editor_hint(): return
 	if demo_mode and is_instance_valid(player):
 		demo_elapsed += delta
 		if demo_elapsed < 7.0: Input.action_press("move_right")
