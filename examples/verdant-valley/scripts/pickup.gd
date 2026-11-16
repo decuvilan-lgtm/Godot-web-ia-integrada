@@ -17,4 +17,5 @@ func _on_body_entered(body: Node2D) -> void:
 		return
 	collected = true
 	body.collect_shard()
+	print("PLAYTEST EVENT: pickup collected, shards=", body.shards)
 	queue_free()
