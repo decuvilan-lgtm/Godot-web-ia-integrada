@@ -442,6 +442,33 @@ def main() -> int:
                 state = probes["editor.get_state"].get("result", {})
                 if state.get("editor_available") is not True:
                     raise RuntimeError("Godot EditorInterface was not available: " + json.dumps(probes["editor.get_state"]))
+                if state.get("has_scene") is not True:
+                    raise RuntimeError("The diagnostics fixture main scene was not opened in the editor.")
+
+                node_creation_probe = execute_semantic_command(
+                    page,
+                    "scene.add_node",
+                    {"node_type": "Node2D", "node_name": "ControllerSmokeNode"},
+                    timeout_ms=15000,
+                )
+                if not node_creation_probe.get("ok"):
+                    raise RuntimeError("Built-in agent could not create the allowlisted test node: " + json.dumps(node_creation_probe))
+                if node_creation_probe.get("result", {}).get("saved_automatically") is not False:
+                    raise RuntimeError("Scene node creation must remain unsaved for review.")
+                tree_after_creation_probe = execute_semantic_command(page, "scene.get_tree", timeout_ms=15000)
+                if not tree_after_creation_probe.get("ok"):
+                    raise RuntimeError("Could not inspect the scene after node creation: " + json.dumps(tree_after_creation_probe))
+
+                def contains_smoke_node(node):
+                    if not isinstance(node, dict):
+                        return False
+                    if node.get("name") == "ControllerSmokeNode" and node.get("type") == "Node2D":
+                        return True
+                    return any(contains_smoke_node(child) for child in node.get("children", []))
+
+                tree_root = tree_after_creation_probe.get("result", {})
+                if not contains_smoke_node(tree_root):
+                    raise RuntimeError("The editor acknowledged node creation but the active scene tree did not contain the new node.")
 
                 pending = page.evaluate("() => window.__godotEditorAgentPending?.size ?? -1")
                 if pending != 0:
@@ -572,6 +599,8 @@ def main() -> int:
                     "source_project_unchanged": True,
                     "runtime": runtime,
                     "semantic_probes": probes,
+                    "node_creation_probe": node_creation_probe,
+                    "tree_after_creation_probe": tree_after_creation_probe,
                     "pending_requests_after_probes": pending,
                     "pending_requests_after_denial": pending_after_denial,
                     "read_only_rejection_probe": denied_write_probe,
@@ -589,7 +618,7 @@ def main() -> int:
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
                     "workers": worker_urls[-20:],
-                    "note": "The built editor imported a clean project, exposed the native read-only adapter, and answered through the Chromium extension relay. This does not yet validate the deployed Render wrapper.",
+                    "note": "The built editor imported a clean project, answered semantic queries, created one allowlisted node through the editor undo manager, and left the scene unsaved for review. This does not yet validate the deployed Render wrapper.",
                 }
                 result, report_redactions = redact_sensitive_payload(result)
                 result["report_redactions_applied"] = report_redactions
