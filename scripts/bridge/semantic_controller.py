@@ -9,6 +9,7 @@ ACTIONS = {
     "editor.get_state": set(),
     "editor.list_capabilities": set(),
     "scene.get_tree": set(),
+    "scene.add_node": {"node_type", "node_name", "parent_path"},
 }
 
 
@@ -17,9 +18,24 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         raise ValueError(f"Unsupported semantic editor action: {action}")
     if not isinstance(args, dict) or set(args) - ACTIONS[action]:
         raise ValueError("Invalid arguments for semantic editor action")
+    if action == "scene.add_node" and not {"node_type", "node_name"}.issubset(args):
+        raise ValueError("scene.add_node requires node_type and node_name")
+    limits = {"node_type": 64, "node_name": 48, "parent_path": 200}
     for key, value in args.items():
-        if not isinstance(value, str) or not value or len(value) > 500:
-            raise ValueError(f"{key} must be a non-empty string of at most 500 characters")
+        if not isinstance(value, str) or not value or len(value) > limits.get(key, 500):
+            raise ValueError(f"{key} must be a non-empty bounded string")
+    if action == "scene.add_node":
+        allowed_types = {"Node", "Node2D", "Sprite2D", "CharacterBody2D", "StaticBody2D",
+                         "Area2D", "CollisionShape2D", "Camera2D", "Marker2D", "CanvasLayer",
+                         "Control", "Label", "TextureRect", "AnimationPlayer", "Timer",
+                         "AudioStreamPlayer2D"}
+        if args["node_type"] not in allowed_types:
+            raise ValueError("node_type is not allowlisted")
+        import re
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}", args["node_name"]):
+            raise ValueError("node_name must be a valid bounded identifier")
+        if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"", ".."}):
+            raise ValueError("parent_path must be relative to the edited scene root")
 def execute_semantic_command(page: Any, action: str, args: dict[str, Any] | None = None,
                              timeout_ms: int = 10000) -> dict[str, Any]:
     """Send one allowlisted semantic command through the extension in this Actions tab.
