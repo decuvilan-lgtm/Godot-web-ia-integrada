@@ -51,7 +51,9 @@ func _dispatch(arguments: Array) -> Dictionary:
 	var request: Dictionary = arguments[0]
 	var action := str(request.get("command", ""))
 	var args: Variant = request.get("args", {})
-	if not args is Dictionary or not (args as Dictionary).is_empty():
+	if not args is Dictionary:
+		return _error("INVALID_ARGUMENTS", "Arguments must be an object.")
+	if not args.is_empty():
 		return _error("INVALID_ARGUMENTS", "This adapter version accepts no arguments.")
 
 	match action:
