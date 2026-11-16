@@ -1,3 +1,4 @@
+@tool
 extends CharacterBody2D
 class_name ValleyCritter
 var left_edge := 0.0
@@ -26,6 +27,7 @@ func _ready() -> void:
 	anim.position.y = -20
 	add_child(anim)
 func _physics_process(delta: float) -> void:
+	if Engine.is_editor_hint(): return
 	position.x += speed * direction * delta
 	if position.x < left_edge or position.x > right_edge:
 		direction *= -1.0
