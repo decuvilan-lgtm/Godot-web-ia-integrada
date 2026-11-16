@@ -3,6 +3,7 @@ extends Area2D
 class_name ValleyPickup
 var collected := false
 func _ready() -> void:
+	add_to_group("collectibles")
 	collision_layer = 0
 	collision_mask = 1
 	var shape := CollisionShape2D.new()
