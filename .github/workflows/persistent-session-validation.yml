@@ -98,7 +98,7 @@ jobs:
               "Workflow A runs the shared browser on GitHub Actions": "scripts/godot-browser-worker.py" in host_source and "runs-on: ubuntu-24.04" in host_source,
               "Relay validates mouse bounds": "_validate_mouse_point" in relay_source and "outside the editor viewport" in relay_source,
               "Workflow A uses the test editor and Relay": "godot-web-ia-editor-test.onrender.com" in host_source and "godot-web-ia-relay-test.onrender.com" in host_source,
-              "Workflow A imports a pinned immutable SHA": "resolve_sha()" in worker_source and "expected_sha":sha in worker_source,
+              "Workflow A imports a pinned immutable SHA": "resolve_sha()" in worker_source and '"expected_sha":sha' in worker_source,
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
               "Workflow A retries transient Relay startup failures": "404,502,503,504" in worker_source,
               "Workflow B and A share the same command session ID": "session_id" in operator_source and "session_id" in command_loop_source,
