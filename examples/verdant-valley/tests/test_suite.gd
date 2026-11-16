@@ -23,7 +23,9 @@ func run() -> void:
 	check(world.player.shards==0,"collectible counter starts at zero")
 	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
 	world.player.global_position = first_pickup.global_position
-	await physics_frame
+	world.player.velocity = Vector2.ZERO
+	world.player.force_update_transform()
+	for i in 3: await physics_frame
 	check(world.player.shards==1,"touching a pickup updates the shard counter")
 	world.player.take_damage(1)
 	check(world.player.health==4,"hazard damage reduces health")
@@ -36,7 +38,8 @@ func run() -> void:
 	check(world.gate.get("opened"),"nearby interaction opens the exit gate")
 	world.player.global_position = Vector2(3780,608)
 	world.player.velocity = Vector2.ZERO
-	await physics_frame
+	world.player.force_update_transform()
+	for i in 3: await physics_frame
 	check(world.finished,"entering the portal completes the level")
 	world.player.set_checkpoint(Vector2(1800,646))
 	world.player.health=2
