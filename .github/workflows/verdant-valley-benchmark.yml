@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg xdotool
+          sudo apt-get install -y --no-install-recommends python3-pil xvfb ffmpeg xdotool mesa-vulkan-drivers libvulkan1
           PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
           python3 "$PROJECT/tools/generate_assets.py"
           mkdir -p "$PROJECT/addons"
@@ -84,7 +84,7 @@ jobs:
           set -euo pipefail
           GODOT="/tmp/godot-runtime/godot-linux-headless-agent/godot"
           PROJECT="$GITHUB_WORKSPACE/examples/verdant-valley"
-          export GODOT_SILENCE_ROOT_WARNING=1 GODOT PROJECT
+          export GODOT_SILENCE_ROOT_WARNING=1 GODOT PROJECT VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           mkdir -p artifacts
           xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
           "$GODOT" --editor --path "$PROJECT" --scene res://scenes/main.tscn --resolution 1500x900 --position 20,20 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/editor.log 2>&1 &
@@ -93,10 +93,16 @@ jobs:
           BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
           # Zoom out the 2D viewport so the full 3,900 px level is framed.
           xdotool mousemove --sync 800 380
-          xdotool click --repeat 7 --delay 80 5
+          xdotool click --repeat 13 --delay 80 5
           sleep 1
           ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
+          kill -TERM "$editor_pid" 2>/dev/null || true
+          for _ in 1 2 3 4 5; do
+            kill -0 "$editor_pid" 2>/dev/null || break
+            sleep 1
+          done
           kill -KILL "$editor_pid" 2>/dev/null || true
+          wait "$editor_pid" 2>/dev/null || true
           trap - EXIT
           "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/game.log 2>&1 &
           game_pid=$!
@@ -104,25 +110,30 @@ jobs:
           sleep 3
           game_window=$(xdotool search --onlyvisible --name "Verdant Valley" | head -n 1 || true)
           if [ -z "$game_window" ]; then xdotool search --onlyvisible --name "." > artifacts/x11-windows.txt || true; cat artifacts/x11-windows.txt; echo "Game window not found"; exit 1; fi
-          xdotool windowactivate --sync "$game_window"
-          xdotool windowfocus --sync "$game_window"
+          xdotool windowfocus --sync "$game_window" || true
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 &
           capture_pid=$!
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
           # Keyboard-driven playthrough: move, jump hazards and gaps, activate the crystal, then reach the exit.
-          xdotool keydown Right
-          sleep 3.05; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.05; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.25; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.25; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.75; xdotool key e
-          sleep 0.75; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
-          sleep 2.25; xdotool keyup Right
+          xdotool keydown --window "$game_window" Right
+          sleep 3.05; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.35; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.05; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.25; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.25; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.75; xdotool key --window "$game_window" e
+          sleep 0.75; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 1.35; xdotool keydown --window "$game_window" space; sleep 0.14; xdotool keyup --window "$game_window" space
+          sleep 2.25; xdotool keyup --window "$game_window" Right
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
           wait "$capture_pid"
+          kill -TERM "$game_pid" 2>/dev/null || true
+          for _ in 1 2 3 4 5; do
+            kill -0 "$game_pid" 2>/dev/null || break
+            sleep 1
+          done
           kill -KILL "$game_pid" 2>/dev/null || true
+          wait "$game_pid" 2>/dev/null || true
           trap - EXIT
           grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor-headless.log artifacts/import.log artifacts/functional-tests.log artifacts/editor.log artifacts/game.log > artifacts/error-summary.log || true
           cat artifacts/error-summary.log
