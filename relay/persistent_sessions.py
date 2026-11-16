@@ -267,6 +267,7 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
     try:
         while time.monotonic() - started < 480:
             if session.page is None or session.page.is_closed():
+                logger.error("Godot editor session %s closed before readiness: %s", session.session_id, readiness)
                 await _close_session(session)
                 return
             connector = await session.page.evaluate("() => window.__godotGithubConnectorStatus || null")
@@ -281,6 +282,11 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
                 "connector_filename": (connector or {}).get("filename", ""),
                 "elapsed_seconds": round(time.monotonic() - started, 1),
             }
+            if readiness["phase"] == "failed":
+                session.events.append({"type": "session.editor_connector_failed", "at": time.time(), **readiness})
+                logger.error("Godot editor connector failed for session %s: %s", session.session_id, readiness)
+                await _close_session(session)
+                return
             if readiness["phase"] == "started" and readiness["imported_sha"] == expected_sha and canvas_count >= 1:
                 session.created_at = time.time()
                 session.last_activity = session.created_at
@@ -290,7 +296,7 @@ async def _wait_for_editor_ready(session: PersistentSession, expected_sha: str) 
             await session.page.wait_for_timeout(5000)
         logger.error("Godot editor session %s did not become ready: %s", session.session_id, readiness)
     except Exception:
-        logger.exception("Godot editor readiness monitor failed for session %s", session.session_id)
+        logger.exception("Godot editor readiness monitor failed for session %s; last state: %s", session.session_id, readiness)
     await _close_session(session)
 
 
@@ -491,6 +497,16 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
             accept_downloads=True,
         )
         session.page = await session.context.new_page()
+        session.page.on(
+            "console",
+            lambda message: logger.warning(
+                "Godot editor console error for session %s: %s", session_id, message.text[:1000]
+            ) if message.type == "error" else None,
+        )
+        session.page.on(
+            "pageerror",
+            lambda error: logger.warning("Godot editor page error for session %s: %s", session_id, error),
+        )
         await session.page.goto(_editor_url_for(body.repository, body.branch, body.project_path, effective_sha), wait_until="domcontentloaded", timeout=90000)
 
         session.events.append({
