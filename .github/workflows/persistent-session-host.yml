@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Open and hold the shared Godot Web editor session
         env:
-          RELAY_URL: https://godot-web-ia-relay.onrender.com
+          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
           DURATION_MINUTES: ${{ inputs.duration_minutes }}
           REPOSITORY: ${{ inputs.repository }}
           BRANCH: ${{ inputs.branch }}
