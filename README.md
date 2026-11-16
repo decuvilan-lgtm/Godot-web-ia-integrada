@@ -38,13 +38,17 @@ Laboratorio independiente para que una IA pueda **entender, construir, ejecutar,
                 |
        Exportación aprobada
 
-### Responsabilidades por entorno
+### Los tres entornos Godot (no confundir)
 
-| Entorno | Responsabilidad | Estado |
+| Entorno | Responsabilidad | Qué valida |
 |---|---|---|
-| Godot Headless Linux | Autoría por archivos, importación, parseo, ejecución y pruebas técnicas | Flujo de trabajo definido; requiere un runtime compatible disponible en el entorno |
-| Godot Editor nativo | Inspección visual de escenas, nodos, Inspector, recursos y preview | Headless Session Bridge integrado en la rama de trabajo |
-| Godot Web Editor (Chromium) | Inspección del editor y revisión visual en navegador | Agente C++ integrado; actualmente de solo lectura |
+| **Godot Headless local del agente** | Desarrollo principal: crear scripts/escenas, importar, ejecutar el juego, probar y corregir desde Linux | El proyecto y su comportamiento en el entorno local del agente |
+| **Godot Headless de GitHub Actions** | Runtime independiente del runner CI, conectado al editor real para pruebas del Headless Session Bridge | El protocolo, las operaciones del puente y la integración con el editor en Actions |
+| **Godot Editor real** | Inspección visual de la copia de trabajo: escenas, nodos, Inspector, recursos y preview | La presentación visual y el estado del editor |
+
+El Headless de Actions **no es** el Headless local del agente y no sustituye su instalación. Una prueba verde en Actions no significa que el agente haya ejecutado el juego en su entorno. Del mismo modo, una ejecución local correcta no demuestra por sí sola que la integración del puente funcione en el editor real.
+
+La disponibilidad del Headless local debe comprobarse en el entorno del agente antes de declarar pruebas locales como realizadas. Si el binario no está instalado, se informa como requisito pendiente; Actions sigue siendo una validación separada.
 
 **Headless es el entorno principal de construcción.** Se crean y modifican scripts GDScript, escenas .tscn, recursos y datos directamente en la copia de trabajo. No se programa haciendo clic en el editor ni se automatizan coordenadas para colocar cada nodo.
 
