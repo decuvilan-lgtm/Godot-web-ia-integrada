@@ -1,5 +1,5 @@
 name: Persistent Godot Session Host (Workflow A)
-run-name: Godot Web host — ${{ inputs.duration_minutes }} min
+run-name: Godot Web host — ${{ inputs.duration_minutes || 10 }} min
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
       - name: Open and hold the shared Godot Web editor session
         env:
           RELAY_URL: https://godot-web-ia-relay-test.onrender.com
-          DURATION_MINUTES: ${{ inputs.duration_minutes }}
+          DURATION_MINUTES: ${{ inputs.duration_minutes || '10' }}
           REPOSITORY: ${{ inputs.repository || 'decuvilan-lgtm/Godot-web-ia-integrada' }}
           BRANCH: ${{ inputs.branch || 'test/verdant-valley-development-benchmark' }}
           PROJECT_PATH: ${{ inputs.project_path || 'examples/verdant-valley' }}
