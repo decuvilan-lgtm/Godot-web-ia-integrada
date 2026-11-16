@@ -95,7 +95,7 @@ jobs:
           /usr/bin/xdotool mousemove --sync 800 380
           /usr/bin/xdotool click --repeat 20 --delay 80 5
           sleep 1
-          ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
+          ffmpeg -nostdin -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
           kill -TERM "$editor_pid" 2>/dev/null || true
           for _ in 1 2 3 4 5; do
             kill -0 "$editor_pid" 2>/dev/null || break
@@ -107,12 +107,12 @@ jobs:
           "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy -- --playtest > artifacts/game.log 2>&1 < /dev/null &
           game_pid=$!
           trap 'kill -TERM "$game_pid" 2>/dev/null || true; sleep 2; kill -KILL "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
-          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 < /dev/null &
+          ffmpeg -nostdin -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 < /dev/null &
           capture_pid=$!
           sleep 1.2
-          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
+          ffmpeg -nostdin -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
           wait "$capture_pid"
-          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
+          ffmpeg -nostdin -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
           kill -TERM "$game_pid" 2>/dev/null || true
           for _ in 1 2 3 4 5; do
             kill -0 "$game_pid" 2>/dev/null || break
