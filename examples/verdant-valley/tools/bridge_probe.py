@@ -35,6 +35,7 @@ assert caps["result"]["adapter"]=="godot_native_editor"
 assert "capture.editor_screenshot" in caps["result"]["commands"]
 assert state["result"]["active_scene"]=="res://scenes/main.tscn",state
 assert scene["result"]["root"]["name"]=="VerdantValley",scene
+assert scene["result"]["root"]["child_count"]>35,scene
 assert any(p.endswith("player.gd") for p in resources["result"]["entries"])
 focus=request("editor.focus_inspector",{"node_path":".","main_screen":"2D"})
 shot=request("capture.editor_screenshot")
