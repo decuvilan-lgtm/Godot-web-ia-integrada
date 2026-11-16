@@ -87,7 +87,7 @@ jobs:
           export GODOT_SILENCE_ROOT_WARNING=1 GODOT PROJECT VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           mkdir -p artifacts
           xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
-          "$GODOT" --editor --path "$PROJECT" --scene res://scenes/main.tscn --resolution 1500x900 --position 20,20 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/editor.log 2>&1 &
+          "$GODOT" --editor --path "$PROJECT" --scene res://scenes/main.tscn --resolution 1500x900 --position 20,20 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy > artifacts/editor.log 2>&1 < /dev/null &
           editor_pid=$!
           trap 'kill -TERM "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true' EXIT
           BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
@@ -104,10 +104,10 @@ jobs:
           kill -KILL "$editor_pid" 2>/dev/null || true
           wait "$editor_pid" 2>/dev/null || true
           trap - EXIT
-          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy -- --playtest > artifacts/game.log 2>&1 &
+          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy -- --playtest > artifacts/game.log 2>&1 < /dev/null &
           game_pid=$!
           trap 'kill -TERM "$game_pid" 2>/dev/null || true; sleep 2; kill -KILL "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
-          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 &
+          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 < /dev/null &
           capture_pid=$!
           sleep 1.2
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
