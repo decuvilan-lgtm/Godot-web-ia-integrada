@@ -1,6 +1,15 @@
 name: Build Godot Web Editor with Built-in Agent
 
 on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - "scripts/build/patch_godot_web_agent.py"
+      - "scripts/build/smoke_test_godot_web_agent.py"
+      - "tests/test_web_agent_patcher.py"
+      - "browser-extension/page-bridge.js"
+      - "browser-extension/content.js"
   pull_request:
     branches:
       - main
