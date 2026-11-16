@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 
-RELAY_URL = "https://godot-web-ia-relay.onrender.com"
+RELAY_URL = "https://godot-web-ia-relay-test.onrender.com"
 def patch_html(html: str) -> str:
     """Apply mobile metadata and connector; validate structure, not private Godot APIs."""
     if not re.search(r"<html\b", html, flags=re.I):
