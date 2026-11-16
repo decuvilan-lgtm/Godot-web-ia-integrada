@@ -109,7 +109,7 @@ jobs:
               sid=result["session_id"]
           else:
               if not sid:
-                  matches=[s for s in sessions if s["repository"]==os.environ["REPOSITORY"]
+                  matches=[s for s in sessions if s["state"]=="open" and s["repository"]==os.environ["REPOSITORY"]
                            and s["branch"]==os.environ["BRANCH"]
                            and s["project_path"]==os.environ.get("PROJECT_PATH","")]
                   if len(matches)!=1:
@@ -145,7 +145,7 @@ jobs:
               else:
                   raise RuntimeError("Unsupported operation")
 
-          summary={"operation":op,"session_id":sid,"session_kept_open":op not in ("open",),
+          summary={"operation":op,"session_id":sid,"session_kept_open":True,
                    "result":result}
           Path("artifacts").mkdir(exist_ok=True)
           Path("artifacts/operator-result.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
