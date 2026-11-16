@@ -109,3 +109,43 @@ clients.
 - No command saves a scene or overwrites project assets automatically.
 - The bridge is an experimental QA/operator interface, not a production
   remote-control or multi-user service.
+
+
+## Coordinate-free Python operator
+
+For an operator process running on the **same machine** as the graphical editor,
+the repository includes `scripts/bridge/native_editor_client.py`. It sends
+semantic commands directly to the native addon over loopback TCP. It does not
+click, drag, type into the UI, start another editor, or expose the editor port
+to the network.
+
+Example (replace the registry path with the location of
+`user://headless_bridge.json` for your Godot user profile):
+
+```sh
+python scripts/bridge/native_editor_client.py \
+  --project /absolute/path/to/project \
+  --registry /absolute/path/to/headless_bridge.json \
+  --command editor.get_state
+
+python scripts/bridge/native_editor_client.py \
+  --project /absolute/path/to/project \
+  --registry /absolute/path/to/headless_bridge.json \
+  --command scene.get_tree
+```
+
+The client verifies the registry protocol, project fingerprint, response
+identity, and command allowlist before returning a result. Mutating commands
+remain subject to the addon's per-command validation and editor undo history;
+they are not saved automatically.
+
+**Remote A/B limitation:** this local client is not yet a remote tunnel. The
+current GitHub Actions A/B browser session runs on a hosted runner, while a
+developer's native editor and its loopback listener run on another machine.
+The runner cannot reach that listener. Do not solve this by binding the addon
+to a public interface or forwarding its TCP port. A later remote integration
+must use an authenticated outbound connection with session binding, expiry,
+replay protection, rate limits, and an auditable command queue. Until that
+transport exists, the native client is genuinely headless and coordinate-free
+when co-located with Godot, while the existing A/B web-editor session remains
+a separate browser workflow.
