@@ -1,36 +1,33 @@
-# Persistent Godot session: operator/host split
+# Persistent Godot Web session
 
-The persistent browser/editor host is the Relay service, not a GitHub Actions runner.
-The Relay owns the Playwright browser context and its editor page in `persistent_sessions.py`.
-A completed operator job does not close that context. The operator workflow is disposable and reconnects to the Relay by session ID.
+The Relay service owns one Playwright Chromium browser context and its real Godot Web editor page. The operator workflow is a short-lived client: it reconnects to the existing session, performs an operation, and exits without closing the editor.
 
 ## Workflows
 
-- `.github/workflows/persistent-session-operator.yml`: manually opens, inspects, screenshots, starts/stops the editor preview, clicks visible text, or checkpoints an existing session.
-- `.github/workflows/persistent-session-keeper.yml`: scheduled heartbeat every ten minutes. It refreshes active session idle leases and sends traffic to keep a free Render instance warm.
-- `.github/workflows/persistent-session-smoke.yml`: existing browser-worker smoke/import workflow. It is not the persistent host and should not be used as the operator.
+- `.github/workflows/persistent-session-operator.yml`: opens, inspects, screenshots, starts/stops the editor preview, clicks visible text, or checkpoints an existing session.
+- `.github/workflows/persistent-session-keeper.yml`: sends periodic heartbeats to reduce idle spin-down risk for the Relay service. It does not extend the editor session's fixed lifetime.
+- `.github/workflows/persistent-session-validation.yml`: validates workflow YAML and embedded Python clients.
 
-## Session lifecycle
+## Fixed ten-minute lifecycle
 
-1. Run the operator with `operation=open` once. Record the returned `session_id`.
-2. Run later operator jobs with that same ID (or omit it to resolve the unique matching repository/branch/project).
-3. Use `inspect` to inspect the current page, `run_game` to send F5, `stop_game` to send Escape, and `screenshot` or `complete` to persist evidence.
-4. Task completion writes an evidence ZIP to Neon Object Storage and explicitly returns `session_kept_open=true`.
-5. Close the session only by calling the existing DELETE endpoint; the operator workflow intentionally has no close action.
+1. When the Relay creates a new editor session, its ten-minute wall-clock timer starts.
+2. The session remains available to Workflow B for the full window, even if nobody interacts with it.
+3. Operator actions, screenshots, task completion, and keeper heartbeats do not reset or extend the timer.
+4. The Relay reaper checks every five seconds and closes the browser context once the ten-minute limit is reached. A command arriving after expiry receives HTTP 410.
+5. Opening the same project while its session is still alive reuses that session and reports its original expiry; it does not silently restart the timer.
+6. Once expired, a later `open` creates a new session and a new ten-minute window. A new session ID is returned.
+
+The API reports `created_at`, `expires_at`, `max_duration_seconds`, and `remaining_seconds` so operators can see the actual remaining window.
 
 ## Authentication and deployment
 
-The Relay validates GitHub OIDC claims against an explicit workflow allowlist and the configured ref. The two new workflow paths must be included in `PERSISTENT_SESSION_OIDC_ADDITIONAL_WORKFLOWS` (or the code default) and must run from the configured ref (currently `refs/heads/main`). The workflow files and Relay code are committed to the development branch first; they do not become active until the changes are reviewed and deployed to the Relay's configured branch.
+The Relay validates GitHub OIDC claims against an explicit workflow allowlist and configured ref. The operator and keeper workflow paths must be included in `PERSISTENT_SESSION_OIDC_ADDITIONAL_WORKFLOWS` (or the code default) and run from the configured ref (currently `refs/heads/main`).
 
-## Limits and honest guarantees
+The workflow and Relay changes are currently being prepared on the development branch. They do not become active until reviewed and deployed to the Relay's configured branch. The current Render Blueprint still targets `main`; this work has not been deployed.
 
-- The host is a Relay-owned Chromium browser session for the deployed Godot Web editor. It is not a native desktop Godot process or a native Vulkan runtime.
-- Session state is in-memory in the Relay process; screenshots and task bundles are persisted in Neon Object Storage.
-- Render Free may sleep or restart, and deploys/restarts destroy in-memory browser contexts. The keeper workflow reduces idle spin-down risk but cannot prevent provider restarts, scheduled-workflow delays, or deployments.
-- The Relay's idle TTL is configurable. Keep the heartbeat cadence comfortably shorter than that TTL.
-- Native Godot gameplay benchmarking remains a separate workflow until a dedicated persistent native runtime host is provisioned and tested.
+## Limits
 
-
-## Godot nativo: siguiente fase
-
-La sesión Relay descrita arriba mantiene un navegador Chromium y el editor Godot Web. No mantiene un proceso Godot Desktop. El puente nativo local está documentado en `headless/native-editor/tools/headless_bridge/README.md`; usa TCP solo en `127.0.0.1` y un watcher que reconecta al editor. Para controlarlo desde operadores remotos se requiere un anfitrión gráfico persistente y un agente local seguro. La arquitectura, requisitos y fases de implementación están en [`docs/native-godot-persistent-host.md`](native-godot-persistent-host.md). Esa integración aún no está activa: Command Center todavía no registra un dispositivo `native_editor` ni entrega órdenes nativas. No confundir la sesión Chromium con una sesión Godot Desktop.
+- The host is Chromium running the deployed Godot Web editor, not a second editor or a native desktop process.
+- Session state is held in Relay memory. A Render restart, redeploy, or process crash destroys the active browser context before its ten-minute timer finishes.
+- The keeper reduces idle spin-down risk but cannot prevent provider restarts, deployment interruptions, or scheduled-workflow delays.
+- The ten-minute guarantee is a fixed maximum lifetime measured by the Relay process clock; automatic closure can occur up to approximately five seconds after the deadline due to the reaper interval.
