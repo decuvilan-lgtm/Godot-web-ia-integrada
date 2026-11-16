@@ -31,6 +31,9 @@ class GodotWebEditorAdapterTests(unittest.TestCase):
         for action in ("editor.get_state", "editor.list_capabilities", "scene.get_tree"):
             self.assertIn(f'"{action}"', self.source)
         self.assertIn('"COMMAND_NOT_ALLOWED"', self.source)
+        self.assertIn('"scene.add_node"', self.source)
+        self.assertIn("undo_redo.create_action", self.source)
+        self.assertIn("undo_redo.commit_action()", self.source)
         self.assertIn('"INVALID_ARGUMENTS"', self.source)
         self.assertIn("if not args.is_empty():", self.source)
 
