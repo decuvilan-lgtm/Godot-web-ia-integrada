@@ -10,6 +10,7 @@ on:
       - "tests/test_web_agent_patcher.py"
       - "browser-extension/page-bridge.js"
       - "browser-extension/content.js"
+      - ".github/workflows/build-godot-web-agent-editor.yml"
   pull_request:
     branches:
       - main
