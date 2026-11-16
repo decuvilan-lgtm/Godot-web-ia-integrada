@@ -1,11 +1,14 @@
 import unittest
 from unittest.mock import patch
 import browser_command_loop
-from browser_command_loop import _bounded_duration_seconds, _fetch_new_comments, _ordered_comments, _validate
+from browser_command_loop import TRUSTED_ACTORS, _bounded_duration_seconds, _fetch_new_comments, _ordered_comments, _validate
 
 SESSION="issue-test"
 
 class BrowserCommandValidationTests(unittest.TestCase):
+    def test_operator_workflow_bot_is_trusted_for_scoped_issue_commands(self):
+        self.assertIn("github-actions[bot]", TRUSTED_ACTORS)
+
     def command(self, action, **fields):
         return {"protocol":1,"session_id":SESSION,"seq":1,"action":action,**fields}
 
