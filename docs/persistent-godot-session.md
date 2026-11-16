@@ -29,3 +29,8 @@ The Relay validates GitHub OIDC claims against an explicit workflow allowlist an
 - Render Free may sleep or restart, and deploys/restarts destroy in-memory browser contexts. The keeper workflow reduces idle spin-down risk but cannot prevent provider restarts, scheduled-workflow delays, or deployments.
 - The Relay's idle TTL is configurable. Keep the heartbeat cadence comfortably shorter than that TTL.
 - Native Godot gameplay benchmarking remains a separate workflow until a dedicated persistent native runtime host is provisioned and tested.
+
+
+## Godot nativo: siguiente fase
+
+La sesión Relay descrita arriba mantiene un navegador Chromium y el editor Godot Web. No mantiene un proceso Godot Desktop. El puente nativo local está documentado en `headless/native-editor/tools/headless_bridge/README.md`; usa TCP solo en `127.0.0.1` y un watcher que reconecta al editor. Para controlarlo desde operadores remotos se requiere un anfitrión gráfico persistente y un agente local seguro. La arquitectura, requisitos y fases de implementación están en [`docs/native-godot-persistent-host.md`](native-godot-persistent-host.md). Esa integración aún no está activa: Command Center todavía no registra un dispositivo `native_editor` ni entrega órdenes nativas. No confundir la sesión Chromium con una sesión Godot Desktop.
