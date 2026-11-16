@@ -19,6 +19,21 @@ class BrowserCommandValidationTests(unittest.TestCase):
         cmd=self.command("canvas_drag",points=[[0.1,0.2],[0.5,0.6],[0.9,0.8]],duration_ms=600)
         self.assertEqual(_validate(cmd,SESSION,0),(1,"canvas_drag"))
 
+    def test_game_preview_click_accepts_normalized_coordinates(self):
+        self.assertEqual(_validate(self.command("game_click",x=0.5,y=0.5),SESSION,0),(1,"game_click"))
+
+    def test_game_preview_input_accepts_bounded_key_hold(self):
+        cmd=self.command("game_input",key="Space",duration_ms=350)
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"game_input"))
+
+    def test_game_preview_input_rejects_unapproved_key(self):
+        with self.assertRaises(ValueError):
+            _validate(self.command("game_input",key="Alt+F4",duration_ms=350),SESSION,0)
+
+    def test_game_preview_input_rejects_unbounded_hold(self):
+        with self.assertRaises(ValueError):
+            _validate(self.command("game_input",key="Space",duration_ms=6000),SESSION,0)
+
     def test_canvas_click_rejects_out_of_bounds_coordinates(self):
         with self.assertRaises(ValueError):
             _validate(self.command("canvas_click",x=1.01,y=0.5),SESSION,0)
@@ -90,7 +105,9 @@ class BrowserCommandValidationTests(unittest.TestCase):
     def test_duration_is_clamped_to_requested_limit(self):
         self.assertEqual(_bounded_duration_seconds(180),180)
         self.assertEqual(_bounded_duration_seconds(600),600)
-        self.assertEqual(_bounded_duration_seconds(900),600)
+        self.assertEqual(_bounded_duration_seconds(900),900)
+        self.assertEqual(_bounded_duration_seconds(3600),3600)
+        self.assertEqual(_bounded_duration_seconds(4000),3600)
         self.assertEqual(_bounded_duration_seconds(-10),0)
 
     def test_duration_rejects_bool_and_non_integer_values(self):
