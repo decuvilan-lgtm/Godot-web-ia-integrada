@@ -1,0 +1,64 @@
+name: Validate persistent session workflows
+
+on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - ".github/workflows/persistent-session-operator.yml"
+      - ".github/workflows/persistent-session-keeper.yml"
+      - ".github/workflows/persistent-session-validation.yml"
+      - "relay/persistent_sessions.py"
+      - "render-relay.yaml"
+  pull_request:
+    paths:
+      - ".github/workflows/persistent-session-operator.yml"
+      - ".github/workflows/persistent-session-keeper.yml"
+      - ".github/workflows/persistent-session-validation.yml"
+      - "relay/persistent_sessions.py"
+      - "render-relay.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate workflow YAML and embedded Python clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check PyYAML==6.0.2
+          python - <<'PY'
+          from pathlib import Path
+          import re, textwrap, yaml
+
+          workflow_dir=Path(".github/workflows")
+          workflows=sorted(workflow_dir.glob("*.yml"))+sorted(workflow_dir.glob("*.yaml"))
+          for path in workflows:
+              parsed=yaml.load(path.read_text(encoding="utf-8"),Loader=yaml.BaseLoader)
+              if not isinstance(parsed,dict):
+                  raise SystemExit(f"{path}: workflow root must be a mapping")
+              print(f"YAML PASS: {path}")
+
+          for name in ("persistent-session-operator.yml","persistent-session-keeper.yml"):
+              path=workflow_dir/name
+              parsed=yaml.load(path.read_text(encoding="utf-8"),Loader=yaml.BaseLoader)
+              steps=parsed.get("jobs",{}).get("operate",{}).get("steps",[]) if name.endswith("operator.yml") else parsed.get("jobs",{}).get("heartbeat",{}).get("steps",[])
+              scripts=[]
+              for step in steps:
+                  command=step.get("run","")
+                  match=re.search(r"python3 - <<'PY'\n(.*?)\nPY",command,re.S)
+                  if match:
+                      scripts.append(textwrap.dedent(match.group(1)))
+              if len(scripts)!=1:
+                  raise SystemExit(f"{path}: expected exactly one embedded Python client, found {len(scripts)}")
+              compile(scripts[0],str(path)+"::<embedded-python>","exec")
+              print(f"EMBEDDED PYTHON PASS: {path}")
+          PY
