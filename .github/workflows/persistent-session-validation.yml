@@ -20,6 +20,7 @@ on:
       - "scripts/godot-browser-worker.py"
       - "scripts/bridge/browser_command_loop.py"
       - "scripts/bridge/test_browser_command_loop.py"
+      - "scripts/bridge/test_semantic_controller.py"
       - "scripts/bridge/native_editor_client.py"
       - "scripts/test_godot_web_editor_adapter.py"
       - "examples/verdant-valley/project.godot"
