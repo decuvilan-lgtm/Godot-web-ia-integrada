@@ -231,7 +231,7 @@ def patch_html(html: str) -> str:
 
     // Godot puede mantener Start deshabilitado mientras termina su inicialización.
     // No abortar la importación: esperar a que el botón esté listo.
-    await waitForElement("#startButton", element => !element.disabled, 90000);
+    await waitForElement("#startButton", element => !element.disabled, 240000);
     if (typeof closeWelcomeModal === "function") closeWelcomeModal(false);
     window.__godotGithubConnectorStatus = {
       ...(window.__godotGithubConnectorStatus || {}),
