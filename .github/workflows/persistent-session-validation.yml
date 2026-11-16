@@ -45,6 +45,7 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python -m compileall -q relay/persistent_sessions.py
+          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions)
           python scripts/test_patch_web_shell.py
