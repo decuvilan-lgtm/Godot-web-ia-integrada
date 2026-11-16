@@ -20,10 +20,8 @@ var playtest_mode := false
 var playtest_elapsed := 0.0
 var playtest_reported := false
 var playtest_last_trace_second := -1
-const PLAYTEST_JUMP_WINDOWS := [
-	[2.0, 2.14], [3.15, 3.29], [4.3, 4.44], [5.4, 5.54],
-	[7.05, 7.19], [8.1, 8.24], [10.65, 10.79]
-]
+var playtest_jump_index := 0
+const PLAYTEST_JUMP_TARGETS := [660.0, 940.0, 1280.0, 1580.0, 1980.0, 2280.0, 2990.0]
 
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
@@ -294,26 +292,32 @@ func _process_playtest(delta:float) -> void:
 	if trace_second != playtest_last_trace_second:
 		playtest_last_trace_second = trace_second
 		print("PLAYTEST TRACE: t=", snappedf(playtest_elapsed, 0.1), " position=", player.global_position, " velocity=", player.velocity, " grounded=", player.is_on_floor(), " health=", player.health, " shards=", player.shards, " finished=", finished)
-	if playtest_elapsed < 13.94:
-		Input.action_press("move_right")
-	else:
+	if finished:
 		Input.action_release("move_right")
+	else:
+		Input.action_press("move_right")
 	var jump_now := false
-	for window in PLAYTEST_JUMP_WINDOWS:
-		if playtest_elapsed >= window[0] and playtest_elapsed < window[1]:
-			jump_now = true
-			break
+	if playtest_jump_index < PLAYTEST_JUMP_TARGETS.size() and player.is_on_floor() and player.global_position.x >= PLAYTEST_JUMP_TARGETS[playtest_jump_index]:
+		jump_now = true
+		print("PLAYTEST ACTION: jump target=", PLAYTEST_JUMP_TARGETS[playtest_jump_index], " actual_x=", player.global_position.x)
+		playtest_jump_index += 1
 	if jump_now:
 		Input.action_press("jump")
 	else:
 		Input.action_release("jump")
-	if playtest_elapsed >= 10.1 and playtest_elapsed < 10.22:
+	var interact_now := false
+	var switches := get_tree().get_nodes_in_group("interactables")
+	if not switches.is_empty() and not switches[0].is_active and player.is_on_floor():
+		if player.global_position.distance_to(switches[0].global_position) < 80.0:
+			interact_now = true
+			print("PLAYTEST ACTION: interact with crystal at ", player.global_position)
+	if interact_now:
 		Input.action_press("interact")
 	else:
 		Input.action_release("interact")
 	if playtest_elapsed >= 14.1 and not playtest_reported:
 		playtest_reported = true
-		print("PLAYTEST RESULT: position=", player.global_position, " health=", player.health, " shards=", player.shards, " finished=", finished)
+		print("PLAYTEST RESULT: position=", player.global_position, " health=", player.health, " shards=", player.shards, " jumps=", playtest_jump_index, " finished=", finished)
 
 func _process(delta:float) -> void:
 	if Engine.is_editor_hint(): return
