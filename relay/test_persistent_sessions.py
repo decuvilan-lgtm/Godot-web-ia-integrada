@@ -310,6 +310,24 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("--js-flags=--max-old-space-size=128", fake_playwright.chromium.launch_args["args"])
 
 
+    async def test_lifetime_starts_only_after_exact_revision_and_canvas_are_ready(self):
+        expected_sha = "b" * 40
+        self.session.commit_sha = expected_sha
+        self.session.created_at = None
+        with patch.object(
+            self.page,
+            "evaluate",
+            return_value=None,
+        ) as evaluate:
+            evaluate.return_value = {"phase": "started", "commitSha": expected_sha}
+            await sessions._wait_for_editor_ready(self.session, expected_sha)
+        self.assertIsNotNone(self.session.created_at)
+        self.assertEqual(
+            self.session.events[-1]["imported_sha"],
+            expected_sha,
+        )
+        self.assertEqual(self.session.events[-1]["canvas_count"], 1)
+
     async def test_session_expiry_uses_its_configured_duration(self):
         self.session.max_duration_seconds = 60
         self.session.created_at = time.time() - 61
