@@ -83,7 +83,7 @@ jobs:
                   if ready_marker not in body:
                       continue
                   ready_payload=body.split(ready_marker,1)[1].strip()
-                  if ready_payload.startswith("\\\\n"):
+                  if ready_payload.startswith(chr(92) + "n"):
                       ready_payload=ready_payload[2:].lstrip()
                   try: marker=json.loads(ready_payload)
                   except Exception: continue
