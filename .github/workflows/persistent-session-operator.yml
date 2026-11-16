@@ -112,21 +112,24 @@ jobs:
               url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
               req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
               with urllib.request.urlopen(req,timeout=20) as r: return json.load(r)["value"]
-          token=oidc()
-          headers={"Authorization":"Bearer "+token,"Accept":"application/json"}
+          auth={"token":oidc()}
           def call(path,method="GET",payload=None,timeout=90):
               data=None if payload is None else json.dumps(payload).encode()
-              h=dict(headers)
-              if data is not None: h["Content-Type"]="application/json"
-              req=urllib.request.Request(relay+path,data=data,headers=h,method=method)
-              try:
-                  with urllib.request.urlopen(req,timeout=timeout) as r:
-                      raw=r.read()
-                      ctype=r.headers.get("Content-Type","")
-                      return json.loads(raw) if "json" in ctype else raw
-              except urllib.error.HTTPError as e:
-                  detail=e.read().decode("utf-8","replace")[:1500]
-                  raise RuntimeError(f"Relay HTTP {e.code}: {detail}") from e
+              for attempt in range(2):
+                  h={"Authorization":"Bearer "+auth["token"],"Accept":"application/json"}
+                  if data is not None: h["Content-Type"]="application/json"
+                  req=urllib.request.Request(relay+path,data=data,headers=h,method=method)
+                  try:
+                      with urllib.request.urlopen(req,timeout=timeout) as r:
+                          raw=r.read()
+                          ctype=r.headers.get("Content-Type","")
+                          return json.loads(raw) if "json" in ctype else raw
+                  except urllib.error.HTTPError as e:
+                      if e.code==401 and attempt==0:
+                          auth["token"]=oidc()
+                          continue
+                      detail=e.read().decode("utf-8","replace")[:1500]
+                      raise RuntimeError(f"Relay HTTP {e.code}: {detail}") from e
 
           op=os.environ["OPERATION"]
           sid=os.environ.get("SESSION_ID","").strip()
