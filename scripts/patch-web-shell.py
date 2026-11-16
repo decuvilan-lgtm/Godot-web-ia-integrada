@@ -237,7 +237,7 @@ def patch_html(html: str) -> str:
       ...(window.__godotGithubConnectorStatus || {}),
       phase: "starting"
     };
-    startButton.click();
+    readyStartButton.click();
     window.__godotGithubConnectorStatus = {
       ...(window.__godotGithubConnectorStatus || {}),
       phase: "started"
