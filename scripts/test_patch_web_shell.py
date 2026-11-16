@@ -24,6 +24,7 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn('id="godot-github-connector" data-version="commit-pinned-v3"', result)
         self.assertIn('button.id = "godot-connect-github"', result)
         self.assertIn("/v1/github/", result)
+        self.assertIn('const relay = "https://godot-web-ia-relay-test.onrender.com";', result)
         self.assertIn("credentials:", result)
         self.assertIn('target.searchParams.set("repo", repo)', result)
         self.assertIn('target.searchParams.set("branch", branch)', result)
