@@ -22,10 +22,13 @@ func run() -> void:
 	check(world.player.health==5,"player starts with five health points")
 	check(world.player.shards==0,"collectible counter starts at zero")
 	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
+	var pickup_events: Array[Node2D] = []
+	first_pickup.body_entered.connect(func(body:Node2D): pickup_events.append(body))
 	world.player.global_position = first_pickup.global_position
 	world.player.velocity = Vector2.ZERO
 	world.player.force_update_transform()
 	for i in 3: await physics_frame
+	print("DIAGNOSTIC PICKUP: player=", world.player.global_position, " area=", first_pickup.global_position, " area_valid=", is_instance_valid(first_pickup), " player_layer=", world.player.collision_layer, " area_mask=", first_pickup.collision_mask, " area_monitoring=", first_pickup.monitoring, " body_entered_events=", pickup_events.size(), " shards=", world.player.shards)
 	check(world.player.shards==1,"touching a pickup updates the shard counter")
 	world.player.take_damage(1)
 	check(world.player.health==4,"hazard damage reduces health")
@@ -36,10 +39,14 @@ func run() -> void:
 	world.player.interact_nearby()
 	check(switch.is_active,"crystal switch changes to active")
 	check(world.gate.get("opened"),"nearby interaction opens the exit gate")
+	var exit_portal := world.get_tree().get_nodes_in_group("exit_portal")[0] as Area2D
+	var portal_events: Array[Node2D] = []
+	exit_portal.body_entered.connect(func(body:Node2D): portal_events.append(body))
 	world.player.global_position = Vector2(3780,608)
 	world.player.velocity = Vector2.ZERO
 	world.player.force_update_transform()
 	for i in 3: await physics_frame
+	print("DIAGNOSTIC PORTAL: player=", world.player.global_position, " area=", exit_portal.global_position, " player_layer=", world.player.collision_layer, " area_mask=", exit_portal.collision_mask, " area_monitoring=", exit_portal.monitoring, " body_entered_events=", portal_events.size(), " finished=", world.finished)
 	check(world.finished,"entering the portal completes the level")
 	world.player.set_checkpoint(Vector2(1800,646))
 	world.player.health=2
