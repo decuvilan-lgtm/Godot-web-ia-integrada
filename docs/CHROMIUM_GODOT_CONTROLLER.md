@@ -44,4 +44,4 @@ La prueba manual con artefacto de compilación se ejecuta mediante .github/workf
 
 ## Limitaciones
 
-El control Web ya puede crear nodos de una lista fija; todavía no edita propiedades ni recursos. Tampoco sustituye a Godot Headless para pruebas técnicas ni al editor nativo para operaciones de edición avanzadas. La captura de vídeo del navegador muestra la sesión Chromium, no garantiza capturar una ventana de juego externa del escritorio.
+El control Web ya puede crear nodos de una lista fija; todavía no edita propiedades ni recursos. Tampoco sustituye a Godot Headless para pruebas técnicas. La edición avanzada pendiente debe incorporarse al agente Web para mantener el flujo móvil sin depender de una PC; el puente nativo es opcional y separado. La captura de vídeo del navegador muestra la sesión Chromium, no garantiza capturar una ventana de juego externa del escritorio.
