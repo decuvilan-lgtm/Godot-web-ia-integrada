@@ -1,65 +1,66 @@
-# Flujo de desarrollo: Godot Headless Linux + GitHub
+# Flujo de desarrollo: Godot Headless Linux + editor visual
 
-## Regla general
+## Principio de trabajo
 
-El desarrollo y las pruebas se realizan en el entorno Linux disponible para ChatGPT, usando el ejecutable Godot Headless ya instalado. Ese entorno no tiene salida directa a Internet. No se debe intentar resolver esta limitación creando otro relay, servidor o servicio, ni trasladando el motor Godot a GitHub.
+**Godot Headless Linux es el entorno principal de construcción y prueba.** El agente trabaja sobre una copia aislada del proyecto mediante archivos, escenas .tscn, recursos, scripts y configuraciones. No necesita manejar la interfaz para crear contenido ni depende de coordenadas, clics o automatización de ventanas para programar el juego.
 
-El proyecto es la unidad de trabajo. El motor Headless es únicamente la herramienta local para editar, importar, validar y ejecutar el proyecto.
+**Godot Editor real es la estación de inspección visual.** Se utiliza después de que Headless haya importado y validado el proyecto para comprobar cómo se ven las escenas, la jerarquía, el Inspector, los recursos y el juego en ejecución. El Headless Session Bridge permite consultar el estado del editor y solicitar operaciones acotadas desde el proceso operador; no convierte la interfaz en el mecanismo principal de autoría.
 
-## Flujo de trabajo obligatorio
+El proyecto es la unidad de trabajo. No se depende de un repositorio de juego predeterminado: el usuario elige el proyecto y el sistema crea una copia de trabajo aislada.
 
-1. **Trabajar en el proyecto local de Linux.** Abrir y modificar directamente la copia de trabajo del proyecto con las herramientas disponibles y el Godot Headless instalado.
-2. **Probar antes de publicar.** Ejecutar importación, validaciones, pruebas automatizadas y ejecuciones headless que correspondan al cambio. Corregir los errores detectados antes de actualizar GitHub, siempre que sea posible verificarlos localmente.
-3. **Identificar el conjunto real de cambios.** Determinar qué archivos fueron creados, modificados o eliminados y revisar su contenido. No reconstruir cambios de memoria ni subir archivos que no formen parte del trabajo.
-4. **Actualizar GitHub usando la conexión de GitHub de ChatGPT.** Como Linux no tiene salida a Internet, las operaciones remotas se hacen mediante la integración de GitHub disponible en ChatGPT.
-5. **Elegir la vía adecuada según el tipo de cambio.** No existe una única operación obligatoria:
-   - **Subir/crear/reemplazar archivos:** cuando el trabajo local produjo escenas, scripts, recursos, configuraciones u otros archivos que deben incorporarse al repositorio. Crear los archivos nuevos y reemplazar los existentes necesarios, conservando el resto del repositorio.
-   - **Modificar directamente el repositorio:** cuando el cambio es documental, de configuración o de código que conviene editar directamente en GitHub y no requiere transferir un archivo generado/probado localmente. Leer primero la versión actual y actualizarla sin sobrescribir cambios ajenos.
-   - **Combinar ambas vías:** cuando una tarea incluye archivos desarrollados localmente y ajustes adicionales que tienen más sentido como edición directa del repositorio.
-6. **Mantener el repositorio coherente con lo probado.** Los archivos transferidos deben ser los mismos que se trabajaron y probaron en Linux. Si se hace una modificación directa en GitHub que afecta el proyecto ejecutable, incorporar luego esa modificación a la copia local y validarla en Headless cuando sea posible.
-7. **Dejar Godot Web para la revisión visual/sincronización posterior.** Una vez que los cambios estén en GitHub, el proyecto podrá sincronizarse desde Godot Web para inspección visual. Godot Web no reemplaza las pruebas headless y una prueba headless correcta no garantiza por sí sola que la presentación web sea correcta.
+## Ciclo de desarrollo obligatorio
 
-## Qué NO se debe hacer
+1. **Seleccionar y aislar el proyecto.** Registrar origen/commit cuando exista y crear una copia de trabajo sin modificar el original.
+2. **Construir desde Linux Headless.** Crear y editar scripts GDScript, escenas .tscn, recursos, datos y configuraciones directamente en la copia de trabajo. Mantener cambios pequeños, organizados y reutilizables.
+3. **Importar y validar.** Ejecutar Godot con --headless --editor --path <proyecto> --quit para importar recursos y detectar errores de parseo/importación. Revisar el código de salida y los logs; no basta con que el proceso se haya iniciado.
+4. **Probar comportamiento.** Ejecutar pruebas automatizadas y el juego con --headless --path <proyecto> (con límite de tiempo cuando corresponda). Añadir pruebas reproducibles para mecánicas, escenas, datos y regresiones.
+5. **Revisar visualmente en el editor real.** Abrir la misma copia de trabajo en Godot Editor. Consultar la escena activa, árbol de nodos, selección, Inspector, recursos y preview mediante el puente. Capturar evidencia visual cuando ayude.
+6. **Corregir y repetir.** Si la inspección visual revela problemas, corregir los archivos desde el flujo Headless, volver a importar y ejecutar pruebas; después repetir la inspección. No resolver problemas de diseño a base de hacer clics a ciegas.
+7. **Revisar el diff.** Confirmar exactamente qué archivos cambiaron y que pertenecen al proyecto seleccionado.
+8. **Sincronizar/publicar solo con aprobación.** Reflejar los archivos probados en la rama de trabajo correspondiente. El original permanece intacto; exportar o publicar cambios requiere revisión explícita.
 
-- No subir el ejecutable, la distribución, el archivo comprimido ni el entorno completo de Godot Headless.
-- No generar un ZIP del motor o del proyecto como paso rutinario.
-- No crear un proyecto nuevo para cada consulta o cambio.
-- No intentar conectar Linux directamente a GitHub, Render u otros servicios externos: el entorno de ejecución no tiene salida a Internet.
-- No crear un relay, proxy o servicio adicional para evitar esa limitación.
-- No reemplazar todo el repositorio cuando solo hacen falta unos pocos archivos.
-- No afirmar que algo fue probado si solo se editó o se subió.
-- No sobrescribir cambios remotos sin leer la versión actual y respetar el SHA/concurrencia que exija la operación de GitHub.
+## Responsabilidades separadas
 
-## Separación de responsabilidades
-
-| Componente | Responsabilidad |
+| Componente | Responsabilidad principal |
 |---|---|
-| Godot Headless en Linux | Desarrollo local, importación, ejecución y pruebas técnicas |
-| Proyecto local | Copia de trabajo donde se hacen los cambios y se verifica su comportamiento |
-| Integración GitHub de ChatGPT | Crear, añadir o reemplazar únicamente los archivos necesarios; editar directamente archivos del repo cuando corresponda |
-| Repositorio GitHub | Historial y versión compartida de los cambios terminados |
-| Godot Web | Sincronización y revisión visual posterior del proyecto |
+| Godot Headless Linux | Autoría por archivos, importación, parseo, ejecución y pruebas automatizadas |
+| Copia de trabajo local | Fuente de verdad durante el ciclo de desarrollo |
+| Godot Editor real | Inspección visual de escenas, nodos, Inspector, recursos y preview |
+| Headless Session Bridge | Consultas y operaciones acotadas sobre la instancia del editor; nunca automatización por coordenadas |
+| Integración GitHub | Sincronizar archivos y commits de forma controlada |
+| Godot Web/Chromium | Revisión visual/sincronización web cuando sea necesario; no reemplaza Headless |
 
-## Informe al terminar cada tarea
+## Reglas de automatización
 
-El resumen debe indicar, de forma breve y verificable:
+- No usar clics, coordenadas ni automatización de ventanas como método normal para crear niveles o programar.
+- No exigir que la IA manipule manualmente cada nodo desde el editor cuando el archivo de escena puede generarse y validarse de forma determinista.
+- No asumir que un proyecto headless válido se ve bien: la revisión visual sigue siendo obligatoria para cambios de presentación.
+- No afirmar que una prueba visual se realizó si solo se ejecutó Headless.
+- No afirmar que una prueba Headless se realizó si el ejecutable no estaba disponible.
+- No instalar el puente en el proyecto original: solo en una copia aislada y cuando se necesite inspección desde el editor.
+- No ejecutar GDScript arbitrario recibido como comando del puente. La autoría de scripts ocurre como cambios de archivos en el workspace aislado y se valida con el runtime Godot.
+- No publicar automáticamente ni modificar main.
 
-- Qué se cambió.
-- Qué pruebas se ejecutaron y cuáles fueron sus resultados.
-- Qué archivos se añadieron, reemplazaron o editaron directamente en GitHub.
-- Si quedó algo pendiente de revisar en Godot Web.
-- Cualquier limitación que haya impedido probar una parte.
+## Disponibilidad del runtime
 
-**Principio clave:** primero se desarrolla y se prueba en el proyecto local con Godot Headless; después se refleja el resultado en GitHub usando la operación que corresponda. Se transfieren los archivos del proyecto cuando hace falta, no el motor Headless.
+Antes de iniciar una tarea, comprobar que existe un ejecutable Godot compatible y registrar su versión. Si no está instalado en el entorno de trabajo, no fingir que las pruebas locales se ejecutaron: preparar los cambios y usar el workflow Linux de CI como validación temporal, o detener la fase de ejecución hasta disponer del runtime. La inspección del editor real es una etapa distinta y no sustituye esa validación.
 
-## Obtener o actualizar la copia local desde GitHub
+El entorno Linux de trabajo puede no tener salida directa a Internet. En ese caso, recuperar los archivos mediante la integración GitHub de ChatGPT y no crear relays, proxies o servicios nuevos para sortear esa limitación.
 
-Como Linux no tiene salida a Internet, al iniciar el trabajo o cuando la copia local no esté disponible/no corresponda al commit actual, primero se debe recuperar el contenido del repositorio mediante la integración de GitHub de ChatGPT.
+## Pruebas y reporte
 
-Para transferencias iniciales o amplias se utiliza el workflow `.github/workflows/export-headless-workspace.yml`, que crea un artefacto temporal con los archivos versionados del repositorio. ChatGPT descarga ese artefacto mediante la conexión de GitHub, lo materializa en el entorno de trabajo y lo extrae en la carpeta local de proyectos. Se verifica el SHA-256 y el commit de origen antes de abrir el proyecto con Godot Headless.
+Cada iteración debe dejar evidencia verificable de:
+- versión y ruta del ejecutable Godot utilizado;
+- importación/parseo y código de salida;
+- pruebas ejecutadas y sus resultados;
+- logs y errores relevantes;
+- inspección visual realizada en el editor real, si se hizo;
+- diff exacto de archivos.
 
-El workflow no incluye el contenido de submódulos Git ni el motor Godot. Si una tarea necesita un submódulo o recurso externo concreto, se recupera por separado mediante una vía autorizada; no se asume que está presente en el archivo exportado.
+Al terminar, informar qué se construyó, qué se probó en Headless, qué se inspeccionó visualmente y qué limitaciones quedaron pendientes.
 
-Para cambios pequeños o archivos puntuales, no hace falta volver a empaquetar todo el repositorio: se recuperan los archivos necesarios con la integración GitHub y se actualiza solo esa parte de la copia local. La copia local debe registrar el commit del que procede y mantenerse sincronizada con los cambios directos que se hagan en GitHub.
+## Sincronización con GitHub
 
-El artefacto ZIP es solo un medio de transporte para una descarga inicial/masiva; no es el formato de trabajo ni un paquete que haya que generar en cada iteración.
+Para transferencias iniciales o amplias se puede usar .github/workflows/export-headless-workspace.yml y verificar commit/SHA-256. Para cambios pequeños, recuperar y actualizar solo los archivos necesarios. Como el entorno Linux puede no tener salida a Internet, las operaciones remotas se realizan mediante la integración GitHub disponible en ChatGPT. Nunca sobrescribir cambios remotos sin leer la versión actual y respetar SHA/concurrencia.
+
+**Principio clave:** construir y probar primero en Godot Headless; inspeccionar después en el editor real; corregir desde el workspace sin depender de clics; sincronizar únicamente los cambios revisados.
