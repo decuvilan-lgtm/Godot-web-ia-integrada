@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Read and validate the host request and select a successful custom editor build
         shell: bash
@@ -43,7 +43,7 @@ jobs:
           fields={
               "REPOSITORY": request.get("repository"),
               "BRANCH": request.get("branch"),
-              "PROJECT_PATH": request.get("project_path"),
+              "PROJECT_PATH": request.get("project_path") or "",
               "BROWSER_SESSION_ID": request.get("session_id"),
               "SESSION_ISSUE_NUMBER": str(request.get("issue_number","")),
           }
