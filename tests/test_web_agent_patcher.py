@@ -61,6 +61,8 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("undo_redo->add_do_reference(created)", source)
         self.assertIn("allowed_node_types", source)
         self.assertIn("node_name.is_valid_identifier()", source)
+        self.assertIn("argument_types_valid", source)
+        self.assertIn("Variant::STRING", source)
         self.assertIn("args: request.args || {}", source)
         self.assertIn("saved_automatically", source)
         self.assertIn("scene.add_node", source)
