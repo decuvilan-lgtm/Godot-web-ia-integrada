@@ -54,8 +54,8 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation!="inspect":
-              raise SystemExit("This verification run only permits the read-only inspect operation")
+          if operation not in {"inspect","interaction-smoke"}:
+              raise SystemExit("Unsupported operator verification operation")
 
           api="https://api.github.com"
           token=os.environ["GITHUB_TOKEN"]
@@ -132,14 +132,24 @@ jobs:
 
           nonlocal_seq=[last_seq]
           initial=send("status")
-          screenshot=send("screenshot")
-          after=send("status")
+          if operation=="inspect":
+              screenshot=send("screenshot")
+              after=send("status")
+              extra={"screenshot":screenshot}
+              commands_sent=3
+          else:
+              clicked=send("click_text",text="Scene")
+              escaped=send("press_key",key="Escape")
+              after=send("status")
+              screenshot=send("screenshot")
+              extra={"clicked_menu":clicked,"escape_key":escaped,"screenshot":screenshot}
+              commands_sent=4
           if initial.get("title")!=after.get("title") or initial.get("url")!=after.get("url"):
               raise RuntimeError("The browser page changed while Workflow B was operating it")
           if not after.get("visible_canvases"):
               raise RuntimeError("The same browser session no longer exposes a visible canvas")
-          result={"workflow":"B-operator","operation":"inspect","session_id":session_id,
-                  "issue_number":issue_number,"commands_sent":3,"screenshot":screenshot,
+          result={"workflow":"B-operator","operation":operation,"session_id":session_id,
+                  "issue_number":issue_number,"commands_sent":commands_sent,**extra,
                   "initial_status":initial,"final_status":after,"session_kept_open":True}
           Path("operator-result.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
           print(json.dumps(result,ensure_ascii=False,indent=2))
