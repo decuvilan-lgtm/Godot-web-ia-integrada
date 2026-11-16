@@ -7,7 +7,6 @@ on:
     paths:
       - ".github/workflows/persistent-session-operator.yml"
       - ".github/workflows/persistent-session-host.yml"
-      - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
       - "docs/persistent-godot-session.md"
@@ -16,7 +15,6 @@ on:
     paths:
       - ".github/workflows/persistent-session-operator.yml"
       - ".github/workflows/persistent-session-host.yml"
-      - ".github/workflows/persistent-session-keeper.yml"
       - ".github/workflows/persistent-session-validation.yml"
       - "relay/persistent_sessions.py"
       - "docs/persistent-godot-session.md"
@@ -55,7 +53,6 @@ jobs:
           workflow_jobs = {
               "persistent-session-operator.yml": "operate",
               "persistent-session-host.yml": "host",
-              "persistent-session-keeper.yml": "heartbeat",
           }
           for name, job_name in workflow_jobs.items():
               path=workflow_dir/name
