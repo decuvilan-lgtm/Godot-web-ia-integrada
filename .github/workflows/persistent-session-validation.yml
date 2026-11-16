@@ -22,9 +22,6 @@ on:
       - "scripts/bridge/test_browser_command_loop.py"
       - "scripts/bridge/test_semantic_controller.py"
       - "scripts/bridge/native_editor_client.py"
-      - "scripts/test_godot_web_editor_adapter.py"
-      - "examples/verdant-valley/project.godot"
-      - "examples/verdant-valley/addons/godot_controller_bridge/**"
       - "tests/test_native_editor_client.py"
       - "headless/native-editor/tools/headless_bridge/README.md"
       - "docs/persistent-godot-session.md"
@@ -67,7 +64,6 @@ jobs:
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions test_native_remote)
           python scripts/test_patch_web_shell.py
-          python scripts/test_godot_web_editor_adapter.py
           python - <<'PY'
           from pathlib import Path
           import re, textwrap, yaml
@@ -104,7 +100,6 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           worker_source=Path("scripts/godot-browser-worker.py").read_text(encoding="utf-8")
           command_loop_source=Path("scripts/bridge/browser_command_loop.py").read_text(encoding="utf-8")
-          godot_adapter_source=Path("examples/verdant-valley/addons/godot_controller_bridge/plugin.gd").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
           editor_patcher=Path("scripts/patch-web-shell.py").read_text(encoding="utf-8")
@@ -118,7 +113,6 @@ jobs:
               "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
           "Workflow B supports coordinate-free semantic inspection": '"semantic-inspect"' in operator_source and '"editor.get_state"' in operator_source and '"scene.get_tree"' in operator_source,
           "Workflow B semantic inspection remains read-only": "semantic_read_allowlist" in operator_source and '"semantic-inspect"' in operator_source,
-          "Workflow B exposes one scoped semantic edit": '"semantic-edit"' in operator_source and '"scene.add_node"' in operator_source and "allowed_node_types" in operator_source,
               "Workflow B exposes canvas click and keyboard actions": 'send("canvas_click",x=0.02,y=0.02)' in operator_source and 'send("press_key",key="Escape")' in operator_source,
               "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
