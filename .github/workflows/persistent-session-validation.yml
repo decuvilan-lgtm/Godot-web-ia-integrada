@@ -21,6 +21,11 @@ on:
       - "scripts/bridge/browser_command_loop.py"
       - "scripts/bridge/test_browser_command_loop.py"
       - "scripts/bridge/test_semantic_controller.py"
+      - "scripts/bridge/semantic_controller.py"
+      - "scripts/build/patch_godot_web_agent.py"
+      - "scripts/build/smoke_test_godot_web_agent.py"
+      - "tests/test_web_agent_patcher.py"
+      - "browser-extension/page-bridge.js"
       - "scripts/bridge/native_editor_client.py"
       - "tests/test_native_editor_client.py"
       - "headless/native-editor/tools/headless_bridge/README.md"
@@ -58,12 +63,14 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python -m compileall -q relay/persistent_sessions.py relay/native_remote.py
-          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/native_editor_client.py scripts/bridge/native_remote_agent.py
+          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/semantic_controller.py scripts/bridge/native_editor_client.py scripts/bridge/native_remote_agent.py scripts/build/patch_godot_web_agent.py scripts/build/smoke_test_godot_web_agent.py
           (cd scripts/bridge && python -m unittest -v test_browser_command_loop test_semantic_controller)
           python -m unittest -v tests.test_native_editor_client
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions test_native_remote)
           python scripts/test_patch_web_shell.py
+          python -m unittest discover -s tests -p "test_web_agent_patcher.py" -v
+          node --check browser-extension/page-bridge.js
           python - <<'PY'
           from pathlib import Path
           import re, textwrap, yaml
@@ -100,6 +107,7 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           worker_source=Path("scripts/godot-browser-worker.py").read_text(encoding="utf-8")
           command_loop_source=Path("scripts/bridge/browser_command_loop.py").read_text(encoding="utf-8")
+          web_agent_patcher=Path("scripts/build/patch_godot_web_agent.py").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
           editor_patcher=Path("scripts/patch-web-shell.py").read_text(encoding="utf-8")
@@ -112,7 +120,9 @@ jobs:
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
               "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
           "Workflow B supports coordinate-free semantic inspection": '"semantic-inspect"' in operator_source and '"editor.get_state"' in operator_source and '"scene.get_tree"' in operator_source,
-          "Workflow B semantic inspection remains read-only": "semantic_read_allowlist" in operator_source and '"semantic-inspect"' in operator_source,
+          "Workflow B semantic inspection is coordinate-free": "semantic_read_allowlist" in operator_source and '"semantic-inspect"' in operator_source,
+          "Workflow B supports one scoped semantic edit": '"semantic-edit"' in operator_source and '"scene.add_node"' in operator_source and "allowed_node_types" in operator_source,
+          "Built-in Godot Web agent implements undoable scene node creation": "scene.add_node" in web_agent_patcher and "EditorUndoRedoManager *undo_redo = get_undo_redo()" in web_agent_patcher and "undo_redo->add_do_reference(created)" in web_agent_patcher,
               "Workflow B exposes canvas click and keyboard actions": 'send("canvas_click",x=0.02,y=0.02)' in operator_source and 'send("press_key",key="Escape")' in operator_source,
               "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
