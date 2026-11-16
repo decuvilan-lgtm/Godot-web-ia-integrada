@@ -170,6 +170,7 @@ func _add_checkpoint(point:Vector2) -> void:
 
 func _add_exit(point:Vector2) -> void:
 	var portal := Area2D.new()
+	portal.add_to_group("exit_portal")
 	portal.position = point
 	portal.collision_layer = 0
 	portal.collision_mask = 1
@@ -266,6 +267,7 @@ func _on_hazard_entered(body:Node2D) -> void:
 		body.velocity.y = -300
 
 func _on_exit_entered(body:Node2D) -> void:
+	print("PLAYTEST EVENT: portal body_entered body=", body.name, " type=", body.get_class())
 	if body is ValleyPlayer and not finished:
 		finished = true
 		show_message("¡LO LOGRASTE!  •  Fragmentos: %d / 11" % player.shards)
