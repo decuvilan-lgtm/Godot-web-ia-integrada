@@ -86,7 +86,7 @@ jobs:
               "reuse_existing":True,
               "reimport_existing":False,
               "duration_seconds":duration*60,
-          })
+          },timeout=600)
           sid=opened["session_id"]
           expires_at=float(opened["expires_at"])
           print(json.dumps({
