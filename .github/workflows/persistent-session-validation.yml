@@ -91,7 +91,7 @@ jobs:
               "per-session duration is stored": "max_duration_seconds=body.duration_seconds" in relay_source,
               "expiry uses each session duration": "now - session.created_at >= session.max_duration_seconds" in relay_source,
               "idle cleanup cannot pre-empt configured duration": "IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS" in relay_source,
-              "Workflow B does not create or replace the browser session": "SESSION_ID" in operator_source and "issues: write" in operator_source,
+              "Workflow B does not create or replace the browser session": "open_persistent_sessions" not in operator_source and "issue_number" in operator_source,
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
               "Workflow B sends bounded commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
@@ -100,7 +100,7 @@ jobs:
               "Workflow A uses the test editor and Relay": "godot-web-ia-editor-test.onrender.com" in host_source and "godot-web-ia-relay-test.onrender.com" in host_source,
               "Workflow A imports a pinned immutable SHA": "resolve_sha()" in worker_source and "expected_sha":sha in worker_source,
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
-              "Workflow A refreshes expired OIDC identity": "if exc.code==401 and attempt==0" in worker_source,
+              "Workflow A retries transient Relay startup failures": "404,502,503,504" in worker_source,
               "Workflow B and A share the same command session ID": "session_id" in operator_source and "session_id" in command_loop_source,
               "The issue command loop trusts only the user and GitHub Actions bot": 'TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}' in command_loop_source,
 undefined
