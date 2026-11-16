@@ -72,19 +72,37 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" bash -euo pipefail <<'SCRIPT'
           "$GODOT" --editor --path "$PROJECT" --scene res://scenes/main.tscn --resolution 1500x900 --position 20,20 --rendering-method gl_compatibility --audio-driver Dummy > artifacts/editor.log 2>&1 &
           editor_pid=$!
-          trap 'kill -9 "$editor_pid" 2>/dev/null || true' EXIT
+          trap 'kill -TERM "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true' EXIT
           BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
           ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
-          kill -9 "$editor_pid" 2>/dev/null || true
+          kill -TERM "$editor_pid" 2>/dev/null || true
+          wait "$editor_pid" 2>/dev/null || true
           trap - EXIT
           "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --audio-driver Dummy -- --demo > artifacts/game.log 2>&1 &
           game_pid=$!
-          trap 'kill -9 "$game_pid" 2>/dev/null || true' EXIT
+          trap 'kill -TERM "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
           sleep 2
-          timeout 20s ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 24 -i "$DISPLAY" -t 9 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
+          timeout 20s ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 9 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
-          kill -9 "$game_pid" 2>/dev/null || true
+          kill -TERM "$game_pid" 2>/dev/null || true
+          wait "$game_pid" 2>/dev/null || true
           trap - EXIT
+          ! grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor.log artifacts/game.log
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          for name, expected in [("editor-desktop.png", (1600, 1000)), ("gameplay.png", (1280, 720)), ("editor-bridge.png", None)]:
+              path = Path("artifacts") / name
+              if not path.is_file():
+                  raise SystemExit(f"Missing screenshot: {name}")
+              with Image.open(path) as image:
+                  if expected and image.size != expected:
+                      raise SystemExit(f"{name}: expected {expected}, got {image.size}")
+                  print(f"FRAME {name}: {image.size[0]}x{image.size[1]}")
+          PY
+          ffprobe -v error -select_streams v:0 -show_entries stream=width,height -show_entries format=duration -of default=noprint_wrappers=1 artifacts/gameplay.mp4 | tee artifacts/video-metadata.txt
+          grep -q 'width=1280' artifacts/video-metadata.txt
+          grep -q 'height=720' artifacts/video-metadata.txt
           SCRIPT
 
       - name: Upload full development evidence
