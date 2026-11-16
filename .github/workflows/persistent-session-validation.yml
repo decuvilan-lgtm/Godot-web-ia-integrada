@@ -104,6 +104,7 @@ jobs:
               "Workflow A publishes its ready marker": "post_host_ready_comment" in worker_source,
               "Workflow A exports request variables safely": "chr(10)" in host_source,
               "Workflow A retries transient Relay startup failures": "404,502,503,504" in worker_source,
+              "Workflow A authenticates branch SHA lookup": '"Authorization":"Bearer "+os.environ.get("GITHUB_TOKEN","")' in worker_source,
               "A and B share the same browser session ID": "session_id" in operator_source and "session_id" in command_loop_source,
               "The issue command loop trusts the user and GitHub Actions bot": 'TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}' in command_loop_source,
               "Relay validates mouse bounds": "_validate_mouse_point" in relay_source and "outside the editor viewport" in relay_source,
