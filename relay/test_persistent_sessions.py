@@ -340,9 +340,9 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             expected_expiry,
         )
 
-    async def test_idle_expiry_is_at_least_fifteen_minutes(self):
-        self.assertGreaterEqual(sessions.IDLE_TTL, 900)
-        self.session.last_activity = time.time() - 901
+    async def test_idle_expiry_cannot_preempt_the_maximum_session_duration(self):
+        self.assertGreaterEqual(sessions.IDLE_TTL, sessions.MAX_SESSION_DURATION_SECONDS)
+        self.session.last_activity = time.time() - sessions.IDLE_TTL - 1
         with self.assertRaises(Exception):
             sessions._get_session("test-session")
 
