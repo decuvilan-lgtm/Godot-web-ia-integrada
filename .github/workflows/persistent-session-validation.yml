@@ -104,6 +104,8 @@ jobs:
               "Workflow A can pin the existing immutable revision": "REQUESTED_COMMIT_SHA" in host_source and "requested_sha" in host_source,
               "Workflow A identifies the dispatched operator run independently of commit SHA": 'run.get("created_at","")>=dispatch_started' in host_source,
               "Relay records editor connector failure detail": '"connector_error": (connector or {}).get("error", "")' in relay_source,
+              "Relay fails fast on connector failure": 'if readiness["phase"] == "failed":' in relay_source,
+              "Relay logs Godot browser page errors": '"pageerror"' in relay_source,
               "Godot editor allows a longer ZIP import": 'element => !element.disabled, 240000' in editor_patcher,
               "Relay waits for exact project import": 'readiness["imported_sha"] == expected_sha' in relay_source and "canvas_count >= 1" in relay_source,
               "Readiness monitor runs independently": 'asyncio.create_task(_wait_for_editor_ready(session, effective_sha))' in relay_source,
