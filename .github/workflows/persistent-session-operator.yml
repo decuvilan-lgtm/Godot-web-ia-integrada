@@ -28,6 +28,11 @@ on:
         required: false
         default: examples/verdant-valley
         type: string
+      duration_minutes:
+        description: Session lifetime in minutes (default 10; allowed 1-1440). Used only by open.
+        required: false
+        default: 10
+        type: number
       commit_sha:
         description: Optional immutable commit SHA for a new session
         required: false
@@ -64,6 +69,7 @@ jobs:
           BRANCH: ${{ inputs.branch }}
           PROJECT_PATH: ${{ inputs.project_path }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          DURATION_MINUTES: ${{ inputs.duration_minutes }}
           CLICK_TEXT: ${{ inputs.text }}
           TASK_ID: ${{ inputs.task_id }}
           GH_RUN_ID: ${{ github.run_id }}
@@ -100,9 +106,12 @@ jobs:
           sessions=call("/v1/persistent-sessions").get("sessions",[])
           sid=os.environ.get("SESSION_ID","").strip()
           if op=="open":
+              duration_minutes=int(float(os.environ.get("DURATION_MINUTES","10")))
+              if not 1 <= duration_minutes <= 1440:
+                  raise RuntimeError("duration_minutes must be between 1 and 1440")
               body={"repository":os.environ["REPOSITORY"],"branch":os.environ["BRANCH"],
                     "project_path":os.environ.get("PROJECT_PATH",""),"reuse_existing":True,
-                    "reimport_existing":False}
+                    "reimport_existing":False,"duration_seconds":duration_minutes*60}
               sha=os.environ.get("COMMIT_SHA","").strip()
               if sha: body["commit_sha"]=sha
               result=call("/v1/persistent-sessions","POST",body,timeout=120)
@@ -146,6 +155,8 @@ jobs:
                   raise RuntimeError("Unsupported operation")
 
           summary={"operation":op,"session_id":sid,"session_kept_open":True,
+                   "configured_duration_seconds":result.get("max_duration_seconds") if isinstance(result,dict) else None,
+                   "remaining_seconds":result.get("remaining_seconds") if isinstance(result,dict) else None,
                    "result":result}
           Path("artifacts").mkdir(exist_ok=True)
           Path("artifacts/operator-result.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
