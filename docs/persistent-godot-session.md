@@ -7,7 +7,7 @@ The Render Relay is not the browser host in this design. It supplies the project
 ## Workflow roles
 
 - **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It starts Chromium on the GitHub runner, downloads and imports the exact branch revision, checks that the Godot scene editor and canvas are visible, publishes a ready marker to the issue channel, then keeps the same browser available for B.
-- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The current verification operation performs status, screenshot, and a second status check.
+- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The current B workflow supports two verification operations: `inspect` (status, screenshot, and a second status check) and `interaction-smoke` (normalized canvas click, Escape key, screenshot, and final status check).
 - **Command loop — `scripts/bridge/browser_command_loop.py`:** runs inside A's Chromium process. It polls the issue comments, accepts only the repository owner and the GitHub Actions bot, validates command shape and sequence numbers, and executes allowlisted browser actions.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python, Relay session tests, editor patcher tests, and the A/B handoff configuration.
 
