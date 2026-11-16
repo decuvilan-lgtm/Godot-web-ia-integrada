@@ -15,7 +15,13 @@ on:
       - "scripts/godot-browser-worker.py"
       - "scripts/bridge/browser_command_loop.py"
       - "scripts/bridge/test_browser_command_loop.py"
+      - "scripts/bridge/native_editor_client.py"
+      - "tests/test_native_editor_client.py"
+      - "headless/native-editor/tools/headless_bridge/README.md"
       - "docs/persistent-godot-session.md"
+      - "scripts/bridge/native_editor_client.py"
+      - "tests/test_native_editor_client.py"
+      - "headless/native-editor/tools/headless_bridge/README.md"
       - "render-relay.yaml"
   pull_request:
     paths:
@@ -45,7 +51,8 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python -m compileall -q relay/persistent_sessions.py
-          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py
+          python -m py_compile scripts/godot-browser-worker.py scripts/bridge/browser_command_loop.py scripts/bridge/native_editor_client.py
+          python -m unittest -v tests.test_native_editor_client
           python -m pip install --disable-pip-version-check -r relay/requirements.txt
           (cd relay && python -m unittest -v test_persistent_sessions)
           python scripts/test_patch_web_shell.py
