@@ -2,6 +2,11 @@ name: Persistent Godot Session Host (Workflow A)
 run-name: Godot Web host — ${{ inputs.duration_minutes }} min
 
 on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - ".github/workflows/persistent-session-host.yml"
   workflow_dispatch:
     inputs:
       duration_minutes:
@@ -28,6 +33,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: write
 
 concurrency:
   group: godot-session-host-${{ inputs.repository }}
@@ -42,9 +48,12 @@ jobs:
         env:
           RELAY_URL: https://godot-web-ia-relay-test.onrender.com
           DURATION_MINUTES: ${{ inputs.duration_minutes }}
-          REPOSITORY: ${{ inputs.repository }}
-          BRANCH: ${{ inputs.branch }}
-          PROJECT_PATH: ${{ inputs.project_path }}
+          REPOSITORY: ${{ inputs.repository || 'decuvilan-lgtm/Godot-web-ia-integrada' }}
+          BRANCH: ${{ inputs.branch || 'test/verdant-valley-development-benchmark' }}
+          PROJECT_PATH: ${{ inputs.project_path || 'examples/verdant-valley' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -110,6 +119,51 @@ jobs:
               "expires_at":expires_at,
               "editor_state":"ready",
           },indent=2))
+
+          # End-to-end verification: dispatch Workflow B as a separate run
+          # against this exact session, then wait for its inspect operation.
+          api="https://api.github.com/repos/"+os.environ["REPOSITORY"]
+          api_headers={"Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                       "Accept":"application/vnd.github+json",
+                       "X-GitHub-Api-Version":"2022-11-28",
+                       "Content-Type":"application/json"}
+          dispatch_payload={"ref":os.environ["GITHUB_REF_NAME"],"inputs":{
+              "operation":"inspect","session_id":sid,
+              "repository":os.environ["REPOSITORY"],
+              "branch":os.environ["BRANCH"],
+              "project_path":os.environ["PROJECT_PATH"]}}
+          dispatch_req=urllib.request.Request(
+              api+"/actions/workflows/persistent-session-operator.yml/dispatches",
+              data=json.dumps(dispatch_payload).encode(),headers=api_headers,method="POST")
+          with urllib.request.urlopen(dispatch_req,timeout=30) as response:
+              if response.status not in (200,204):
+                  raise RuntimeError("Workflow B dispatch returned HTTP "+str(response.status))
+          print(json.dumps({"workflow":"A-host","workflow_b":"dispatched","operation":"inspect","session_id":sid}))
+
+          b_run_id=None
+          deadline=time.time()+240
+          while time.time()<deadline:
+              runs_req=urllib.request.Request(api+"/actions/runs?event=workflow_dispatch&branch="+
+                  urllib.parse.quote(os.environ["BRANCH"],safe="")+"&per_page=30",headers=api_headers)
+              with urllib.request.urlopen(runs_req,timeout=30) as response:
+                  runs=json.load(response).get("workflow_runs",[])
+              candidates=[run for run in runs if run.get("path")==".github/workflows/persistent-session-operator.yml"
+                          and run.get("head_sha")==os.environ["GITHUB_SHA"]]
+              if candidates:
+                  b_run_id=max(candidates,key=lambda run:run.get("created_at",""))["id"]
+                  run_req=urllib.request.Request(api+"/actions/runs/"+str(b_run_id),headers=api_headers)
+                  with urllib.request.urlopen(run_req,timeout=30) as response:
+                      b_run=json.load(response)
+                  if b_run.get("status")=="completed":
+                      if b_run.get("conclusion")!="success":
+                          raise RuntimeError("Workflow B failed: "+str(b_run.get("html_url"))+
+                                             " conclusion="+str(b_run.get("conclusion")))
+                      print(json.dumps({"workflow":"B-operator","run_id":b_run_id,"conclusion":"success",
+                                        "session_id":sid,"session_kept_open":True}))
+                      break
+              time.sleep(10)
+          else:
+              raise RuntimeError("Timed out waiting for Workflow B to inspect the existing session")
 
           # Keep this workflow alive and ping the same Relay-owned page.
           # Heartbeats keep the hosting service warm; they never extend session expiry.
