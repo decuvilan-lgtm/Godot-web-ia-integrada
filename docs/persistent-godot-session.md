@@ -13,7 +13,6 @@ The Relay service owns one Playwright Chromium browser context and its real Godo
 
 - The default is **10 minutes (600 seconds)**. This is only the starting default, not a permanent fixed duration.
 - When manually starting Workflow A, change `duration_minutes` to any whole number from **1 to 350 minutes**.
-- Workflow B's `open` operation exposes the same duration setting when it is used to create a session.
 - The selected duration is stored on that individual session. A session created for 20 minutes expires after 20 minutes, not after the default 10.
 - The timer starts after the Godot Web editor page finishes its initial navigation.
 - Workflow A stays running during the selected window and sends a heartbeat every 30 seconds. Heartbeats keep the Relay service warm but do not reset or extend the deadline.
