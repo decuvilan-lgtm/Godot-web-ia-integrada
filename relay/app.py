@@ -20,6 +20,7 @@ from project_sync import router as project_sync_router
 from github_archives import router as github_archives_router
 from persistent_sessions import router as persistent_sessions_router
 from worker_artifacts import router as worker_artifacts_router
+from native_remote import router as native_remote_router
 
 APP_VERSION = "0.3.0"
 logger = logging.getLogger("godot_web_ia_relay")
@@ -62,6 +63,7 @@ app.include_router(project_sync_router)
 app.include_router(github_archives_router)
 app.include_router(persistent_sessions_router)
 app.include_router(worker_artifacts_router)
+app.include_router(native_remote_router)
 
 @app.middleware("http")
 async def prevent_command_center_response_caching(request, call_next):
