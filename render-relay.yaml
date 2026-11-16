@@ -20,7 +20,7 @@ services:
       - key: PERSISTENT_SESSION_TOKEN
         generateValue: true
       - key: PERSISTENT_SESSION_IDLE_TTL_SECONDS
-        value: "3600"
+        value: "86400"
       - key: PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS
         value: "600"
       - key: PERSISTENT_SESSION_MAX_COUNT
