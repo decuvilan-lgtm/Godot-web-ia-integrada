@@ -1,5 +1,5 @@
 name: Persistent Godot Session Operator (Workflow B)
-run-name: Godot session ${{ inputs.operation }} — ${{ inputs.session_id || inputs.repository }}
+run-name: Godot session operator — ${{ inputs.operation || 'inspect' }}
 
 on:
   push:
@@ -117,7 +117,8 @@ jobs:
           if os.environ.get("GITHUB_EVENT_NAME")=="push":
               request_path=Path(".session-operator-request.json")
               if not request_path.is_file():
-                  raise RuntimeError("Operator request file is missing")
+                  print("No operator request file; ignoring request-file deletion event")
+                  raise SystemExit(0)
               request=json.loads(request_path.read_text(encoding="utf-8"))
               if request.get("operation")!="inspect":
                   raise RuntimeError("Push-triggered operator requests are limited to inspect")
