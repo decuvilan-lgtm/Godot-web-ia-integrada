@@ -27,6 +27,7 @@ BRIDGE_BLOCK = r'''
 #include "editor/editor_interface.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "core/object/class_db.h"
+#include "core/os/memory.h"
 #include "scene/main/node.h"
 #include "scene/main/timer.h"
 
@@ -59,7 +60,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\t\t\tconst payload = JSON.stringify({
 \t\t\t\t\tid: request.id,
 \t\t\t\t\tcommand: request.command,
-\t\t\t\t\targs: {}
+\t\t\t\t\targs: request.args || {}
 \t\t\t\t});
 \t\t\t\tif (payload.length > 16384) { reject(new Error("Agent request exceeds the 16 KiB limit")); return; }
 				const bytes = new TextEncoder().encode(payload);
