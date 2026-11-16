@@ -27,7 +27,7 @@ class GodotWebEditorAdapterTests(unittest.TestCase):
         self.assertIn('window.set("__godotEditorAgent", _adapter)', self.source)
         self.assertIn('_adapter.set("dispatch", _dispatch_callback)', self.source)
 
-    def test_only_read_only_inspection_actions_are_exposed(self):
+    def test_inspection_and_one_undoable_mutation_are_exposed(self):
         for action in ("editor.get_state", "editor.list_capabilities", "scene.get_tree"):
             self.assertIn(f'"{action}"', self.source)
         self.assertIn('"COMMAND_NOT_ALLOWED"', self.source)
@@ -35,7 +35,9 @@ class GodotWebEditorAdapterTests(unittest.TestCase):
         self.assertIn("undo_redo.create_action", self.source)
         self.assertIn("undo_redo.commit_action()", self.source)
         self.assertIn('"INVALID_ARGUMENTS"', self.source)
-        self.assertIn("if not args.is_empty():", self.source)
+        self.assertIn('and not args.is_empty():', self.source)
+        self.assertIn('if action == "scene.add_node":', self.source)
+        self.assertIn("undo_redo.add_do_reference(created)", self.source)
 
     def test_scene_tree_has_depth_and_node_limits(self):
         self.assertIn("MAX_TREE_NODES := 1000", self.source)
