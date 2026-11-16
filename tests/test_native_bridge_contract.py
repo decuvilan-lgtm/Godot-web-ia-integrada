@@ -70,7 +70,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         advertised = set(re.findall(r'"([a-z][a-z0-9_.]+)"', advertised_block))
 
         dispatch_block = plugin.split("match command:", 1)[1]
-        dispatched = set(re.findall(r'^\s*"([^"]+)":', dispatch_block, re.MULTILINE))
+        dispatched = set(re.findall(r'^\t\t"([^"]+)":', dispatch_block, re.MULTILINE))
 
         probe_block = probe.split("if not [", 1)[1].split("].has(action)", 1)[0]
         probe_allowed = set(re.findall(r'"([a-z][a-z0-9_.]+)"', probe_block))
