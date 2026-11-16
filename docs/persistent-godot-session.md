@@ -7,7 +7,7 @@ The Render Relay is not the browser host in this design. It supplies the project
 ## Workflow roles
 
 - **Workflow A — `.github/workflows/persistent-session-host.yml`:** triggered by `.session-host-request.json`. It starts Chromium on the GitHub runner, downloads and imports the exact branch revision, checks that the Godot scene editor and canvas are visible, publishes a ready marker to the issue channel, then keeps the same browser available for B.
-- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (coordinate-free state/capability/scene-tree queries) plus `semantic-edit` (currently only `scene.add_node`, with a fixed node-class allowlist, bounded names and parent paths, and Godot undo history). Node creation is not automatically saved; the project remains reviewable before saving.
+- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** triggered by `.session-operator-request.json`. It waits for A's ready marker, sends bounded commands to A's issue channel, and correlates each command with the browser's result. The B workflow supports `inspect` (status and screenshot), `interaction-smoke` (a diagnostic canvas click, Escape key, and screenshot), and `semantic-inspect` (coordinate-free state/capability/scene-tree queries)
 - **Command loop — `scripts/bridge/browser_command_loop.py`:** runs inside A's Chromium process. It polls the issue comments, accepts only the repository owner and the GitHub Actions bot, validates command shape and sequence numbers, and executes allowlisted browser actions.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python, Relay session tests, editor patcher tests, and the A/B handoff configuration.
 
@@ -60,7 +60,7 @@ To ask B to inspect the editor without sending mouse or keyboard input, the requ
 }
 ```
 
-For inspection, only the three read-only actions listed above are accepted. The request remains scoped to the active A session and test branch. A controlled node-creation request uses `operation: "semantic-edit"`, `editor_action: "scene.add_node"`, and `args` such as `{"node_type":"Node2D","node_name":"VisualRoot","parent_path":"."}`. This is the only enabled mutation for now; it creates the node through Godot’s undo manager and does not save the scene automatically.
+For inspection, only the three read-only actions listed above are accepted. The request remains scoped to the active A session and test branch.
 
 ## Godot Web EditorPlugin bridge
 
