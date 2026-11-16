@@ -13,7 +13,7 @@ TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=5
 SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.add_node":{"node_type","node_name","parent_path"}}
-ALLOWED_KEYS={"Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
+ALLOWED_KEYS={"F5","F6","F8","w","a","s","d","W","A","S","D","Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
     data=None if payload is None else json.dumps(payload).encode()
@@ -38,7 +38,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args","duration_ms"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -47,7 +47,7 @@ def _validate(command, session_id, last_seq):
     if not isinstance(seq,int) or isinstance(seq,bool) or seq<=last_seq:
         raise ValueError("Sequence must be a new increasing integer")
     action=command.get("action")
-    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","semantic_command","stop"}:
+    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","semantic_command","run_game","game_view","game_click","game_input","stop"}:
         raise ValueError("Action is not allowlisted")
     text=command.get("text")
     placeholder=command.get("placeholder")
@@ -58,7 +58,7 @@ def _validate(command, session_id, last_seq):
     seconds=command.get("seconds",1)
     if action=="wait" and (not isinstance(seconds,int) or isinstance(seconds,bool) or not 0<=seconds<=20):
         raise ValueError("wait seconds must be 0-20")
-    if action=="canvas_click" and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
+    if action in {"canvas_click","game_click"} and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
         raise ValueError("canvas_click x and y must be normalized numbers from 0 to 1")
     if action=="canvas_scroll":
         if not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
@@ -91,6 +91,12 @@ def _validate(command, session_id, last_seq):
                 raise ValueError("Node name is not a valid identifier")
             if "parent_path" in args and (args["parent_path"].startswith("/") or ".." in args["parent_path"].split("/") or "//" in args["parent_path"]):
                 raise ValueError("Parent path must stay inside the edited scene root")
+    if action in {"press_key","game_input"} and command.get("key") not in ALLOWED_KEYS:
+        raise ValueError("Key is not in the browser editing/game input allowlist")
+    if action=="game_input":
+        duration=command.get("duration_ms",150)
+        if not isinstance(duration,int) or isinstance(duration,bool) or not 50<=duration<=5000:
+            raise ValueError("game_input duration_ms must be 50-5000")
     if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
         raise ValueError("Key is not in the browser editing allowlist")
     return seq,action
@@ -109,6 +115,24 @@ def _largest_visible_canvas(page):
     if not candidates:
         raise ValueError("No visible editor canvas was found")
     return max(candidates,key=lambda item:item["width"]*item["height"])
+
+def _visible_canvases_across_frames(page):
+    result=[]
+    for frame_index, frame in enumerate(page.frames):
+        canvases=frame.locator("canvas")
+        for index in range(min(canvases.count(),8)):
+            box=canvases.nth(index).bounding_box()
+            if box and box["width"]>=100 and box["height"]>=100:
+                result.append({"frame_index":frame_index,"index":index,"x":round(box["x"],1),"y":round(box["y"],1),"width":round(box["width"],1),"height":round(box["height"],1)})
+    return result
+
+
+def _largest_game_canvas(page):
+    candidates=_visible_canvases_across_frames(page)
+    if not candidates:
+        raise ValueError("No visible game-preview canvas was found after opening the Game view")
+    return max(candidates,key=lambda item:item["width"]*item["height"])
+
 
 def _canvas_coordinates(canvas,x,y):
     return canvas["x"]+x*canvas["width"],canvas["y"]+y*canvas["height"]
@@ -189,6 +213,45 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         point=_canvas_coordinates(canvas,command["x"],command["y"])
                         page.mouse.click(*point)
                         result={"canvas_index":canvas["index"],"normalized_point":{"x":command["x"],"y":command["y"]}}
+                    elif action=="run_game":
+                        editor_tab=page.get_by_text("Editor",exact=True)
+                        if editor_tab.count():
+                            editor_tab.first.click(timeout=10000)
+                            page.wait_for_timeout(500)
+                        editor_canvas=page.locator("#editor-canvas")
+                        if editor_canvas.count() and editor_canvas.first.is_visible():
+                            editor_canvas.first.focus()
+                        else:
+                            canvas=_largest_visible_canvas(page)
+                            point=_canvas_coordinates(canvas,0.5,0.5)
+                            page.mouse.click(*point)
+                        page.keyboard.press("F6")
+                        page.wait_for_timeout(2000)
+                        result={"run_command":"F6","title":page.title(),"url":page.url}
+                    elif action=="game_view":
+                        game_tab=page.get_by_text("Game",exact=True)
+                        if game_tab.count()<1:
+                            raise ValueError("The Godot Web Game tab is not visible")
+                        game_tab.first.click(timeout=10000)
+                        page.wait_for_timeout(1200)
+                        canvases=_visible_canvases_across_frames(page)
+                        result={"game_tab_opened":True,"preview_detected":bool(canvases),"visible_game_canvases":canvases,"title":page.title()}
+                    elif action=="game_click":
+                        canvas=_largest_game_canvas(page)
+                        point=_canvas_coordinates(canvas,command["x"],command["y"])
+                        page.mouse.click(*point)
+                        result={"frame_index":canvas["frame_index"],"canvas_index":canvas["index"],"normalized_point":{"x":command["x"],"y":command["y"]}}
+                    elif action=="game_input":
+                        canvas=_largest_game_canvas(page)
+                        point=_canvas_coordinates(canvas,0.5,0.5)
+                        page.mouse.click(*point)
+                        key=command["key"]
+                        page.keyboard.down(key)
+                        try:
+                            page.wait_for_timeout(command.get("duration_ms",150))
+                        finally:
+                            page.keyboard.up(key)
+                        result={"frame_index":canvas["frame_index"],"canvas_index":canvas["index"],"key":key,"duration_ms":command.get("duration_ms",150),"released":True}
                     elif action=="canvas_drag":
                         canvas=_largest_visible_canvas(page)
                         points=[_canvas_coordinates(canvas,x,y) for x,y in command["points"]]
