@@ -36,6 +36,19 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(self.command("canvas_drag",points=[[0.5,0.5],[2,0.5]]),SESSION,0)
 
+    def test_semantic_command_accepts_read_only_editor_action(self):
+        cmd=self.command("semantic_command",editor_action="scene.get_tree",args={})
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_command_rejects_unknown_editor_action_shape(self):
+        cmd=self.command("semantic_command",editor_action="execute_script",args={"code":"print(1)"})
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_command_rejects_too_many_arguments(self):
+        cmd=self.command("semantic_command",editor_action="scene.get_tree",args={"a":1,"b":2,"c":3,"d":4,"e":5})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_press_key_uses_allowlist(self):
         self.assertEqual(_validate(self.command("press_key",key="Escape"),SESSION,0),(1,"press_key"))
         with self.assertRaises(ValueError):
