@@ -1,12 +1,7 @@
 {
-  "operation": "semantic-edit",
+  "operation": "stop",
   "session_id": "godot-web-agent-extended-20261116",
   "issue_number": 60,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark",
-  "editor_action": "scene.add_node",
-  "args": {
-    "node_type": "Node2D",
-    "node_name": "AgentVerifiedNode2"
-  }
+  "branch": "test/verdant-valley-development-benchmark"
 }
