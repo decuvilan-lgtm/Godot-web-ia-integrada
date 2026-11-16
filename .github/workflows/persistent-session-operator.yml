@@ -54,7 +54,7 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit"}:
+          if operation not in {"inspect","interaction-smoke","semantic-inspect"}:
               raise SystemExit("Unsupported operator verification operation")
 
           semantic_action=request.get("editor_action","editor.get_state")
@@ -63,18 +63,6 @@ jobs:
           if operation=="semantic-inspect":
               if semantic_action not in semantic_read_allowlist or semantic_args!={}:
                   raise SystemExit("Semantic inspection only permits read-only, zero-argument editor queries")
-          if operation=="semantic-edit":
-              if semantic_action!="scene.add_node" or not isinstance(semantic_args,dict):
-                  raise SystemExit("Semantic edit currently permits only scene.add_node")
-              if set(semantic_args)-{"node_type","node_name","parent_path"} or not {"node_type","node_name"}.issubset(semantic_args):
-                  raise SystemExit("scene.add_node needs node_type and node_name, with optional parent_path")
-              if any(not isinstance(value,str) or not value or len(value)>200 for value in semantic_args.values()):
-                  raise SystemExit("scene.add_node arguments must be bounded strings")
-              allowed_node_types={"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}
-              if semantic_args["node_type"] not in allowed_node_types or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",semantic_args["node_name"]):
-                  raise SystemExit("Node type or name is not allowlisted")
-              if "parent_path" in semantic_args and (semantic_args["parent_path"].startswith("/") or semantic_args["parent_path"] in {"",".."} or ".." in semantic_args["parent_path"].split("/") or "//" in semantic_args["parent_path"]):
-                  raise SystemExit("Parent path must be relative to the edited scene root")
           api="https://api.github.com"
           token=os.environ["GITHUB_TOKEN"]
           headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
@@ -155,7 +143,7 @@ jobs:
               after=send("status")
               extra={"screenshot":screenshot}
               commands_sent=3
-          elif operation in {"semantic-inspect","semantic-edit"}:
+          elif operation=="semantic-inspect":
               semantic=send("semantic_command",editor_action=semantic_action,args=semantic_args)
               screenshot=send("screenshot")
               after=send("status")
