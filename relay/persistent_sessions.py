@@ -53,11 +53,12 @@ OIDC_ADDITIONAL_WORKFLOWS = tuple(
 OIDC_REF = os.environ.get("PERSISTENT_SESSION_OIDC_REF", "refs/heads/main")
 _oidc_jwks_client = None
 _oidc_jwks_lock = threading.Lock()
-IDLE_TTL = max(900, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "900")))
 # Default wall-clock lifetime; each session can override this when opened.
 DEFAULT_SESSION_DURATION_SECONDS = max(60, min(86400, int(os.environ.get("PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS", "600"))))
 MIN_SESSION_DURATION_SECONDS = 60
 MAX_SESSION_DURATION_SECONDS = 86400
+# Idle cleanup must never pre-empt a session's explicitly selected maximum duration.
+IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS, int(os.environ.get("PERSISTENT_SESSION_IDLE_TTL_SECONDS", "86400")))
 MAX_SESSIONS = max(1, int(os.environ.get("PERSISTENT_SESSION_MAX_COUNT", "2")))
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_SESSION_ARTIFACT_BYTES = 24 * 1024 * 1024
