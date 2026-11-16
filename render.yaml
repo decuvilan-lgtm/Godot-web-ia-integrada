@@ -1,10 +1,10 @@
 services:
   - type: web
     runtime: static
-    name: godot-web-ia-integrada
+    name: godot-web-ia-editor-test
     buildCommand: bash scripts/build-web.sh
     staticPublishPath: ./public
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     headers:
       - path: /*
         name: Cross-Origin-Opener-Policy
