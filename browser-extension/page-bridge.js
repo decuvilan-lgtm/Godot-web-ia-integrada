@@ -1,7 +1,7 @@
 (() => {
 "use strict";
 const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1";
-const ALLOWED=new Set(["editor.get_state","editor.list_capabilities","scene.get_tree"]);
+const ALLOWED=new Set(["editor.get_state","editor.list_capabilities","scene.get_tree","scene.add_node"]);
 window.addEventListener("message",async event=>{
  if(event.source!==window||event.origin!==location.origin) return;
  const data=event.data; if(!data||data.channel!==CHANNEL||data.direction!=="request") return;
