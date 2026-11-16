@@ -67,7 +67,7 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
 
 def start_local_editor(directory):
     editor_dir=Path(directory).resolve()
-    required=("index.html","godot.editor.js","godot.editor.wasm")
+    required=("index.html","godot.editor.js","godot.editor.wasm","service.worker.js")
     missing=[name for name in required if not (editor_dir/name).is_file()]
     if missing:
         raise RuntimeError("Local custom Godot editor is incomplete: "+", ".join(missing))
