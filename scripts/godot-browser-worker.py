@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Real Godot Web browser worker running only inside a GitHub Actions job."""
 from __future__ import annotations
-import base64, hashlib, io, json, os, re, tempfile, time, urllib.parse, urllib.request, zipfile
+import base64, hashlib, io, json, os, re, shutil, tempfile, threading, time, urllib.parse, urllib.request, zipfile
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
@@ -14,6 +15,41 @@ PROJECT_PATH=os.environ.get("PROJECT_PATH",""); REQUESTED_SHA=os.environ.get("CO
 WAIT_SECONDS=int(os.environ.get("WAIT_SECONDS","10")); IMPORT_TIMEOUT=int(os.environ.get("IMPORT_TIMEOUT_SECONDS","480"))
 RUN_ID=os.environ.get("GITHUB_RUN_ID",str(int(time.time()))); ATTEMPT=os.environ.get("GITHUB_RUN_ATTEMPT","1")
 OUT=Path("artifacts"); OUT.mkdir(exist_ok=True)
+
+
+class IsolatedEditorHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
+
+
+def start_local_editor(directory):
+    editor_dir=Path(directory).resolve()
+    required=("index.html","godot.editor.js","godot.editor.wasm","service.worker.js")
+    missing=[name for name in required if not (editor_dir/name).is_file()]
+    if missing:
+        raise RuntimeError("Local custom Godot editor is incomplete: "+", ".join(missing))
+    handler=lambda *args,**kwargs:IsolatedEditorHandler(*args,directory=str(editor_dir),**kwargs)
+    server=ThreadingHTTPServer(("127.0.0.1",0),handler)
+    server.daemon_threads=True
+    thread=threading.Thread(target=server.serve_forever,daemon=True)
+    thread.start()
+    return server,thread,f"http://127.0.0.1:{server.server_port}/"
+
+
+def prepare_extension(source_dir, target_dir, origin):
+    target_dir.mkdir(parents=True,exist_ok=True)
+    for name in ("page-bridge.js","content.js"):
+        shutil.copy2(source_dir/name,target_dir/name)
+    manifest=json.loads((source_dir/"manifest.json").read_text(encoding="utf-8"))
+    match=origin+"/*"
+    manifest["host_permissions"]=[match]
+    for item in manifest.get("content_scripts",[]):
+        item["matches"]=[match]
+    (target_dir/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
 
 def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, retry_seconds=360):
     """Retry only transient startup/deploy failures while Render rolls out the API."""
@@ -111,15 +147,25 @@ def main():
     sha=resolve_sha(); session_id=os.environ.get("BROWSER_SESSION_ID", f"gha-{RUN_ID}-{ATTEMPT}"); task_id=f"github-actions-{RUN_ID}-{ATTEMPT}"
     bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
     oidc_preflight=relay_oidc_preflight()
-    url=EDITOR_URL.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
+    editor_server=None
+    local_editor_dir=os.environ.get("LOCAL_EDITOR_DIR","").strip()
+    if local_editor_dir:
+        editor_server,editor_server_thread,editor_base_url=start_local_editor(local_editor_dir)
+    else:
+        editor_base_url=EDITOR_URL
+    url=editor_base_url.rstrip("/")+"/?"+urllib.parse.urlencode({"repo":REPOSITORY,"branch":BRANCH,"path":PROJECT_PATH,"sha":sha})
     errors=[]; page_errors=[]; failed=[]; events=[]; inspection={}; readiness={"phase":"not_started","canvas_count":0}; failure=None; browser_ready=False
     shot=OUT/"editor-final.png"; started=time.time()
     # Keep the browser process alive through evidence upload; the runner owns its lifetime.
     p = sync_playwright().start()
     if True:
-        extension_dir=Path(__file__).resolve().parent.parent/"browser-extension"
-        if not (extension_dir/"manifest.json").is_file():
+        extension_source=Path(__file__).resolve().parent.parent/"browser-extension"
+        if not (extension_source/"manifest.json").is_file():
             raise FileNotFoundError("Godot Controller extension manifest is missing")
+        extension_dir=Path(tempfile.mkdtemp(prefix="godot-actions-extension-"))
+        parsed_editor_url=urllib.parse.urlparse(editor_base_url)
+        editor_origin=f"{parsed_editor_url.scheme}://{parsed_editor_url.netloc}"
+        prepare_extension(extension_source,extension_dir,editor_origin)
         profile_dir=tempfile.mkdtemp(prefix="godot-actions-chromium-")
         context=p.chromium.launch_persistent_context(
             profile_dir,
