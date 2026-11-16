@@ -1,0 +1,50 @@
+name: Validate native editor command agent
+
+on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - "relay/command_center.py"
+      - "headless/native-editor/tools/native_command_agent.py"
+      - "tests/test_native_command_agent.py"
+      - "database/migrations/008_native_editor_device.sql"
+      - ".github/workflows/native-editor-agent-validation.yml"
+  pull_request:
+    paths:
+      - "relay/command_center.py"
+      - "headless/native-editor/tools/native_command_agent.py"
+      - "tests/test_native_command_agent.py"
+      - "database/migrations/008_native_editor_device.sql"
+      - ".github/workflows/native-editor-agent-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile native agent and relay
+        run: |
+          python -m py_compile relay/command_center.py
+          python -m py_compile headless/native-editor/tools/native_command_agent.py
+      - name: Run native agent policy tests
+        run: python -m unittest tests/test_native_command_agent.py -v
+      - name: Validate migration contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          sql = Path("database/migrations/008_native_editor_device.sql").read_text()
+          required = ["native_editor", "devices_device_kind_check", "commands_target_check"]
+          missing = [item for item in required if item not in sql]
+          if missing:
+              raise SystemExit(f"Migration is missing required contract terms: {missing}")
+          print("Native editor migration contract passed")
+          PY
