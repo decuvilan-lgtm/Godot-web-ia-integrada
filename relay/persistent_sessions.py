@@ -604,6 +604,8 @@ async def run_project_lab_command(
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", command_name):
         raise HTTPException(status_code=400, detail="Invalid project-owned command name")
     session = _get_session(session_id)
+    if session.created_at is None:
+        raise HTTPException(status_code=409, detail="Godot Web project is still importing; wait until the session state is open")
     if session.page is None or session.page.is_closed():
         raise HTTPException(status_code=409, detail="Editor page is disconnected")
     profile = await load_project_profile(session.repository, session.commit_sha or session.branch, command_name=command_name)
@@ -651,6 +653,8 @@ async def run_project_lab_command(
 async def persistent_session_command(session_id: str, body: CommandRequest, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
     session = _get_session(session_id)
+    if session.created_at is None:
+        raise HTTPException(status_code=409, detail="Godot Web project is still importing; wait until the session state is open")
     if session.page is None or session.page.is_closed():
         raise HTTPException(status_code=409, detail="Editor page is disconnected")
     async with session.lock:
@@ -734,6 +738,8 @@ async def persistent_session_command(session_id: str, body: CommandRequest, auth
 async def complete_persistent_task(session_id: str, body: CompleteTaskRequest, authorization: str | None = Header(default=None)):
     await _authorize(authorization)
     session = _get_session(session_id)
+    if session.created_at is None:
+        raise HTTPException(status_code=409, detail="Godot Web project is still importing; wait until the session state is open")
     async with session.lock:
         if body.task_id in session.completed_tasks:
             return {**session.completed_tasks[body.task_id], "session_kept_open": True}
