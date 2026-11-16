@@ -26,7 +26,7 @@ func _ready() -> void:
 	_build_objects()
 	_build_player()
 	_build_hud()
-	show_message("EL SENDERO DE LAS LUCIÉRNAGAS  •  Encuentra 5 fragmentos y abre el paso")
+	show_message("EL SENDERO DE LAS LUCIÉRNAGAS  •  Sigue los fragmentos y activa el cristal")
 
 func _setup_input() -> void:
 	var actions := {"move_left":[KEY_A,KEY_LEFT],"move_right":[KEY_D,KEY_RIGHT],"jump":[KEY_SPACE,KEY_W,KEY_UP],"interact":[KEY_E,KEY_F]}
@@ -249,7 +249,7 @@ func _panel_style() -> StyleBoxFlat:
 func _update_hud(_value:int) -> void:
 	if not is_instance_valid(player) or not is_instance_valid(hearts_label): return
 	hearts_label.text = "♥ ".repeat(player.health) + "♡ ".repeat(player.MAX_HEALTH-player.health)
-	shard_label.text = "✦ %d / 5" % player.shards
+	shard_label.text = "✦ %d / 11" % player.shards
 
 func _on_switch_activated() -> void:
 	gate.call("open_gate")
