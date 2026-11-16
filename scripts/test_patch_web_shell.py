@@ -40,7 +40,7 @@ class WebShellPatchTests(unittest.TestCase):
         self.assertIn("startButton.click()", result)
         self.assertIn('get("manual") === "1"', result)
         self.assertIn("async function waitForElement(selector, predicate, timeoutMs)", result)
-        self.assertIn('await waitForElement("#startButton", element => !element.disabled, 90000)', result)
+        self.assertIn('await waitForElement("#startButton", element => !element.disabled, 240000)', result)
         self.assertIn('document.readyState === "loading"', result)
         self.assertIn('window.__godotGithubConnectorStatus', result)
         self.assertNotIn('if (!startButton || startButton.disabled) return;', result)
