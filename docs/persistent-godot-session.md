@@ -5,7 +5,7 @@ The Relay service owns one Playwright Chromium browser context and its real Godo
 ## Workflow roles
 
 - **Workflow A — `.github/workflows/persistent-session-host.yml`:** starts or reuses the Godot Web session, remains running for the selected duration, sends periodic heartbeats, and requests closure at the deadline.
-- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** connects to the session ID (or resolves the unique active project session), inspects the editor, takes screenshots, sends keyboard/click commands, runs the game, and stores task evidence. Ending B does not close the editor or stop A.
+- **Workflow B — `.github/workflows/persistent-session-operator.yml`:** connects to the session ID (or resolves the unique active project session), inspects the editor, captures screenshots, clicks by coordinates or visible text, types text, presses allowlisted keys, scrolls, drags, runs/stops the game, and stores task evidence. B cannot create or extend a session. Ending B does not close the editor or stop A.
 - **Validation — `.github/workflows/persistent-session-validation.yml`:** validates workflow YAML, embedded Python clients, and duration configuration.
 
 ## Configurable session duration
