@@ -85,7 +85,7 @@ jobs:
               "Workflow B has no session creation action": "options: [status, inspect, screenshot, run_game, stop_game, click_text, complete]" in operator_source and 'if op=="open"' not in operator_source,
               "Workflow A exposes configurable duration": "duration_minutes:" in host_source and "default: 10" in host_source,
               "Workflow A sends selected duration": '"duration_seconds":duration*60' in host_source,
-              "Workflow A keeps a host heartbeat": '"/heartbeat","POST"' in host_source,
+              "Workflow A keeps a host heartbeat": '"heartbeat","POST"' in host_source,
               "Workflow A closes its session at deadline": '"DELETE"' in host_source,
               "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
               "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
