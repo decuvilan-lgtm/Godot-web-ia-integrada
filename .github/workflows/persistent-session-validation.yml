@@ -78,6 +78,7 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
+          relay_url="https://godot-web-ia-relay-test.onrender.com"
           required_checks = {
               "configurable per-session API duration": "duration_seconds: int = Field(default=DEFAULT_SESSION_DURATION_SECONDS" in relay_source,
               "default duration is 600 seconds": '"PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS", "600"' in relay_source,
@@ -102,6 +103,8 @@ jobs:
               "Workflow A allows open request timeout": '},timeout=180)' in host_source,
               "Workflow A keeps a host heartbeat": 'heartbeat","POST' in host_source,
               "Workflow A closes its session at deadline": '"DELETE"' in host_source,
+              "Workflow A targets the deployed test Relay": relay_url in host_source and "godot-web-ia-relay.onrender.com" not in host_source,
+              "Workflow B targets the deployed test Relay": relay_url in operator_source and "godot-web-ia-relay.onrender.com" not in operator_source,
               "Relay allowlists Workflow A identity": "persistent-session-host.yml" in relay_source,
               "Render configures default only": "PERSISTENT_SESSION_DEFAULT_DURATION_SECONDS" in render_source,
               "docs explain duration can be changed": "change" in docs and "340 minutes" in docs,
