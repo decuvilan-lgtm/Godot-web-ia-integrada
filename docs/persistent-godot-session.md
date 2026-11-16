@@ -65,3 +65,7 @@ For inspection, only the three read-only actions listed above are accepted. The 
 ## Godot Web EditorPlugin bridge
 
 The project enables `addons/godot_controller_bridge` in `project.godot`. The addon runs as an `EditorPlugin` inside the actual Godot Web editor, retains its JavaScript callback references, and registers the bounded API consumed by the browser extension. Its first write operation creates a node from a fixed class allowlist through `EditorUndoRedoManager`, selects the new node, and leaves the scene unsaved for review. The bridge does not accept shell commands, arbitrary GDScript, arbitrary class names, filesystem paths, or script execution. A static CI contract test exists; live A/B validation is still required.
+
+## Godot Web EditorPlugin bridge
+
+The project enables `addons/godot_controller_bridge` in `project.godot`. The addon runs as an `EditorPlugin` inside the actual Godot Web editor, retains its JavaScript callback references, and registers the bounded API consumed by the browser extension. Its first write operation creates a node from a fixed class allowlist through `EditorUndoRedoManager`, selects the new node, and leaves the scene unsaved for review. The bridge does not accept shell commands, arbitrary GDScript, arbitrary class names, filesystem paths, or script execution. A static CI contract test exists; live A/B validation is still required.
