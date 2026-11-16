@@ -1,3 +1,4 @@
+@tool
 extends StaticBody2D
 class_name ValleyGate
 var opened := false
