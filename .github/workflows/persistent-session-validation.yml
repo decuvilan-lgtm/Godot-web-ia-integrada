@@ -95,6 +95,7 @@ jobs:
               "idle cleanup cannot pre-empt configured duration": "IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS" in relay_source,
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
               "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
+              "Workflow B exposes canvas click and keyboard actions": 'send("canvas_click",x=0.02,y=0.02)' in operator_source and 'send("press_key",key="Escape")' in operator_source,
               "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
               "Workflow A runs Chromium on the GitHub runner": "scripts/godot-browser-worker.py" in host_source and "runs-on: ubuntu-24.04" in host_source,
