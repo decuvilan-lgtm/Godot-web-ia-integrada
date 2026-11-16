@@ -107,6 +107,8 @@ jobs:
               "Relay fails fast on connector failure": 'if readiness["phase"] == "failed":' in relay_source,
               "Relay logs Godot browser page errors": '"pageerror"' in relay_source,
               "Godot editor allows a longer ZIP import": 'element => !element.disabled, 240000' in editor_patcher,
+              "Godot editor connector dispatches input and change events": 'new Event("input", { bubbles: true })' in editor_patcher,
+              "Godot editor connector records start-button failure diagnostics": 'startButtonDisabled' in editor_patcher and 'phase: "failed"' in editor_patcher,
               "Relay waits for exact project import": 'readiness["imported_sha"] == expected_sha' in relay_source and "canvas_count >= 1" in relay_source,
               "Readiness monitor runs independently": 'asyncio.create_task(_wait_for_editor_ready(session, effective_sha))' in relay_source,
               "Readiness task is retained": "_readiness_tasks.add(readiness_task)" in relay_source,
