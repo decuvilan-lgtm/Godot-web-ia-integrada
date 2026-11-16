@@ -92,16 +92,30 @@ jobs:
           trap 'kill -TERM "$editor_pid" 2>/dev/null || true; wait "$editor_pid" 2>/dev/null || true' EXIT
           BRIDGE_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts" python3 "$PROJECT/tools/bridge_probe.py" | tee artifacts/bridge-probe.log
           ffmpeg -y -loglevel error -f x11grab -video_size 1600x1000 -i "$DISPLAY" -frames:v 1 artifacts/editor-desktop.png
-          kill -TERM "$editor_pid" 2>/dev/null || true
-          wait "$editor_pid" 2>/dev/null || true
+          stop_process() {
+            local pid="$1"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in 1 2 3 4 5; do
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          stop_process "$editor_pid"
           trap - EXIT
-          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --audio-driver Dummy -- --demo > artifacts/game.log 2>&1 &
+          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --audio-driver Dummy > artifacts/game.log 2>&1 &
           game_pid=$!
-          trap 'kill -TERM "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
+          trap 'kill -TERM "$game_pid" 2>/dev/null || true; sleep 2; kill -KILL "$game_pid" 2>/dev/null || true; wait "$game_pid" 2>/dev/null || true' EXIT
           sleep 3
           game_window=$(xdotool search --onlyvisible --name "Verdant Valley" | head -n 1 || true)
-          if [ -n "$game_window" ]; then xdotool windowactivate --sync "$game_window" || true; fi
-          # Real desktop input: move, jump across hazards, activate the crystal, then continue toward the portal.
+          if [ -z "$game_window" ]; then xdotool search --onlyvisible --name "." > artifacts/x11-windows.txt || true; cat artifacts/x11-windows.txt; echo "Game window not found"; exit 1; fi
+          xdotool windowactivate --sync "$game_window"
+          xdotool windowfocus --sync "$game_window"
+          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 17 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4 > artifacts/ffmpeg-capture.log 2>&1 &
+          capture_pid=$!
+          ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay-start.png
+          # Keyboard-driven playthrough: move, jump hazards and gaps, activate the crystal, then reach the exit.
           xdotool keydown Right
           sleep 3.05; xdotool keydown space; sleep 0.14; xdotool keyup space
           sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
@@ -112,10 +126,9 @@ jobs:
           sleep 0.75; xdotool keydown space; sleep 0.14; xdotool keyup space
           sleep 1.35; xdotool keydown space; sleep 0.14; xdotool keyup space
           sleep 2.25; xdotool keyup Right
-          timeout 20s ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -framerate 30 -i "$DISPLAY" -t 2 -c:v libx264 -pix_fmt yuv420p -preset veryfast artifacts/gameplay.mp4
           ffmpeg -y -loglevel error -f x11grab -video_size 1280x720 -i "$DISPLAY" -frames:v 1 artifacts/gameplay.png
-          kill -TERM "$game_pid" 2>/dev/null || true
-          wait "$game_pid" 2>/dev/null || true
+          wait "$capture_pid"
+          stop_process "$game_pid"
           trap - EXIT
           grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor-headless.log artifacts/import.log artifacts/functional-tests.log artifacts/editor.log artifacts/game.log > artifacts/error-summary.log || true
           cat artifacts/error-summary.log
