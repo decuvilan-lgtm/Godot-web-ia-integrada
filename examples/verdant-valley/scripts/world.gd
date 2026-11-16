@@ -253,6 +253,7 @@ func _update_hud(_value:int) -> void:
 	shard_label.text = "✦ %d / 11" % player.shards
 
 func _on_switch_activated() -> void:
+	print("PLAYTEST EVENT: crystal activated; gate opening")
 	gate.call("open_gate")
 	show_message("¡El sello respondió! El arco del valle está abierto.")
 
