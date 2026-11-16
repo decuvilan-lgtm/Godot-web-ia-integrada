@@ -62,6 +62,8 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
             branch="main",
             project_path="game",
             page=self.page,
+            created_at=time.time(),
+            last_activity=time.time(),
         )
         sessions._sessions[self.session.session_id] = self.session
 
@@ -306,6 +308,37 @@ class PersistentSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Install it during the Render build", raised.exception.detail)
         self.assertIn("--renderer-process-limit=1", fake_playwright.chromium.launch_args["args"])
         self.assertIn("--js-flags=--max-old-space-size=128", fake_playwright.chromium.launch_args["args"])
+
+
+    async def test_session_expiry_uses_its_configured_duration(self):
+        self.session.max_duration_seconds = 60
+        self.session.created_at = time.time() - 61
+        with self.assertRaises(Exception) as raised:
+            sessions._get_session("test-session")
+        self.assertEqual(getattr(raised.exception, "status_code", None), 410)
+
+    async def test_operator_commands_reject_a_session_while_project_is_loading(self):
+        self.session.created_at = None
+        body = sessions.CommandRequest(command="inspect")
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+            with self.assertRaises(Exception) as raised:
+                await sessions.persistent_session_command(
+                    "test-session", body, "Bearer test-secret"
+                )
+        self.assertEqual(getattr(raised.exception, "status_code", None), 409)
+
+    async def test_heartbeat_does_not_extend_configured_expiry(self):
+        self.session.max_duration_seconds = 600
+        expected_expiry = self.session.created_at + self.session.max_duration_seconds
+        with patch.object(sessions, "SESSION_TOKEN", "test-secret"):
+            result = await sessions.persistent_session_heartbeat(
+                "test-session", "Bearer test-secret"
+            )
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            self.session.created_at + self.session.max_duration_seconds,
+            expected_expiry,
+        )
 
     async def test_idle_expiry_is_at_least_fifteen_minutes(self):
         self.assertGreaterEqual(sessions.IDLE_TTL, 900)
