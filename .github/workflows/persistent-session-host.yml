@@ -21,7 +21,7 @@ concurrency:
 jobs:
   host:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - name: Check out the test-branch controller
         uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
           COMMIT_SHA: ""
           WAIT_SECONDS: "10"
           IMPORT_TIMEOUT_SECONDS: "480"
-          BROWSER_COMMAND_WINDOW_SECONDS: "600"
+          BROWSER_COMMAND_WINDOW_SECONDS: "1800"
           SKIP_RELAY_ARTIFACT_UPLOAD: "1"
           BRIDGE_REPOSITORY: ${{ github.repository }}
           EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
