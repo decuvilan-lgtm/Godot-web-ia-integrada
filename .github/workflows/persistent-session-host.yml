@@ -88,14 +88,27 @@ jobs:
               "duration_seconds":duration*60,
           },timeout=600)
           sid=opened["session_id"]
-          expires_at=float(opened["expires_at"])
+          status=opened
+          while status.get("state") == "loading":
+              print(json.dumps({"session_id":sid,"editor_state":"loading","message":"Waiting for exact project SHA and editor canvas"}))
+              time.sleep(5)
+              try:
+                  status=call(f"/v1/persistent-sessions/{urllib.parse.quote(sid,safe='')}")
+              except RuntimeError as exc:
+                  if "HTTP 404" in str(exc) or "HTTP 410" in str(exc):
+                      raise RuntimeError("Relay closed the session because the Godot project did not become ready or the host was lost") from exc
+                  raise
+          if status.get("state") != "open" or not status.get("ready"):
+              raise RuntimeError(f"Godot editor did not become ready: {status}")
+          expires_at=float(status["expires_at"])
           print(json.dumps({
               "workflow":"A-host",
               "session_id":sid,
               "reused":opened.get("reused",False),
-              "configured_duration_seconds":opened.get("max_duration_seconds"),
-              "remaining_seconds":opened.get("remaining_seconds"),
+              "configured_duration_seconds":status.get("max_duration_seconds"),
+              "remaining_seconds":status.get("remaining_seconds"),
               "expires_at":expires_at,
+              "editor_state":"ready",
           },indent=2))
 
           # Keep this workflow alive and ping the same Relay-owned page.
