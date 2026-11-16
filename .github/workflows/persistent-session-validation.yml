@@ -91,7 +91,7 @@ jobs:
               "Relay validates mouse bounds": "_validate_mouse_point" in relay_source and "outside the editor viewport" in relay_source,
               "Workflow A exposes configurable duration": "duration_minutes:" in host_source and "default: 10" in host_source,
               "Workflow A sends selected duration": '"duration_seconds":duration*60' in host_source,
-              "Relay waits for exact project import": 'readiness["imported_sha"] == expected_sha' in relay_source and 'readiness["canvas_count"] >= 1' in relay_source,
+              "Relay waits for exact project import": 'readiness["imported_sha"] == expected_sha' in relay_source and "canvas_count >= 1" in relay_source,
               "Readiness monitor runs independently": 'asyncio.create_task(_wait_for_editor_ready(session, effective_sha))' in relay_source,
               "Operator commands require ready editor": 'session.created_at is None' in relay_source and 'still importing' in relay_source,
               "Workflow A waits for loading state": 'while status.get("state") == "loading"' in host_source,
