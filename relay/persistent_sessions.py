@@ -322,7 +322,7 @@ async def open_persistent_session(body: OpenSessionRequest, authorization: str |
     now = time.time()
     for existing in list(_sessions.values()):
         if (existing.page is None or existing.page.is_closed()
-                or now - existing.created_at >= MAX_SESSION_DURATION_SECONDS
+                or now - existing.created_at >= existing.max_duration_seconds
                 or now - existing.last_activity > IDLE_TTL):
             await _close_session(existing)
             continue
