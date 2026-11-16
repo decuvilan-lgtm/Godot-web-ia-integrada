@@ -89,7 +89,7 @@ def _validate(command, session_id, last_seq):
                 raise ValueError("Node type is not allowlisted")
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",args["node_name"]):
                 raise ValueError("Node name is not a valid identifier")
-            if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"",".."}):
+            if "parent_path" in args and (args["parent_path"].startswith("/") or args["parent_path"] in {"",".."} or ".." in args["parent_path"].split("/") or "//" in args["parent_path"]):
                 raise ValueError("Parent path must be relative to the edited scene root")
     if action=="press_key" and command.get("key") not in ALLOWED_KEYS:
         raise ValueError("Key is not in the browser editing allowlist")
