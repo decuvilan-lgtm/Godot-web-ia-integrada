@@ -133,6 +133,10 @@ jobs:
           test -f examples/verdant-valley/assets/characters/hero_run_0.png
           test -f examples/verdant-valley/assets/environment/moss.png
 
+      - name: Test generated assets are injected into the selected project ZIP layout
+        if: env.PROJECT_PATH == 'examples/verdant-valley'
+        run: python -m unittest discover -s scripts/bridge -p 'test_project_assets.py' -v
+
       - name: Cache Playwright Chromium
         uses: actions/cache@v4
         with:
