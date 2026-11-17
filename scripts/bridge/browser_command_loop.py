@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded, allowlisted command loop for an already-open Godot Web page."""
 from __future__ import annotations
-import json, os, re, time, urllib.request
+import base64, json, os, re, time, urllib.request
 from pathlib import Path
 try:
     from .semantic_controller import execute_semantic_command
@@ -38,7 +38,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args","include_image","scope"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -60,6 +60,11 @@ def _validate(command, session_id, last_seq):
         raise ValueError("wait seconds must be 0-20")
     if action in {"canvas_click","game_click"} and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
         raise ValueError("canvas_click x and y must be normalized numbers from 0 to 1")
+    if action=="screenshot":
+        include_image=command.get("include_image",False)
+        scope=command.get("scope","page")
+        if not isinstance(include_image,bool) or scope not in {"page","canvas"}:
+            raise ValueError("screenshot include_image must be boolean and scope must be page or canvas")
     if action=="canvas_scroll":
         if not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
             raise ValueError("canvas_scroll x and y must be normalized numbers from 0 to 1")
@@ -203,6 +208,25 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         path=Path(out_dir)/f"command-{seq:03d}.png"
                         page.screenshot(path=str(path),full_page=False,timeout=15000)
                         result={"screenshot":path.name,"title":page.title()}
+                        if command.get("include_image",False):
+                            scope=command.get("scope","page")
+                            if scope=="canvas":
+                                canvas=_largest_visible_canvas(page)
+                                box=canvas["box"]
+                                clip={"x":max(0,box["x"]),"y":max(0,box["y"]),"width":box["width"],"height":box["height"]}
+                                image_bytes=page.screenshot(type="jpeg",quality=24,clip=clip,timeout=15000)
+                                if len(image_bytes)>42000:
+                                    image_bytes=page.screenshot(type="jpeg",quality=10,clip=clip,timeout=15000)
+                            else:
+                                image_bytes=page.screenshot(type="jpeg",quality=12,full_page=False,timeout=15000)
+                                if len(image_bytes)>42000:
+                                    image_bytes=page.screenshot(type="jpeg",quality=5,full_page=False,timeout=15000)
+                            if len(image_bytes)<=42000:
+                                result["image_mime_type"]="image/jpeg"
+                                result["image_base64"]=base64.b64encode(image_bytes).decode("ascii")
+                                result["image_scope"]=scope
+                            else:
+                                result["inline_image_omitted"]="Compressed image exceeded the safe issue-comment size; full PNG remains in Workflow A evidence."
                     elif action=="click_text":
                         locator=page.get_by_text(command["text"],exact=True)
                         if locator.count()<1: raise ValueError("Exact visible text was not found")
