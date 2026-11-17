@@ -79,10 +79,15 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         if not isinstance(value, str) or not value or len(value) > limits[key]:
             raise ValueError(f"{key} must be a non-empty bounded string")
     allowed_types = {
-        "Node", "Node2D", "Sprite2D", "CharacterBody2D", "StaticBody2D",
-        "Area2D", "CollisionShape2D", "Camera2D", "Marker2D", "CanvasLayer",
-        "Control", "Label", "TextureRect", "AnimationPlayer", "Timer",
-        "AudioStreamPlayer2D",
+        "Node", "Node2D", "Sprite2D", "AnimatedSprite2D", "Polygon2D", "Line2D",
+        "CharacterBody2D", "RigidBody2D", "StaticBody2D", "Area2D", "CollisionShape2D",
+        "CollisionPolygon2D", "RayCast2D", "VisibleOnScreenNotifier2D", "Camera2D", "Marker2D",
+        "Path2D", "PathFollow2D", "TileMapLayer", "Parallax2D", "RemoteTransform2D",
+        "CanvasLayer", "Control", "Container", "Label", "RichTextLabel", "TextureRect",
+        "ColorRect", "Panel", "Button", "TextureButton", "ProgressBar", "VBoxContainer",
+        "HBoxContainer", "GridContainer", "MarginContainer", "CenterContainer",
+        "SubViewport", "SubViewportContainer", "AnimationPlayer", "AnimationTree", "Timer",
+        "AudioStreamPlayer", "AudioStreamPlayer2D",
     }
     if args["node_type"] not in allowed_types:
         raise ValueError("node_type is not allowlisted")
