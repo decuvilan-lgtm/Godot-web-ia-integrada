@@ -163,6 +163,10 @@ jobs:
               commands_sent=3
           elif operation in {"semantic-inspect","semantic-edit"}:
               semantic=send("semantic_command",editor_action=semantic_action,args=semantic_args)
+              if operation=="semantic-inspect" and semantic_action=="scene.inspect_node":
+                  inspected=semantic.get("result",{})
+                  if not inspected.get("name") or not isinstance(inspected.get("properties"),list) or not inspected.get("properties"):
+                      raise RuntimeError("The Inspector query returned no node identity or visible properties")
               verification=None
               if operation=="semantic-edit":
                   verification=send("semantic_command",editor_action="scene.get_tree",args={})
