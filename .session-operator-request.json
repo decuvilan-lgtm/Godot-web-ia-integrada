@@ -1,7 +1,11 @@
 {
-  "operation": "inspect",
+  "operation": "ui-action",
   "session_id": "godot-inspector-20261117",
   "issue_number": 63,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark"
+  "branch": "test/verdant-valley-development-benchmark",
+  "ui_action": "press_key",
+  "ui_args": {
+    "key": "Enter"
+  }
 }
