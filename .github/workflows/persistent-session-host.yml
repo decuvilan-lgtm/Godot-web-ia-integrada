@@ -120,6 +120,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Generate deterministic benchmark artwork for the imported project
+        if: env.PROJECT_PATH == 'examples/verdant-valley'
+        run: |
+          python -m pip install Pillow==11.1.0
+          python examples/verdant-valley/tools/generate_assets.py
+          test -f examples/verdant-valley/assets/backgrounds/sky.png
+          test -f examples/verdant-valley/assets/characters/hero_run_0.png
+          test -f examples/verdant-valley/assets/environment/moss.png
+
       - name: Cache Playwright Chromium
         uses: actions/cache@v4
         with:
