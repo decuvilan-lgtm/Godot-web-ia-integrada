@@ -43,7 +43,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tgetCapabilities() {
 \t\t\treturn {
 \t\t\t\tprotocol: 1,
-\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.add_node"]
+\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.inspect_node", "scene.add_node"]
 \t\t\t};
 \t\t},
 \t\tdispatch(request) {
@@ -116,11 +116,11 @@ EMSCRIPTEN_KEEPALIVE void godot_web_agent_submit(const char *p_json) {
 }
 }
 
-static Dictionary godot_web_agent_node_to_dict(Node *p_node, int &r_count, int p_depth) {
+static Dictionary godot_web_agent_node_to_dict(Node *p_scene_root, Node *p_node, int &r_count, int p_depth) {
 \tDictionary result;
 \tresult["name"] = p_node->get_name();
 \tresult["type"] = p_node->get_class();
-\tresult["path"] = p_node->get_path();
+\tresult["path"] = p_node == p_scene_root ? String(".") : String(p_scene_root->get_path_to(p_node));
 \tArray children;
 \tif (p_depth < 16 && r_count < 256) {
 \t\tconst int child_count = MIN(p_node->get_child_count(false), 256 - r_count);
@@ -128,7 +128,7 @@ static Dictionary godot_web_agent_node_to_dict(Node *p_node, int &r_count, int p
 \t\t\tNode *child = p_node->get_child(i, false);
 \t\t\tif (child == nullptr) continue;
 \t\t\tr_count++;
-\t\t\tchildren.push_back(godot_web_agent_node_to_dict(child, r_count, p_depth + 1));
+\t\t\tchildren.push_back(godot_web_agent_node_to_dict(p_scene_root, child, r_count, p_depth + 1));
 \t\t}
 \t}
 \tresult["children"] = children;
@@ -157,6 +157,7 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tcommands.push_back("editor.list_capabilities");
 \t\t\tcommands.push_back("editor.get_state");
 \t\t\tcommands.push_back("scene.get_tree");
+			commands.push_back("scene.inspect_node");
 			commands.push_back("scene.add_node");
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = Dictionary();
@@ -181,8 +182,56 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\t} else {
 \t\t\t\tint count = 1;
 \t\t\t\tresponse["ok"] = true;
-\t\t\t\tresponse["result"] = godot_web_agent_node_to_dict(root, count, 0);
+\t\t\t\tresponse["result"] = godot_web_agent_node_to_dict(root, root, count, 0);
 \t\t\t}
+		} else if (command == "scene.inspect_node") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", ".");
+			bool path_type_valid = path_value.get_type() == Variant::STRING;
+			String path = path_value;
+			bool path_valid = path_type_valid && args.size() == 1 && args.has("path") &&
+				!path.is_empty() && path.length() <= 200 && !path.begins_with("/") &&
+				path.find("..") == -1 && path.find("//") == -1;
+			Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+			Node *target = path_valid && root ? (path == "." ? root : root->get_node_or_null(NodePath(path))) : nullptr;
+			if (!path_valid) {
+				response["error"] = "INVALID_INSPECT_PATH";
+				response["message"] = "Node inspection requires a bounded path inside the active scene.";
+			} else if (root == nullptr) {
+				response["error"] = "NO_ACTIVE_SCENE";
+				response["message"] = "There is no active edited scene.";
+			} else if (target == nullptr || (target != root && !root->is_ancestor_of(target))) {
+				response["error"] = "NODE_NOT_FOUND";
+				response["message"] = "The requested node does not exist inside the active edited scene.";
+			} else {
+				List<PropertyInfo> property_list;
+				target->get_property_list(&property_list);
+				Array properties;
+				int property_count = 0;
+				for (const PropertyInfo &property : property_list) {
+					if (!(property.usage & PROPERTY_USAGE_EDITOR)) {
+						continue;
+					}
+					if (property_count >= 80) {
+						break;
+					}
+					Dictionary item;
+					item["name"] = String(property.name);
+					item["type"] = int(property.type);
+					item["value"] = String(target->get(property.name));
+					properties.push_back(item);
+					property_count++;
+				}
+				Dictionary result;
+				result["name"] = target->get_name();
+				result["type"] = target->get_class();
+				result["path"] = path == "." ? String(".") : String(root->get_path_to(target));
+				result["properties"] = properties;
+				result["property_count"] = property_count;
+				result["properties_truncated"] = property_count >= 80;
+				response["ok"] = true;
+				response["result"] = result;
+			}
 		} else if (command == "scene.add_node") {
 			Dictionary args = request.get("args", Dictionary());
 			Variant node_type_value = args.get("node_type", Variant());
