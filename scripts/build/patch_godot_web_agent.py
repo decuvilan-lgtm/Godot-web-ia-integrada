@@ -404,10 +404,15 @@ void WebToolsEditorPlugin::_process_requests() {
 			String parent_path = parent_path_value;
 			bool allowed_type = false;
 			static const char *allowed_node_types[] = {
-				"Node", "Node2D", "Sprite2D", "CharacterBody2D", "StaticBody2D",
-				"Area2D", "CollisionShape2D", "Camera2D", "Marker2D", "CanvasLayer",
-				"Control", "Label", "TextureRect", "AnimationPlayer", "Timer",
-				"AudioStreamPlayer2D"
+				"Node", "Node2D", "Sprite2D", "AnimatedSprite2D", "Polygon2D", "Line2D",
+				"CharacterBody2D", "RigidBody2D", "StaticBody2D", "Area2D", "CollisionShape2D",
+				"CollisionPolygon2D", "RayCast2D", "VisibleOnScreenNotifier2D", "Camera2D", "Marker2D",
+				"Path2D", "PathFollow2D", "TileMapLayer", "Parallax2D", "RemoteTransform2D",
+				"CanvasLayer", "Control", "Container", "Label", "RichTextLabel", "TextureRect",
+				"ColorRect", "Panel", "Button", "TextureButton", "ProgressBar", "VBoxContainer",
+				"HBoxContainer", "GridContainer", "MarginContainer", "CenterContainer",
+				"SubViewport", "SubViewportContainer", "AnimationPlayer", "AnimationTree", "Timer",
+				"AudioStreamPlayer", "AudioStreamPlayer2D"
 			};
 			for (const char *allowed_type_name : allowed_node_types) {
 				if (node_type == allowed_type_name) {
