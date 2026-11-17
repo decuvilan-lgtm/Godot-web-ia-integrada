@@ -92,6 +92,20 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(cmd,SESSION,0)
 
+    def test_semantic_set_property_accepts_vector_and_resource_reference(self):
+        cmd=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player","property":"position","value":[42.0,84.0]})
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+        resource=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player/Sprite2D","property":"texture","value":{"resource_path":"res://assets/hero.png"}})
+        self.assertEqual(_validate(resource,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_set_property_rejects_parent_traversal_and_unsafe_resource(self):
+        bad_path=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player/../Outside","property":"position","value":[1,2]})
+        with self.assertRaises(ValueError):
+            _validate(bad_path,SESSION,0)
+        bad_resource=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player","property":"texture","value":{"resource_path":"res://../outside.png"}})
+        with self.assertRaises(ValueError):
+            _validate(bad_resource,SESSION,0)
+
     def test_semantic_add_node_accepts_allowlisted_arguments(self):
         cmd=self.command("semantic_command",editor_action="scene.add_node",args={"node_type":"Node2D","node_name":"VisualRoot"})
         self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
