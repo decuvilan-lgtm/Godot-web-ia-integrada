@@ -182,7 +182,7 @@ jobs:
               extra={"stop":stopped}
               commands_sent=2
           elif operation=="preview-smoke":
-              launched=send("run_game")
+              launched={"already_running":True,"title":initial.get("title")} if "(DEBUG)" in str(initial.get("title","")) else send("run_game")
               game_view=send("game_view")
               if not game_view.get("preview_detected"):
                   raise RuntimeError("F6 was sent but no visible game-preview canvas was detected")
