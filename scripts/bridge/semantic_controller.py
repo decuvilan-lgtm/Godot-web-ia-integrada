@@ -86,7 +86,6 @@ def _validate(action: str, args: dict[str, Any]) -> None:
     }
     if args["node_type"] not in allowed_types:
         raise ValueError("node_type is not allowlisted")
-    import re
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}", args["node_name"]):
         raise ValueError("node_name must be a valid bounded identifier")
     if "parent_path" in args and (
