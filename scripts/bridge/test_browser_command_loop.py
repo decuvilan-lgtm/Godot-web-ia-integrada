@@ -26,6 +26,10 @@ class BrowserCommandValidationTests(unittest.TestCase):
         cmd=self.command("game_input",key="Space",duration_ms=350)
         self.assertEqual(_validate(cmd,SESSION,0),(1,"game_input"))
 
+    def test_game_preview_input_accepts_interaction_key(self):
+        cmd=self.command("game_input",key="e",duration_ms=150)
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"game_input"))
+
     def test_game_preview_input_rejects_unapproved_key(self):
         with self.assertRaises(ValueError):
             _validate(self.command("game_input",key="Alt+F4",duration_ms=350),SESSION,0)
