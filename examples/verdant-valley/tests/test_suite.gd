@@ -43,6 +43,8 @@ func run() -> void:
 	check(world.player.health==5,"restorative crystal heals two health points up to the cap")
 	check(world.get_tree().get_nodes_in_group("consumables").is_empty(),"restorative crystal is consumed once")
 	var switch := world.get_tree().get_nodes_in_group("interactables")[0]
+	world._on_exit_entered(world.player)
+	check(not world.finished,"sealed portal rejects the player before the crystal is activated")
 	world.player.global_position = switch.global_position
 	world.player.interact_nearby()
 	check(switch.is_active,"crystal switch changes to active")
@@ -82,5 +84,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [failures.size() + 19, failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [23 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
