@@ -18,6 +18,35 @@ RUN_ID=os.environ.get("GITHUB_RUN_ID",str(int(time.time()))); ATTEMPT=os.environ
 OUT=Path("artifacts"); OUT.mkdir(exist_ok=True)
 
 
+def inject_generated_project_assets(archive_bytes: bytes) -> bytes:
+    """Overlay deterministic local artwork into the GitHub project archive without committing binaries."""
+    project = Path(PROJECT_PATH)
+    asset_root = project / "assets"
+    generated = sorted(path for path in asset_root.rglob("*") if path.is_file()) if asset_root.is_dir() else []
+    if not generated:
+        return archive_bytes
+    with zipfile.ZipFile(io.BytesIO(archive_bytes), "r") as source:
+        names = set(source.namelist())
+        root = next((name.split("/", 1)[0] for name in source.namelist() if "/" in name), "")
+        if not root:
+            return archive_bytes
+        project_prefix = f"{root}/{PROJECT_PATH.strip('/')}/"
+        additions = []
+        for file_path in generated:
+            archive_path = project_prefix + file_path.relative_to(project).as_posix()
+            if archive_path not in names:
+                additions.append((archive_path, file_path))
+        if not additions:
+            return archive_bytes
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
+            for info in source.infolist():
+                target.writestr(info, source.read(info.filename))
+            for archive_path, file_path in additions:
+                target.writestr(archive_path, file_path.read_bytes())
+        return output.getvalue()
+
+
 class IsolatedEditorHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
@@ -45,6 +74,7 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
                     if len(body)>128*1024*1024:
                         self.send_error(413,"GitHub project archive exceeds 128 MiB")
                         return
+                    body=inject_generated_project_assets(body)
                     self.send_response(response.status)
                     for header in ("Content-Type","X-GitHub-Ref","X-GitHub-Commit-SHA","Cache-Control"):
                         if response.headers.get(header):
