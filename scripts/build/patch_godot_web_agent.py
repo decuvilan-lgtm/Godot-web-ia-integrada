@@ -182,7 +182,7 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 			r_error = "Resource paths must be bounded paths inside res://.";
 			return false;
 		}
-		if (p_property.class_name.is_empty() || !ClassDB::is_parent_class(p_property.class_name, "Resource")) {
+		if (p_property.class_name.is_empty() || (p_property.class_name != StringName("Resource") && !ClassDB::is_parent_class(p_property.class_name, "Resource"))) {
 			r_error = "The target property is not a Resource reference.";
 			return false;
 		}
