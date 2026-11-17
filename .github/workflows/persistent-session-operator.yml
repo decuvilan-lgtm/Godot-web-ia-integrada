@@ -201,8 +201,12 @@ jobs:
               commands_sent=5
           def stable_title(value):
               return re.sub(r"^\(\*\)\s*","",str(value or ""))
-          if stable_title(initial.get("title"))!=stable_title(after.get("title")) or initial.get("url")!=after.get("url"):
-              raise RuntimeError("The browser page or local editor URL changed while Workflow B was operating it")
+          if initial.get("url")!=after.get("url"):
+              raise RuntimeError("The local editor URL changed while Workflow B was operating it")
+          if operation not in {"preview-smoke","stop"} and stable_title(initial.get("title"))!=stable_title(after.get("title")):
+              raise RuntimeError("The editor title changed unexpectedly while Workflow B was operating it")
+          if operation=="preview-smoke" and "(DEBUG)" not in str(after.get("title","")):
+              raise RuntimeError("F6 did not leave the running game in its expected debug preview state")
           if not after.get("visible_canvases"):
               raise RuntimeError("The same browser session no longer exposes a visible canvas")
           result={"workflow":"B-operator","operation":operation,"session_id":session_id,
