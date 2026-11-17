@@ -23,9 +23,16 @@ Esta instancia trabaja sobre una copia aislada del proyecto que el usuario haya 
 
 Es otra instalación, dentro de los runners de GitHub Actions. Pertenece al pipeline de integración del repositorio.
 
-Su cometido es ejecutar pruebas automatizadas del Headless Session Bridge y comprobar que puede comunicarse con la instancia del editor real levantada en ese runner. Sirve para verificar el puente, sus protocolos, las operaciones permitidas y la integración CI.
+Su cometido es ejecutar pruebas automatizadas del Headless Session Bridge y operar semánticamente el editor real levantado en ese runner. A y B comparten la misma sesión de Chromium: A abre el proyecto y mantiene la sesión; B inspecciona y edita mediante el agente nativo integrado, sin depender de arrastres del ratón para autoría.
 
-No es el Godot Headless local del agente. No es el entorno cotidiano de autoría. No debe usarse como sustituto del desarrollo local ni asumirse que los archivos que existen en el runner están disponibles automáticamente en el workspace del agente.
+Capacidades verificadas o en aceptación:
+- Consultar estado, árbol de escena y propiedades visibles del Inspector.
+- Crear nodos de clases allowlisted y configurar propiedades tipadas mediante Undo/Redo.
+- Construir jerarquías acotadas y leer de vuelta el árbol/Inspector para verificar los cambios.
+- Ejecutar la escena con F6, abrir Game, detectar el canvas, hacer clic y enviar entradas de teclado con liberación controlada.
+- Capturar la interfaz o la vista previa durante la misma sesión.
+
+B no es un Godot Headless local ni un editor general de archivos. No sustituye el trabajo local de scripts, recursos y automatizaciones de proyecto; tampoco permite ejecutar GDScript arbitrario ni acceder libremente al filesystem. La sesión A/B se configura entre 60 y 3600 segundos (30 minutos por defecto) y puede cerrarse antes mediante `stop`.
 
 ### C. Godot Editor real — inspección visual
 
@@ -56,11 +63,13 @@ No debe ser necesario colocar manualmente cada plataforma, nodo o recurso hacien
 | Capacidad | Headless local del agente | Headless de Actions | Editor real |
 |---|---:|---:|---:|
 | Crear scripts y escenas por archivos | Principal | Solo fixtures de pruebas | No como método normal |
-| Construir niveles y contenido | Principal | No | Inspección |
+| Construir niveles y contenido por archivos | Principal | No es su método principal | Inspección |
+| Crear jerarquías de nodos y configurar propiedades | Sí | Sí, mediante operaciones semánticas acotadas | Inspección |
 | Importar y validar el proyecto | Sí | Sí, en su fixture/runner | Puede mostrar estado |
 | Ejecutar juego headless | Sí | Sí, para CI | No es su función |
 | Ejecutar pruebas automatizadas | Sí | Sí, integración | No |
-| Ver composición visual | No | No por sí solo | Principal |
+| Ejecutar y controlar la vista previa | No por sí solo | Sí, mediante Game canvas y entradas acotadas | Principal |
+| Ver composición visual | No | Sí, con capturas del editor/preview | Principal |
 | Probar Headless Session Bridge | No es su objetivo | Principal | Es el editor conectado |
 | Verificar conexión con editor real | No | Sí | Es el extremo editor |
 
@@ -70,7 +79,7 @@ No debe ser necesario colocar manualmente cada plataforma, nodo o recurso hacien
 - Nunca afirmar que el agente ha ejecutado el juego localmente basándose únicamente en un workflow de Actions.
 - Nunca asumir que el éxito de CI demuestra que el nivel se ve bien.
 - Nunca asumir que una captura del editor demuestra que las pruebas locales pasaron.
-- No usar clics, coordenadas ni automatización de ventanas como método habitual de construcción.
+- No usar clics, coordenadas ni automatización de ventanas como método habitual de construcción; la autoría usa operaciones semánticas. Las entradas normalizadas se reservan para probar el juego en ejecución.
 - No instalar el puente en el proyecto original; solo en una copia aislada.
 - No ejecutar GDScript arbitrario recibido como comando del puente.
 - No publicar automáticamente ni modificar main.
