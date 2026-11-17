@@ -73,7 +73,7 @@ No se deben usar clics o coordenadas como método normal de construcción. Un pr
 
 ## Control semántico unificado
 
-- **Godot Web:** el agente C++ forma parte del binario del editor. Expone editor.list_capabilities, editor.get_state y scene.get_tree. La extensión Chromium solo retransmite.
+- **Godot Web:** el agente C++ forma parte del binario del editor. Expone editor.list_capabilities, editor.get_state, scene.get_tree, scene.inspect_node y scene.add_node. Workflow B añade ejecución F6, detección de la vista Game y entradas de ratón/teclado al canvas de preview. La extensión Chromium solo retransmite.
 - **Editor nativo:** headless/native-editor/ contiene el complemento que escucha únicamente en 127.0.0.1, usa token aleatorio y verifica la identidad del proyecto. Ofrece inspección, edición semántica acotada, preview y captura.
 - **Godot Headless:** crea/valida contenido por archivos, importa recursos, ejecuta el juego y corre pruebas. No es un editor visual ni requiere simular clics.
 
