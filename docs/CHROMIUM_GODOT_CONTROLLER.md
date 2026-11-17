@@ -17,7 +17,7 @@ No crea otro navegador, no instala un addon en el proyecto importado y no sustit
       -> cola nativa C++ en el hilo del editor
       -> EditorInterface
 
-El adaptador procesa las solicitudes en el hilo principal del editor. Las respuestas se correlacionan por ID y los tiempos de espera se comunican explícitamente.
+El adaptador procesa las solicitudes en el hilo principal del editor. Las respuestas se correlacionan por ID y los tiempos de espera se comunican explícitamente. La sesión compartida A/B usa un único Chromium: A mantiene el navegador y B envía comandos secuenciados. La duración predeterminada es 30 minutos; el host request admite `duration_seconds` entre 60 y 3600 y B puede cerrar la sesión con `stop`.
 
 ## Comandos Web disponibles
 
