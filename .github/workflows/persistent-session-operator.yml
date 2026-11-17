@@ -98,6 +98,9 @@ jobs:
           ready_deadline=time.monotonic()+480
           comments=[]
           while time.monotonic()<ready_deadline:
+              issue_state=api_call(f"/repos/{repo}/issues/{issue_number}")
+              if issue_state.get("state")=="closed":
+                  raise RuntimeError("Workflow A closed the command channel before publishing its ready marker")
               comments=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
               if not isinstance(comments,list):
                   raise RuntimeError("Could not read the browser command channel")
