@@ -1,11 +1,7 @@
 {
-  "operation": "semantic-inspect",
+  "operation": "preview-smoke",
   "session_id": "godot-inspector-preview-20261117",
   "issue_number": 65,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark",
-  "editor_action": "scene.inspect_node",
-  "args": {
-    "path": "Player"
-  }
+  "branch": "test/verdant-valley-development-benchmark"
 }
