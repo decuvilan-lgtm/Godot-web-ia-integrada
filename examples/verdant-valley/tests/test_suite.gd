@@ -44,10 +44,12 @@ func run() -> void:
 	for i in 3: await physics_frame
 	print("DIAGNOSTIC PICKUP: player=", world.player.global_position, " area=", first_pickup.global_position, " area_valid=", is_instance_valid(first_pickup), " player_layer=", world.player.collision_layer, " area_mask=", first_pickup.collision_mask, " area_monitoring=", first_pickup.monitoring, " body_entered_events=", pickup_events.size(), " shards=", world.player.shards)
 	check(world.player.shards==1,"touching a pickup updates the shard counter")
+	world.player.invulnerable=0.0
+	world._on_hazard_entered(world.player)
+	check(world.player.health==3,"thorn bed event removes one heart")
+	check(world.player.velocity.y<0,"thorn bed launches the player away")
 	world.player.take_damage(1)
-	check(world.player.health==4,"invulnerability prevents immediate repeated damage")
-	world.player.take_damage(1)
-	check(world.player.health==4,"invulnerability prevents immediate repeated damage")
+	check(world.player.health==3,"invulnerability prevents immediate repeated damage")
 	var healing_items := world.get_tree().get_nodes_in_group("consumables")
 	check(healing_items.size()==1,"one restorative crystal is placed in the level")
 	world.player.health=3
@@ -98,5 +100,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [27 - failures.size(), failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [30 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
