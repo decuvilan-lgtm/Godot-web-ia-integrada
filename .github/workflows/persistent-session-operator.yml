@@ -19,7 +19,7 @@ concurrency:
 jobs:
   operate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 70
     steps:
       - name: Check out the test-branch request
         uses: actions/checkout@v4
