@@ -12,7 +12,7 @@ API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=5
-SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.add_node":{"node_type","node_name","parent_path"}}
+SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.inspect_node":{"path"},"scene.add_node":{"node_type","node_name","parent_path"}}
 ALLOWED_KEYS={"F5","F6","F8","w","a","s","d","W","A","S","D","Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
@@ -38,7 +38,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args","duration_ms"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -80,6 +80,12 @@ def _validate(command, session_id, last_seq):
         args=command.get("args",{})
         if editor_action not in SEMANTIC_ACTIONS or not isinstance(args,dict) or set(args)-SEMANTIC_ACTIONS[editor_action]:
             raise ValueError("semantic_command arguments do not match the action allowlist")
+        if editor_action=="scene.inspect_node":
+            path=args.get("path")
+            if set(args)!={"path"} or not isinstance(path,str) or not path or len(path)>200:
+                raise ValueError("scene.inspect_node requires one bounded relative path")
+            if path.startswith("/") or ".." in path.split("/") or "//" in path:
+                raise ValueError("scene.inspect_node path must stay inside the active scene root")
         if editor_action=="scene.add_node":
             if not {"node_type","node_name"}.issubset(args):
                 raise ValueError("scene.add_node requires node_type and node_name")
