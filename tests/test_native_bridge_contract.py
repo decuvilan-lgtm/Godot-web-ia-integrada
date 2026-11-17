@@ -16,6 +16,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("adapter.dispatch", bridge)
         self.assertNotIn("adapter.execute", bridge)
         self.assertIn('"scene.get_tree"', bridge)
+        self.assertIn('"scene.set_property"', bridge)
 
     def test_clean_build_smoke_rejects_temporary_instrumentation(self):
         smoke = (ROOT / "scripts" / "build" / "smoke_test_godot_web_agent.py").read_text(encoding="utf-8")
@@ -33,6 +34,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn('"editor.list_capabilities"', controller)
         self.assertIn('"editor.get_state"', controller)
         self.assertIn('"scene.get_tree"', controller)
+        self.assertIn('"scene.set_property"', controller)
         self.assertNotIn('"scene.open"', controller)
         self.assertNotIn('"editor.open_panel"', controller)
 
