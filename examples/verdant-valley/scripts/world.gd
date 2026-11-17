@@ -25,7 +25,7 @@ var playtest_reported := false
 var playtest_last_trace_second := -1
 var playtest_jump_index := 0
 var playtest_jump_hold := 0.0
-const PLAYTEST_JUMP_TARGETS := [680.0, 980.0, 1600.0, 1980.0, 2970.0, 3300.0]
+const PLAYTEST_JUMP_TARGETS := [680.0, 940.0, 1570.0, 1940.0, 2930.0, 3250.0]
 
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
@@ -59,9 +59,9 @@ func _build_backdrop() -> void:
 		add_child(sprite)
 
 func _build_terrain() -> void:
-	for data in [[0,650,720,140,"moss"],[760,650,380,140,"moss"],[1210,650,520,140,"moss"],[1780,650,430,140,"moss"],[2230,650,770,140,"moss"],[3060,650,840,140,"moss"],[420,520,170,28,"stone"],[900,505,170,28,"stone"],[1130,430,190,28,"stone"],[1480,520,190,28,"stone"],[1900,500,180,28,"stone"],[2150,420,190,28,"stone"],[2500,520,170,28,"stone"],[2790,455,170,28,"stone"],[3250,510,180,28,"stone"],[3500,430,200,28,"stone"]]:
+	for data in [[0,650,720,140,"moss"],[760,650,380,140,"moss"],[1210,650,520,140,"moss"],[1780,650,430,140,"moss"],[2220,650,780,140,"moss"],[3060,650,840,140,"moss"],[420,520,170,28,"stone"],[900,505,170,28,"stone"],[1130,430,190,28,"stone"],[1480,520,190,28,"stone"],[1900,500,180,28,"stone"],[2150,420,190,28,"stone"],[2500,520,170,28,"stone"],[2790,455,170,28,"stone"],[3250,510,180,28,"stone"],[3500,430,200,28,"stone"]]:
 		_add_platform(data[0],data[1],data[2],data[3],data[4])
-	for data in [[1030,96],[1650,100],[2040,110],[3350,110]]:
+	for data in [[1060,96],[1670,100],[2070,110],[3350,110]]:
 		_add_hazard(data[0],650,data[1])
 
 func _add_platform(x:float,y:float,w:float,h:float,texture_name:String) -> void:
@@ -316,7 +316,7 @@ func _process_playtest(delta:float) -> void:
 		print("PLAYTEST ACTION: jump target=", PLAYTEST_JUMP_TARGETS[playtest_jump_index], " actual_x=", player.global_position.x)
 		playtest_jump_index += 1
 	if jump_now:
-		playtest_jump_hold = 0.72
+		playtest_jump_hold = 0.28 if playtest_jump_index == 1 else 0.9
 	if playtest_jump_hold > 0.0:
 		Input.action_press("jump")
 		playtest_jump_hold = maxf(0.0, playtest_jump_hold - delta)
