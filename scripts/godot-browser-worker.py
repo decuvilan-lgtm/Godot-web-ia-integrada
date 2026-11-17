@@ -41,11 +41,23 @@ def inject_generated_project_assets(archive_bytes: bytes) -> bytes:
         if not additions:
             print(f"PROJECT ASSET OVERLAY: archive already contains generated assets for {PROJECT_PATH}")
             return archive_bytes
-        print(f"PROJECT ASSET OVERLAY: injecting {len(additions)} generated files for {PROJECT_PATH}")
+        directory_entries = set()
+        for archive_path, _file_path in additions:
+            parent = archive_path.rsplit("/", 1)[0]
+            while parent:
+                entry = parent + "/"
+                if entry not in names:
+                    directory_entries.add(entry)
+                if "/" not in parent:
+                    break
+                parent = parent.rsplit("/", 1)[0]
+        print(f"PROJECT ASSET OVERLAY: injecting {len(additions)} generated files and {len(directory_entries)} directories for {PROJECT_PATH}")
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
             for info in source.infolist():
                 target.writestr(info, source.read(info.filename))
+            for directory in sorted(directory_entries, key=lambda value: (value.count("/"), value)):
+                target.writestr(directory, b"")
             for archive_path, file_path in additions:
                 target.writestr(archive_path, file_path.read_bytes())
         return output.getvalue()
