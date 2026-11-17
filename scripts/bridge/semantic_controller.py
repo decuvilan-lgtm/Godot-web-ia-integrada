@@ -9,6 +9,7 @@ ACTIONS = {
     "editor.get_state": set(),
     "editor.list_capabilities": set(),
     "scene.get_tree": set(),
+    "scene.inspect_node": {"path"},
     "scene.add_node": {"node_type", "node_name", "parent_path"},
 }
 
@@ -18,6 +19,13 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         raise ValueError(f"Unsupported semantic editor action: {action}")
     if not isinstance(args, dict) or set(args) - ACTIONS[action]:
         raise ValueError("Invalid arguments for semantic editor action")
+    if action == "scene.inspect_node":
+        path = args.get("path")
+        if set(args) != {"path"} or not isinstance(path, str) or not path or len(path) > 200:
+            raise ValueError("scene.inspect_node requires one bounded relative path")
+        if path.startswith("/") or ".." in path.split("/") or "//" in path:
+            raise ValueError("scene.inspect_node path must stay inside the active scene root")
+        return
     if action != "scene.add_node":
         if args:
             raise ValueError("Read-only editor queries do not accept arguments")
