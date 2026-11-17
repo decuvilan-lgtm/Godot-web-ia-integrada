@@ -67,6 +67,8 @@ jobs:
                   raise SystemExit("Property node path must stay inside the active scene")
               if not isinstance(prop,str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}",prop):
                   raise SystemExit("Property name must be a bounded identifier")
+              if prop=="script":
+                  raise SystemExit("Script assignment is not exposed through the semantic property editor")
               if value is None or isinstance(value,bool):
                   return
               if isinstance(value,(int,float)):
