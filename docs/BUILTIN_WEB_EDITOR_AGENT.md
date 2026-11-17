@@ -23,12 +23,26 @@ El adaptador recibe solicitudes en una cola acotada y procesa las operaciones de
 - `editor.list_capabilities`
 - `editor.get_state`
 - `scene.get_tree` (máximo 256 nodos y 16 niveles; rutas relativas a la raíz de la escena)
-- `scene.inspect_node` (hasta 80 propiedades del Inspector, solo lectura, para una ruta relativa validada)
-- `scene.add_node` (creación de un nodo con clase allowlisted, nombre validado y padre dentro de la escena activa)
+- `scene.inspect_node` (hasta 80 propiedades del Inspector para una ruta relativa validada)
+- `scene.add_node` (crea nodos de una lista acotada de clases 2D, físicas, animación, audio y UI)
+- `scene.set_property` (cambia una propiedad visible y editable del Inspector con conversión tipada)
 
-La creación actual construye estructura de nodos y permite deshacer; todavía no modifica propiedades, asigna texturas/recursos ni crea o edita scripts. El Inspector es de solo lectura. Las capturas PNG completas se guardan en el artefacto de Workflow A; B puede devolver además una vista JPEG inline de la interfaz o del canvas para revisión visual mientras la sesión sigue abierta.
+`scene.set_property` admite valores escalares, vectores 2D/3D, colores, NodePath/StringName y referencias a recursos existentes mediante `{"resource_path":"res://..."}`. Las referencias se limitan al proyecto importado y el tipo de recurso debe coincidir con el tipo declarado por Godot. No permite rutas externas ni valores JSON anidados arbitrarios.
 
-`scene.add_node` usa `EditorUndoRedoManager`, queda disponible para deshacer y no guarda la escena automáticamente. La lista permitida incluye nodos comunes 2D/Control, no clases arbitrarias. No hay ejecución arbitraria de GDScript, shell, procesos ni acceso libre al filesystem. La edición general de propiedades, scripts y recursos sigue pendiente.
+Todas las mutaciones usan `EditorUndoRedoManager`, quedan disponibles para deshacer y no guardan la escena automáticamente. El flujo `semantic-build` de B puede crear hasta 12 nodos, configurar hasta 12 propiedades por nodo y verificar tanto el árbol como la lectura posterior del Inspector. La creación sigue limitada a clases allowlisted; no se instancian clases arbitrarias.
+
+## Vista previa del juego
+
+B puede:
+- Ejecutar la escena con F6 (`run_game`).
+- Cambiar a la pestaña Game y detectar el canvas real (`game_view`).
+- Hacer clic en coordenadas normalizadas dentro del canvas (`game_click`).
+- Mantener teclas permitidas durante 50-5000 ms, con liberación garantizada (`game_input`).
+- Capturar la vista previa como JPEG inline mientras A mantiene la misma sesión de Chromium.
+
+La entrada de juego es distinta de las operaciones semánticas del editor. No se usa como método para construir escenas. Las capturas PNG completas y el registro de comandos quedan en el artefacto de Workflow A.
+
+No hay ejecución arbitraria de GDScript, shell, procesos ni acceso libre al filesystem. La asignación de recursos existentes está acotada a referencias `res://`; la creación o edición arbitraria de scripts no se expone como comando del agente.
 
 ## Compatibilidad Web
 
@@ -52,4 +66,4 @@ No usar artefactos antiguos como evidencia de la rama actual. Para aceptar un ca
 
 ## Estado
 
-La versión actual combina inspección con una primera mutación acotada: crear nodos mediante `scene.add_node`. No es todavía un editor autónomo completo; editar propiedades, recursos y scripts desde Chromium sigue pendiente. No se necesita una PC ni un agente local para esta ruta: la ampliación de edición debe seguir dentro del binario Godot Web que ejecuta GitHub Actions. El puente nativo es una herramienta experimental separada, no un requisito del flujo móvil.
+La ruta Web ya combina inspección del árbol/Inspector, creación estructural, edición tipada de propiedades y control de la vista previa. La edición arbitraria de scripts no se expone. La aceptación de cada ampliación exige compilación del editor, prueba en Chromium real y verificación de la lectura posterior; no basta con que el patcher compile. La sesión compartida A/B es configurable entre 60 y 3600 segundos (30 minutos por defecto en el host). No se necesita una PC ni un agente local para esta ruta; el puente nativo sigue siendo una herramienta experimental separada.
