@@ -489,6 +489,14 @@ def main() -> int:
                 if invalid_property_probe.get("ok") is not False or invalid_property_probe.get("error") != "INVALID_PROPERTY_VALUE":
                     raise RuntimeError("The built-in agent did not reject a mismatched Inspector value: " + json.dumps(invalid_property_probe))
 
+                denied_script_assignment_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
+                    id: "smoke-denied-script-assignment",
+                    command: "scene.set_property",
+                    args: {path: ".", property: "script", value: {resource_path: "res://main.gd"}}
+                })""")
+                if denied_script_assignment_probe.get("ok") is not False:
+                    raise RuntimeError("The built-in agent accepted a Script resource assignment: " + json.dumps(denied_script_assignment_probe))
+
                 def contains_smoke_node(node):
                     if not isinstance(node, dict):
                         return False
@@ -642,6 +650,7 @@ def main() -> int:
                     "property_set_probe": property_set_probe,
                     "inspected_smoke_node": inspected_smoke_node,
                     "invalid_property_probe": invalid_property_probe,
+                    "denied_script_assignment_probe": denied_script_assignment_probe,
                     "invalid_node_probe": invalid_node_probe,
                     "pending_requests_after_probes": pending,
                     "pending_requests_after_denial": pending_after_denial,
@@ -660,7 +669,7 @@ def main() -> int:
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
                     "workers": worker_urls[-20:],
-                    "note": "The built editor imported a clean project, answered semantic queries, created an allowlisted scene node, set and re-inspected a typed Node2D Inspector property through the undo manager, and rejected unapproved node classes and mismatched property values. The scene remains unsaved for review.",
+                    "note": "The built editor imported a clean project, answered semantic queries, created an allowlisted scene node, set and re-inspected a typed Node2D Inspector property through the undo manager, and rejected unapproved node classes, mismatched property values and Script resource attachment. The scene remains unsaved for review.",
                 }
                 result, report_redactions = redact_sensitive_payload(result)
                 result["report_redactions_applied"] = report_redactions
