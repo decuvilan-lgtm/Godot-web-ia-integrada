@@ -171,6 +171,7 @@ func _add_critter(point:Vector2,left:float,right:float) -> void:
 
 func _add_checkpoint(point:Vector2) -> void:
 	var area := Area2D.new()
+	area.add_to_group("checkpoints")
 	area.position = point
 	area.collision_layer = 0
 	area.collision_mask = 1
@@ -277,8 +278,10 @@ func _on_switch_activated() -> void:
 	show_message("¡El sello respondió! El arco del valle está abierto.")
 
 func _on_checkpoint_entered(body:Node2D,point:Vector2) -> void:
-	if body is ValleyPlayer and body.spawn_point != point:
-		body.set_checkpoint(point+Vector2(0,-4))
+	var safe_point := point + Vector2(0,-4)
+	if body is ValleyPlayer and body.spawn_point.distance_to(safe_point) > 1.0:
+		body.set_checkpoint(safe_point)
+		print("PLAYTEST EVENT: checkpoint reached")
 		show_message("Punto de descanso activado")
 
 func _on_hazard_entered(body:Node2D) -> void:
