@@ -118,11 +118,15 @@ EMSCRIPTEN_KEEPALIVE void godot_web_agent_submit(const char *p_json) {
 }
 }
 
+static bool godot_web_agent_is_number(const Variant &p_value) {
+	return p_value.get_type() == Variant::INT || p_value.get_type() == Variant::FLOAT;
+}
+
 static bool godot_web_agent_convert_property_value(const Variant &p_input, const PropertyInfo &p_property, Variant &r_output, String &r_error) {
 	const Variant::Type expected = p_property.type;
 	if (expected == Variant::VECTOR2 && p_input.get_type() == Variant::ARRAY) {
 		Array values = p_input;
-		if (values.size() == 2 && values[0].is_num() && values[1].is_num()) {
+		if (values.size() == 2 && godot_web_agent_is_number(values[0]) && godot_web_agent_is_number(values[1])) {
 			r_output = Vector2(double(values[0]), double(values[1]));
 			return true;
 		}
@@ -136,7 +140,7 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 	}
 	if (expected == Variant::VECTOR3 && p_input.get_type() == Variant::ARRAY) {
 		Array values = p_input;
-		if (values.size() == 3 && values[0].is_num() && values[1].is_num() && values[2].is_num()) {
+		if (values.size() == 3 && godot_web_agent_is_number(values[0]) && godot_web_agent_is_number(values[1]) && godot_web_agent_is_number(values[2])) {
 			r_output = Vector3(double(values[0]), double(values[1]), double(values[2]));
 			return true;
 		}
