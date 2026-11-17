@@ -23,8 +23,11 @@ El adaptador procesa las solicitudes en el hilo principal del editor. Las respue
 
 - editor.list_capabilities
 - editor.get_state
-- scene.get_tree
-- scene.add_node (una primera mutación acotada y deshacible)
+- scene.get_tree (jerarquía limitada, con rutas relativas a la raíz de la escena)
+- scene.inspect_node (lectura acotada de propiedades visibles en el Inspector para un nodo)
+- scene.add_node (creación de nodos allowlisted, deshacible y sin guardado automático)
+
+El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, con nombre, tipo y valor serializado. La edición de propiedades, recursos y scripts sigue pendiente.
 
 El árbol está limitado por profundidad y número de nodos. `scene.add_node` solo acepta clases de nodo allowlisted, nombres identificadores y padres dentro de la escena activa. Usa el historial Undo/Redo del editor y no guarda automáticamente. La extensión y el cliente rechazan comandos fuera de la allowlist. La edición de propiedades, recursos y scripts sigue pendiente.
 
