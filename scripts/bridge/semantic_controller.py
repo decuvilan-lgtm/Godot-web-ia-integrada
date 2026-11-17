@@ -40,6 +40,8 @@ def _validate(action: str, args: dict[str, Any]) -> None:
             raise ValueError("scene.set_property path must stay inside the active scene root")
         if not isinstance(property_name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}", property_name):
             raise ValueError("scene.set_property property must be a bounded identifier")
+        if property_name == "script":
+            raise ValueError("Script assignment is not exposed through the semantic property editor")
         value = args["value"]
         if isinstance(value, bool) or value is None:
             pass
