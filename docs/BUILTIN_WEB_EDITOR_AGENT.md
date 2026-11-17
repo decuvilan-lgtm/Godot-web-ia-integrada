@@ -26,6 +26,8 @@ El adaptador recibe solicitudes en una cola acotada y procesa las operaciones de
 - `scene.inspect_node` (hasta 80 propiedades del Inspector, solo lectura, para una ruta relativa validada)
 - `scene.add_node` (creación de un nodo con clase allowlisted, nombre validado y padre dentro de la escena activa)
 
+La creación actual construye estructura de nodos y permite deshacer; todavía no modifica propiedades, asigna texturas/recursos ni crea o edita scripts. El Inspector es de solo lectura. La captura visual se guarda en el artefacto de Workflow A y no se transmite en vivo al razonador.
+
 `scene.add_node` usa `EditorUndoRedoManager`, queda disponible para deshacer y no guarda la escena automáticamente. La lista permitida incluye nodos comunes 2D/Control, no clases arbitrarias. No hay ejecución arbitraria de GDScript, shell, procesos ni acceso libre al filesystem. La edición general de propiedades, scripts y recursos sigue pendiente.
 
 ## Compatibilidad Web
