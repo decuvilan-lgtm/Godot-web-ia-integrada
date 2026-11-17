@@ -42,6 +42,8 @@ Workflow B dispone de una ruta de preview separada de la edición de escena:
 
 La prueba real en Chromium ejecutó F6, detectó un canvas de preview de 1280×720, envió un click y una entrada de teclado y volvió a comprobar la misma URL y el canvas visible. Esto confirma entrega de entradas al viewport, no una reacción de gameplay concreta. Para afirmar que una mecánica respondió, el proyecto debe aportar controles conocidos y una aserción visual o funcional independiente.
 
+Las capturas quedan en el artefacto de evidencia de Workflow A y pueden inspeccionarse al terminar esa sesión. No existe todavía un canal de visión en vivo que entregue cada captura directamente al razonador durante la misma sesión.
+
 ## Seguridad
 
 - La extensión se limita al origen del editor Godot Web.
