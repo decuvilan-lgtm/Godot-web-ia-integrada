@@ -28,7 +28,7 @@ func _ready() -> void:
 		frames.add_frame("walk", load("res://assets/characters/critter_idle_%d.png" % i))
 	anim.sprite_frames = frames
 	anim.play("walk")
-	anim.position.y = -20
+	anim.position.y = -22
 	add_child(anim)
 
 func _physics_process(delta: float) -> void:
@@ -43,7 +43,7 @@ func _physics_process(delta: float) -> void:
 		position.x = right_edge
 		direction = -1.0
 	anim.flip_h = direction < 0.0
-	anim.position.y = -20.0 + sin(bob_time * 7.0) * 1.5
+	anim.position.y = -22.0 + sin(bob_time * 7.0) * 1.5
 
 func _on_detection_body_entered(body: Node2D) -> void:
 	if not body is ValleyPlayer:
