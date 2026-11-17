@@ -20,7 +20,7 @@
 | Final approach | Last platforms and portal | Payoff and clear landmark | Medium |
 
 ## Movement and collision feel
-The player capsule ends at the same baseline as the character sprite boots. Terrain art is tiled at native 64 px scale and cropped at partial edges, so its visible footprint follows the collision rectangle instead of being stretched. The controller uses separate ground/air acceleration, stronger ground braking, a 0.13 s coyote window, a 0.15 s jump buffer, variable jump height and a capped fall speed. Damage applies directional knockback and brief invulnerability.
+The player capsule ends at the same baseline as the character sprite boots. Terrain art is tiled at native 64 px scale and cropped at partial edges, so its visible footprint follows the collision rectangle instead of being stretched. The controller uses separate ground/air acceleration, stronger ground braking, a 0.13 s coyote window, a 0.15 s jump buffer, variable jump height and a capped fall speed. Damage applies directional knockback and brief invulnerability. A clean downward landing on a patrol creature defeats it and bounces the player back into the air; a side collision costs one heart.
 
 ## Items and event chain
 Eleven animated gold fragments are optional route rewards. A single restorative crystal beside the midpoint checkpoint restores up to two hearts and disappears after use. The checkpoint records the recovery point. The player must activate the pale crystal switch to open the ancient gate; the exit portal rejects contact while the seal is still closed. The portal pulses after the final approach to make the payoff readable.
