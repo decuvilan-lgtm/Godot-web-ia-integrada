@@ -84,5 +84,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [23 - failures.size(), failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [24 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
