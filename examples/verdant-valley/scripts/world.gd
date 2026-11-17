@@ -3,6 +3,7 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PICKUP_SCRIPT := preload("res://scripts/pickup.gd")
+const HEALING_SCRIPT := preload("res://scripts/healing_pickup.gd")
 const SWITCH_SCRIPT := preload("res://scripts/switch.gd")
 const GATE_SCRIPT := preload("res://scripts/gate.gd")
 const CRITTER_SCRIPT := preload("res://scripts/critter.gd")
@@ -81,12 +82,12 @@ func _add_platform(x:float,y:float,w:float,h:float,texture_name:String) -> void:
 
 func _add_hazard(x:float,y:float,w:float) -> void:
 	var area := Area2D.new()
-	area.position = Vector2(x,y-12)
+	area.position = Vector2(x,y-24)
 	area.collision_layer = 0
 	area.collision_mask = 1
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(w,30)
+	rect.size = Vector2(w,42)
 	shape.shape = rect
 	area.add_child(shape)
 	var sprite := Sprite2D.new()
