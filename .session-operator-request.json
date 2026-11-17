@@ -1,7 +1,12 @@
 {
-  "operation": "stop",
-  "session_id": "godot-preview-agent-20261117",
-  "issue_number": 61,
+  "operation": "semantic-edit",
+  "session_id": "godot-live-visual-20261117",
+  "issue_number": 62,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark"
+  "branch": "test/verdant-valley-development-benchmark",
+  "editor_action": "scene.add_node",
+  "args": {
+    "node_type": "Node2D",
+    "node_name": "AgentLiveVisualNode"
+  }
 }
