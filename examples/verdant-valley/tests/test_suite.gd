@@ -17,6 +17,10 @@ func run() -> void:
 	await process_frame
 	check(world.player is ValleyPlayer,"player scene instantiated")
 	check(world.get_child_count()>35,"level contains a substantial set of world objects")
+	var terrain := world.get_node_or_null("Terrain") as StaticBody2D
+	check(terrain != null,"platforms share one static terrain body")
+	if terrain != null:
+		check(terrain.get_child_count()==16,"all sixteen platform colliders are batched under the terrain body")
 	check(world.get_tree().get_nodes_in_group("interactables").size()==1,"one crystal switch is registered")
 	check(world.gate!=null and not world.gate.get("opened"),"exit gate starts closed")
 	check(world.player.health==5,"player starts with five health points")
@@ -110,5 +114,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [32 - failures.size(), failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [34 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
