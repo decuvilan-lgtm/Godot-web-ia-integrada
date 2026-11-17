@@ -26,6 +26,7 @@ El adaptador procesa las solicitudes en el hilo principal del editor. Las respue
 - scene.get_tree (jerarquía limitada, con rutas relativas a la raíz de la escena)
 - scene.inspect_node (lectura acotada de propiedades visibles en el Inspector para un nodo)
 - scene.add_node (creación de nodos allowlisted, deshacible y sin guardado automático)
+- Workflow B puede agrupar hasta 12 llamadas `scene.add_node` en una construcción secuencial y verificar que todos los nodos aparecen en el árbol.
 
 El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, con nombre, tipo y valor serializado. La edición de propiedades, recursos y scripts sigue pendiente.
 
