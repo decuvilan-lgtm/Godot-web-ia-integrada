@@ -95,7 +95,7 @@ jobs:
 
           issue_path=f"/repos/{repo}/issues/{issue_number}/comments"
           ready_marker="<!-- godot-browser-host-ready -->"
-          ready_deadline=time.monotonic()+480
+          ready_deadline=time.monotonic()+900
           comments=[]
           while time.monotonic()<ready_deadline:
               issue_state=api_call(f"/repos/{repo}/issues/{issue_number}")
