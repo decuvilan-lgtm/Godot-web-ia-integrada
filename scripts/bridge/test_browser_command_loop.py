@@ -98,6 +98,11 @@ class BrowserCommandValidationTests(unittest.TestCase):
         resource=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player/Sprite2D","property":"texture","value":{"resource_path":"res://assets/hero.png"}})
         self.assertEqual(_validate(resource,SESSION,0),(1,"semantic_command"))
 
+    def test_semantic_set_property_rejects_script_attachment(self):
+        cmd=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player","property":"script","value":{"resource_path":"res://main.gd"}})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_semantic_set_property_rejects_parent_traversal_and_unsafe_resource(self):
         bad_path=self.command("semantic_command",editor_action="scene.set_property",args={"path":"Player/../Outside","property":"position","value":[1,2]})
         with self.assertRaises(ValueError):
