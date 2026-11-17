@@ -117,12 +117,9 @@ func _physics_process(delta: float) -> void:
 		anim.modulate.a = 1.0
 
 	anim.flip_h = facing < 0
-	if not is_on_floor():
-		anim.play("jump")
-	elif absf(velocity.x) > 24.0:
-		anim.play("run")
-	else:
-		anim.play("idle")
+	var next_animation := "jump" if not is_on_floor() else ("run" if absf(velocity.x) > 24.0 else "idle")
+	if anim.animation != next_animation:
+		anim.play(next_animation)
 
 	move_and_slide()
 	if is_on_floor() and not was_on_floor:
