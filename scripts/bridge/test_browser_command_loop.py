@@ -19,6 +19,20 @@ class BrowserCommandValidationTests(unittest.TestCase):
         cmd=self.command("canvas_drag",points=[[0.1,0.2],[0.5,0.6],[0.9,0.8]],duration_ms=600)
         self.assertEqual(_validate(cmd,SESSION,0),(1,"canvas_drag"))
 
+    def test_screenshot_can_return_inline_canvas_preview(self):
+        cmd=self.command("screenshot",include_image=True,scope="canvas")
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"screenshot"))
+
+    def test_screenshot_rejects_invalid_inline_scope(self):
+        cmd=self.command("screenshot",include_image=True,scope="window")
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
+    def test_screenshot_rejects_non_boolean_inline_flag(self):
+        cmd=self.command("screenshot",include_image="yes",scope="page")
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_game_preview_click_accepts_normalized_coordinates(self):
         self.assertEqual(_validate(self.command("game_click",x=0.5,y=0.5),SESSION,0),(1,"game_click"))
 
