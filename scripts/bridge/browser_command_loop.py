@@ -122,7 +122,7 @@ def _validate(command, session_id, last_seq):
                 raise ValueError("scene.add_node requires node_type and node_name")
             if any(not isinstance(value,str) or not value or len(value)>200 for value in args.values()):
                 raise ValueError("scene.add_node arguments must be bounded strings")
-            if args["node_type"] not in {"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}:
+            if args["node_type"] not in {"Node","Node2D","Sprite2D","AnimatedSprite2D","Polygon2D","Line2D","CharacterBody2D","RigidBody2D","StaticBody2D","Area2D","CollisionShape2D","CollisionPolygon2D","RayCast2D","VisibleOnScreenNotifier2D","Camera2D","Marker2D","Path2D","PathFollow2D","TileMapLayer","Parallax2D","RemoteTransform2D","CanvasLayer","Control","Container","Label","RichTextLabel","TextureRect","ColorRect","Panel","Button","TextureButton","ProgressBar","VBoxContainer","HBoxContainer","GridContainer","MarginContainer","CenterContainer","SubViewport","SubViewportContainer","AnimationPlayer","AnimationTree","Timer","AudioStreamPlayer","AudioStreamPlayer2D"}:
                 raise ValueError("Node type is not allowlisted")
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",args["node_name"]):
                 raise ValueError("Node name is not a valid identifier")
