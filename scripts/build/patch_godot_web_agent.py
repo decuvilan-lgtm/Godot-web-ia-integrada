@@ -23,6 +23,8 @@ BRIDGE_BLOCK = r'''
 // Built-in browser agent bridge. Requests are queued and consumed from _process(),
 // so editor APIs are only touched on Godot's main thread.
 #include "core/io/json.h"
+#include "core/io/resource.h"
+#include "core/io/resource_loader.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_undo_redo_manager.h"
@@ -172,7 +174,7 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 		}
 		String resource_path = path_value;
 		if (!resource_path.begins_with("res://") || resource_path.length() > 512 ||
-				resource_path.find("..") != -1 || resource_path.find("\\\\") != -1) {
+				resource_path.find("..") != -1 || resource_path.find("\\") != -1) {
 			r_error = "Resource paths must be bounded paths inside res://.";
 			return false;
 		}
