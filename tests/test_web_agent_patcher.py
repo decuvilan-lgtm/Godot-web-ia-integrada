@@ -60,6 +60,7 @@ class WebAgentPatcherTests(unittest.TestCase):
         self.assertIn("p_scene_root->get_path_to(p_node)", source)
         self.assertIn("scene.add_node", source)
         self.assertIn("scene.set_property", source)
+        self.assertIn("SCRIPT_ASSIGNMENT_NOT_ALLOWED", source)
         self.assertIn("godot_web_agent_convert_property_value", source)
         self.assertIn("ResourceLoader::load", source)
         self.assertIn("undo_redo->add_undo_property", source)
