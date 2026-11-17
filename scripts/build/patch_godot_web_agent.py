@@ -133,7 +133,7 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 	}
 	if (expected == Variant::VECTOR2I && p_input.get_type() == Variant::ARRAY) {
 		Array values = p_input;
-		if (values.size() == 2 && values[0].is_num() && values[1].is_num()) {
+		if (values.size() == 2 && godot_web_agent_is_number(values[0]) && godot_web_agent_is_number(values[1])) {
 			r_output = Vector2i(int(values[0]), int(values[1]));
 			return true;
 		}
@@ -147,8 +147,8 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 	}
 	if (expected == Variant::COLOR && p_input.get_type() == Variant::ARRAY) {
 		Array values = p_input;
-		if ((values.size() == 3 || values.size() == 4) && values[0].is_num() && values[1].is_num() && values[2].is_num() &&
-				(values.size() == 3 || values[3].is_num())) {
+		if ((values.size() == 3 || values.size() == 4) && godot_web_agent_is_number(values[0]) && godot_web_agent_is_number(values[1]) && godot_web_agent_is_number(values[2]) &&
+				(values.size() == 3 || godot_web_agent_is_number(values[3]))) {
 			r_output = Color(double(values[0]), double(values[1]), double(values[2]), values.size() == 4 ? double(values[3]) : 1.0);
 			return true;
 		}
