@@ -31,6 +31,17 @@ El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, co
 
 El árbol está limitado por profundidad y número de nodos. `scene.add_node` solo acepta clases de nodo allowlisted, nombres identificadores y padres dentro de la escena activa. Usa el historial Undo/Redo del editor y no guarda automáticamente. La extensión y el cliente rechazan comandos fuera de la allowlist. La edición de propiedades, recursos y scripts sigue pendiente.
 
+## Vista previa del juego en ejecución
+
+Workflow B dispone de una ruta de preview separada de la edición de escena:
+
+- `run_game`: enfoca el editor y envía F6 para ejecutar la escena actual.
+- `game_view`: abre la pestaña Game y detecta el canvas visible del runtime, también dentro de iframes.
+- `game_click`: envía un click con coordenadas normalizadas al canvas de juego detectado.
+- `game_input`: mantiene una tecla allowlisted durante un intervalo acotado y siempre la libera al terminar.
+
+La prueba real en Chromium ejecutó F6, detectó un canvas de preview de 1280×720, envió un click y una entrada de teclado y volvió a comprobar la misma URL y el canvas visible. Esto confirma entrega de entradas al viewport, no una reacción de gameplay concreta. Para afirmar que una mecánica respondió, el proyecto debe aportar controles conocidos y una aserción visual o funcional independiente.
+
 ## Seguridad
 
 - La extensión se limita al origen del editor Godot Web.
