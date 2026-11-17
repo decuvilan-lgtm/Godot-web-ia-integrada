@@ -22,10 +22,10 @@ for _ in range(150):
     r = random.choice([1, 1, 2])
     d.rectangle((x-r, y-r, x+r, y+r), fill=(174, 215, 190, random.randrange(100, 225)))
 # Soft moon halo and crisp crescent.
-d.ellipse((3180, 75, 3480, 375), fill=(175, 216, 181, 18))
-d.ellipse((3230, 125, 3430, 325), fill=(191, 222, 177, 45))
-d.ellipse((3270, 150, 3390, 270), fill=(226, 231, 184, 245))
-d.ellipse((3315, 125, 3435, 245), fill=(25, 48, 61, 255))
+d.ellipse((3210, 100, 3450, 340), fill=(175, 216, 181, 10))
+d.ellipse((3250, 140, 3410, 300), fill=(191, 222, 177, 24))
+d.ellipse((3290, 170, 3410, 290), fill=(226, 231, 184, 245))
+d.ellipse((3330, 150, 3450, 270), fill=(25, 48, 61, 255))
 # Thin clouds break the empty upper sky without competing with the player.
 for x, y in [(420, 245), (1450, 170), (2360, 290), (3650, 330)]:
     for ox, oy, rw in [(-42, 8, 35), (0, 0, 48), (44, 10, 30)]:
