@@ -1,7 +1,7 @@
 {
-  "operation": "stop",
-  "session_id": "godot-inspector-preview-20261117",
-  "issue_number": 65,
+  "operation": "preview-smoke",
+  "session_id": "godot-asset-fix-20261117",
+  "issue_number": 66,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark"
 }
