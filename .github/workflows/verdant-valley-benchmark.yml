@@ -134,6 +134,9 @@ jobs:
           grep -q 'PLAYTEST EVENT: crystal activated' artifacts/game.log
           grep -q 'PLAYTEST EVENT: portal body_entered body=Player' artifacts/game.log
           grep -q 'PLAYTEST RESULT:.*finished=true' artifacts/game.log
+          "$GODOT" --path "$PROJECT" --resolution 1280x720 --position 0,0 --rendering-method gl_compatibility --rendering-driver opengl3 --audio-driver Dummy -- --performance-benchmark > artifacts/performance.log 2>&1 < /dev/null
+          cat artifacts/performance.log
+          grep -q 'PERFORMANCE BENCHMARK:' artifacts/performance.log
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
