@@ -6,6 +6,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
+from bridge.project_assets import inject_generated_project_assets
 from bridge.semantic_controller import execute_semantic_command
 
 RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
@@ -16,51 +17,6 @@ EDITOR_BUILD_SHA=os.environ.get("EDITOR_BUILD_SHA","").lower()
 WAIT_SECONDS=int(os.environ.get("WAIT_SECONDS","10")); IMPORT_TIMEOUT=int(os.environ.get("IMPORT_TIMEOUT_SECONDS","480"))
 RUN_ID=os.environ.get("GITHUB_RUN_ID",str(int(time.time()))); ATTEMPT=os.environ.get("GITHUB_RUN_ATTEMPT","1")
 OUT=Path("artifacts"); OUT.mkdir(exist_ok=True)
-
-
-def inject_generated_project_assets(archive_bytes: bytes) -> bytes:
-    """Overlay deterministic local artwork into the GitHub project archive without committing binaries."""
-    if not PROJECT_PATH:
-        return archive_bytes
-    project = Path(PROJECT_PATH)
-    asset_root = project / "assets"
-    generated = sorted(path for path in asset_root.rglob("*") if path.is_file()) if asset_root.is_dir() else []
-    if not generated:
-        return archive_bytes
-    with zipfile.ZipFile(io.BytesIO(archive_bytes), "r") as source:
-        names = set(source.namelist())
-        root = next((name.split("/", 1)[0] for name in source.namelist() if "/" in name), "")
-        if not root:
-            return archive_bytes
-        project_prefix = f"{root}/{PROJECT_PATH.strip('/')}/"
-        additions = []
-        for file_path in generated:
-            archive_path = project_prefix + file_path.relative_to(project).as_posix()
-            if archive_path not in names:
-                additions.append((archive_path, file_path))
-        if not additions:
-            print(f"PROJECT ASSET OVERLAY: archive already contains generated assets for {PROJECT_PATH}")
-            return archive_bytes
-        directory_entries = set()
-        for archive_path, _file_path in additions:
-            parent = archive_path.rsplit("/", 1)[0]
-            while parent:
-                entry = parent + "/"
-                if entry not in names:
-                    directory_entries.add(entry)
-                if "/" not in parent:
-                    break
-                parent = parent.rsplit("/", 1)[0]
-        print(f"PROJECT ASSET OVERLAY: injecting {len(additions)} generated files and {len(directory_entries)} directories for {PROJECT_PATH}")
-        output = io.BytesIO()
-        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
-            for info in source.infolist():
-                target.writestr(info, source.read(info.filename))
-            for directory in sorted(directory_entries, key=lambda value: (value.count("/"), value)):
-                target.writestr(directory, b"")
-            for archive_path, file_path in additions:
-                target.writestr(archive_path, file_path.read_bytes())
-        return output.getvalue()
 
 
 class IsolatedEditorHandler(SimpleHTTPRequestHandler):
@@ -90,7 +46,7 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
                     if len(body)>128*1024*1024:
                         self.send_error(413,"GitHub project archive exceeds 128 MiB")
                         return
-                    body=inject_generated_project_assets(body)
+                    body=inject_generated_project_assets(body, PROJECT_PATH, Path(PROJECT_PATH))
                     self.send_response(response.status)
                     for header in ("Content-Type","X-GitHub-Ref","X-GitHub-Commit-SHA","Cache-Control"):
                         if response.headers.get(header):
