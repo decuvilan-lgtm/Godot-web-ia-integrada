@@ -59,6 +59,34 @@ jobs:
 
           semantic_action=request.get("editor_action","editor.get_state")
           semantic_args=request.get("args",{})
+          def validate_property_args(args):
+              if not isinstance(args,dict) or set(args)!={"path","property","value"}:
+                  raise SystemExit("scene.set_property requires path, property, and value")
+              path=args["path"]; prop=args["property"]; value=args["value"]
+              if not isinstance(path,str) or not path or len(path)>200 or path.startswith("/") or ".." in path.split("/") or "//" in path:
+                  raise SystemExit("Property node path must stay inside the active scene")
+              if not isinstance(prop,str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}",prop):
+                  raise SystemExit("Property name must be a bounded identifier")
+              if value is None or isinstance(value,bool):
+                  return
+              if isinstance(value,(int,float)):
+                  if abs(value)>1_000_000_000:
+                      raise SystemExit("Property number exceeds safe range")
+                  return
+              if isinstance(value,str):
+                  if len(value)>512:
+                      raise SystemExit("Property strings are limited to 512 characters")
+                  return
+              if isinstance(value,list):
+                  if not 2<=len(value)<=4 or any(not isinstance(v,(int,float)) or isinstance(v,bool) or abs(v)>1_000_000_000 for v in value):
+                      raise SystemExit("Property vectors/colors need 2-4 bounded numeric components")
+                  return
+              if isinstance(value,dict):
+                  resource_path=value.get("resource_path")
+                  if set(value)!={"resource_path"} or not isinstance(resource_path,str) or not resource_path.startswith("res://") or len(resource_path)>512 or ".." in resource_path.split("/") or "\\" in resource_path:
+                      raise SystemExit("Resource references must be bounded res:// paths")
+                  return
+              raise SystemExit("Unsupported Inspector property value shape")
           semantic_read_allowlist={"editor.get_state","editor.list_capabilities","scene.get_tree","scene.inspect_node"}
           if operation=="semantic-inspect":
               if semantic_action not in semantic_read_allowlist or not isinstance(semantic_args,dict):
@@ -70,17 +98,20 @@ jobs:
               elif semantic_args!={}:
                   raise SystemExit("This read-only editor query does not accept arguments")
           if operation=="semantic-edit":
-              if semantic_action!="scene.add_node" or not isinstance(semantic_args,dict):
-                  raise SystemExit("Semantic edit currently permits only scene.add_node")
-              if set(semantic_args)-{"node_type","node_name","parent_path"} or not {"node_type","node_name"}.issubset(semantic_args):
-                  raise SystemExit("scene.add_node requires node_type and node_name, with optional parent_path")
-              if any(not isinstance(value,str) or not value or len(value)>200 for value in semantic_args.values()):
-                  raise SystemExit("scene.add_node arguments must be bounded strings")
-              allowed_node_types={"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}
-              if semantic_args["node_type"] not in allowed_node_types or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",semantic_args["node_name"]):
-                  raise SystemExit("Node type or name is not allowlisted")
-              if "parent_path" in semantic_args and (semantic_args["parent_path"].startswith("/") or ".." in semantic_args["parent_path"].split("/") or "//" in semantic_args["parent_path"]):
-                  raise SystemExit("Parent path must stay inside the edited scene root")
+              if semantic_action=="scene.set_property":
+                  validate_property_args(semantic_args)
+              elif semantic_action=="scene.add_node":
+                  if not isinstance(semantic_args,dict) or set(semantic_args)-{"node_type","node_name","parent_path"} or not {"node_type","node_name"}.issubset(semantic_args):
+                      raise SystemExit("scene.add_node requires node_type and node_name, with optional parent_path")
+                  if any(not isinstance(value,str) or not value or len(value)>200 for value in semantic_args.values()):
+                      raise SystemExit("scene.add_node arguments must be bounded strings")
+                  allowed_node_types={"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}
+                  if semantic_args["node_type"] not in allowed_node_types or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",semantic_args["node_name"]):
+                      raise SystemExit("Node type or name is not allowlisted")
+                  if "parent_path" in semantic_args and (semantic_args["parent_path"].startswith("/") or ".." in semantic_args["parent_path"].split("/") or "//" in semantic_args["parent_path"]):
+                      raise SystemExit("Parent path must stay inside the edited scene root")
+              else:
+                  raise SystemExit("Semantic edit must use scene.add_node or scene.set_property")
           api="https://api.github.com"
           token=os.environ["GITHUB_TOKEN"]
           headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
@@ -180,7 +211,7 @@ jobs:
                   if not inspected.get("name") or not isinstance(inspected.get("properties"),list) or not inspected.get("properties"):
                       raise RuntimeError("The Inspector query returned no node identity or visible properties")
               verification=None
-              if operation=="semantic-edit":
+              if operation=="semantic-edit" and semantic_action=="scene.add_node":
                   verification=send("semantic_command",editor_action="scene.get_tree",args={})
                   created=semantic.get("result",{}).get("created",{})
                   created_name=created.get("name")
@@ -188,6 +219,12 @@ jobs:
                       return isinstance(node,dict) and (node.get("name")==name or any(tree_contains(child,name) for child in node.get("children",[])))
                   if not created_name or not tree_contains(verification.get("result",{}),created_name):
                       raise RuntimeError("The editor acknowledged creation but the follow-up scene tree did not contain the new node")
+              elif operation=="semantic-edit" and semantic_action=="scene.set_property":
+                  verification=send("semantic_command",editor_action="scene.inspect_node",args={"path":semantic_args["path"]})
+                  expected=semantic.get("result",{}).get("value")
+                  actual=[item.get("value") for item in verification.get("result",{}).get("properties",[]) if item.get("name")==semantic_args["property"]]
+                  if not actual or actual[0]!=expected:
+                      raise RuntimeError("The Inspector read-back did not match the value applied by the semantic edit")
               screenshot=send("screenshot",include_image=True,scope="canvas")
               after=send("status")
               extra={"semantic":semantic,"verification":verification,"screenshot":screenshot}
@@ -214,20 +251,54 @@ jobs:
               names=[node.get("node_name") for node in nodes if isinstance(node,dict)]
               if len(names)!=len(nodes) or len(set(names))!=len(names):
                   raise SystemExit("semantic-build node specifications must be objects with unique node_name values")
+              allowed_node_types={"Node","Node2D","Sprite2D","CharacterBody2D","StaticBody2D","Area2D","CollisionShape2D","Camera2D","Marker2D","CanvasLayer","Control","Label","TextureRect","AnimationPlayer","Timer","AudioStreamPlayer2D"}
+              property_count=0
+              for node in nodes:
+                  if set(node)-{"node_type","node_name","parent_path","properties"} or not {"node_type","node_name"}.issubset(node):
+                      raise SystemExit("Each node needs allowlisted type/name, optional parent_path, and optional properties")
+                  if node["node_type"] not in allowed_node_types or not isinstance(node["node_name"],str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}",node["node_name"]):
+                      raise SystemExit("Node type or name is not allowlisted")
+                  if "parent_path" in node and (not isinstance(node["parent_path"],str) or not node["parent_path"] or len(node["parent_path"])>200 or node["parent_path"].startswith("/") or ".." in node["parent_path"].split("/") or "//" in node["parent_path"]):
+                      raise SystemExit("Node parent path must stay inside the edited scene root")
+                  properties=node.get("properties",{})
+                  if not isinstance(properties,dict) or len(properties)>12:
+                      raise SystemExit("Each node may set at most 12 Inspector properties")
+                  for prop,value in properties.items():
+                      validate_property_args({"path":node["node_name"],"property":prop,"value":value})
+                      property_count+=1
               created=[]
+              property_edits=[]
               for node_spec in nodes:
-                  result=send("semantic_command",editor_action="scene.add_node",args=node_spec)
-                  created.append(result.get("result",{}).get("created",{}))
+                  node_args={key:value for key,value in node_spec.items() if key!="properties"}
+                  result=send("semantic_command",editor_action="scene.add_node",args=node_args)
+                  created_info=result.get("result",{}).get("created",{})
+                  if not created_info.get("path"):
+                      raise RuntimeError("Node creation returned no verified scene path")
+                  created.append(created_info)
+                  for prop,value in node_spec.get("properties",{}).items():
+                      edit=send("semantic_command",editor_action="scene.set_property",args={"path":created_info["path"],"property":prop,"value":value})
+                      property_edits.append({"path":created_info["path"],"property":prop,"result":edit})
               verification=send("semantic_command",editor_action="scene.get_tree",args={})
               def tree_contains(node,name):
                   return isinstance(node,dict) and (node.get("name")==name or any(tree_contains(child,name) for child in node.get("children",[])))
               missing=[item.get("name") for item in created if not tree_contains(verification.get("result",{}),item.get("name"))]
               if missing:
                   raise RuntimeError("Scene tree verification did not find created nodes: "+", ".join(str(name) for name in missing))
+              property_verifications=[]
+              for node_spec,created_info in zip(nodes,created):
+                  if not node_spec.get("properties"):
+                      continue
+                  inspected=send("semantic_command",editor_action="scene.inspect_node",args={"path":created_info["path"]})
+                  actual={item.get("name"):item.get("value") for item in inspected.get("result",{}).get("properties",[])}
+                  for prop in node_spec["properties"]:
+                      expected=next((entry["result"].get("result",{}).get("value") for entry in property_edits if entry["path"]==created_info["path"] and entry["property"]==prop),None)
+                      if prop not in actual or actual[prop]!=expected:
+                          raise RuntimeError("Inspector read-back failed for "+created_info["path"]+"."+prop)
+                  property_verifications.append({"path":created_info["path"],"inspection":inspected})
               screenshot=send("screenshot",include_image=True,scope="page")
               after=send("status")
-              extra={"created":created,"verification":verification,"screenshot":screenshot}
-              commands_sent=len(nodes)+4
+              extra={"created":created,"property_edits":property_edits,"property_verifications":property_verifications,"verification":verification,"screenshot":screenshot}
+              commands_sent=len(nodes)+property_count+len(property_verifications)+4
           elif operation=="preview-smoke":
               launched={"already_running":True,"title":initial.get("title")} if "(DEBUG)" in str(initial.get("title","")) else send("run_game")
               game_view=send("game_view")
