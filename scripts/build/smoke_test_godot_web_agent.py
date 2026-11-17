@@ -459,6 +459,36 @@ def main() -> int:
                 if not tree_after_creation_probe.get("ok"):
                     raise RuntimeError("Could not inspect the scene after node creation: " + json.dumps(tree_after_creation_probe))
 
+                property_set_probe = execute_semantic_command(
+                    page,
+                    "scene.set_property",
+                    {"path": "ControllerSmokeNode", "property": "position", "value": [42.0, 84.0]},
+                    timeout_ms=15000,
+                )
+                if not property_set_probe.get("ok"):
+                    raise RuntimeError("Built-in agent could not set a typed Inspector property: " + json.dumps(property_set_probe))
+                if property_set_probe.get("result", {}).get("saved_automatically") is not False:
+                    raise RuntimeError("Inspector property edits must remain unsaved for review.")
+                inspected_smoke_node = execute_semantic_command(
+                    page, "scene.inspect_node", {"path": "ControllerSmokeNode"}, timeout_ms=15000
+                )
+                if not inspected_smoke_node.get("ok"):
+                    raise RuntimeError("Could not inspect the node after its property edit: " + json.dumps(inspected_smoke_node))
+                position_properties = [
+                    item for item in inspected_smoke_node.get("result", {}).get("properties", [])
+                    if item.get("name") == "position"
+                ]
+                position_value = str(position_properties[0].get("value", "")) if position_properties else ""
+                if not position_properties or "42" not in position_value or "84" not in position_value:
+                    raise RuntimeError("Inspector verification did not observe the requested Node2D position: " + json.dumps(inspected_smoke_node))
+                invalid_property_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
+                    id: "smoke-invalid-property-value",
+                    command: "scene.set_property",
+                    args: {path: "ControllerSmokeNode", property: "position", value: "not-a-vector"}
+                })""")
+                if invalid_property_probe.get("ok") is not False or invalid_property_probe.get("error") != "INVALID_PROPERTY_VALUE":
+                    raise RuntimeError("The built-in agent did not reject a mismatched Inspector value: " + json.dumps(invalid_property_probe))
+
                 def contains_smoke_node(node):
                     if not isinstance(node, dict):
                         return False
@@ -609,6 +639,9 @@ def main() -> int:
                     "semantic_probes": probes,
                     "node_creation_probe": node_creation_probe,
                     "tree_after_creation_probe": tree_after_creation_probe,
+                    "property_set_probe": property_set_probe,
+                    "inspected_smoke_node": inspected_smoke_node,
+                    "invalid_property_probe": invalid_property_probe,
                     "invalid_node_probe": invalid_node_probe,
                     "pending_requests_after_probes": pending,
                     "pending_requests_after_denial": pending_after_denial,
@@ -627,7 +660,7 @@ def main() -> int:
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
                     "workers": worker_urls[-20:],
-                    "note": "The built editor imported a clean project, answered semantic queries, created one allowlisted scene node through the editor undo manager, and rejected an unapproved node class. The scene remains unsaved for review.",
+                    "note": "The built editor imported a clean project, answered semantic queries, created an allowlisted scene node, set and re-inspected a typed Node2D Inspector property through the undo manager, and rejected unapproved node classes and mismatched property values. The scene remains unsaved for review.",
                 }
                 result, report_redactions = redact_sensitive_payload(result)
                 result["report_redactions_applied"] = report_redactions
