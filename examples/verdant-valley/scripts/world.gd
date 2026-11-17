@@ -119,7 +119,7 @@ func _build_decor() -> void:
 func _build_objects() -> void:
 	for p in [Vector2(270,610),Vector2(470,470),Vector2(960,450),Vector2(1190,375),Vector2(1540,465),Vector2(1945,445),Vector2(2200,365),Vector2(2550,465),Vector2(2840,400),Vector2(3300,455),Vector2(3560,375)]:
 		_add_pickup(p)
-	_add_healing_pickup(Vector2(1850,610))
+	_add_healing_pickup(Vector2(1850,620))
 	_add_critter(Vector2(1370,625),1250,1570)
 	_add_critter(Vector2(2390,625),2260,2690)
 	_add_checkpoint(Vector2(1800,650))
