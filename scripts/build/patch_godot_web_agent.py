@@ -298,9 +298,6 @@ void WebToolsEditorPlugin::_process_requests() {
 			} else if (target == nullptr || (target != root && !root->is_ancestor_of(target))) {
 				response["error"] = "NODE_NOT_FOUND";
 				response["message"] = "The requested node does not exist inside the active edited scene.";
-			} else if (property_name == "script") {
-				response["error"] = "SCRIPT_ASSIGNMENT_NOT_ALLOWED";
-				response["message"] = "Script attachment is not exposed through the semantic property editor.";
 			} else {
 				List<PropertyInfo> property_list;
 				target->get_property_list(&property_list);
@@ -355,6 +352,9 @@ void WebToolsEditorPlugin::_process_requests() {
 			} else if (target == nullptr || (target != root && !root->is_ancestor_of(target))) {
 				response["error"] = "NODE_NOT_FOUND";
 				response["message"] = "The requested node does not exist inside the active edited scene.";
+			} else if (property_name == "script") {
+				response["error"] = "SCRIPT_ASSIGNMENT_NOT_ALLOWED";
+				response["message"] = "Script attachment is not exposed through the semantic property editor.";
 			} else {
 				List<PropertyInfo> property_list;
 				target->get_property_list(&property_list);
