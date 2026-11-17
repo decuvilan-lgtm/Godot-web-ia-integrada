@@ -14,18 +14,20 @@ The generated PNGs are deterministic outputs of the committed source generator. 
 - A/D or arrow keys: move.
 - Space/W/Up: jump.
 - E/F: activate the crystal switch.
-- Touch devices: on-screen controls are enabled automatically.
+- Touch devices: visible on-screen movement, jump and interaction buttons are enabled automatically.
+- Jump has a short input buffer and coyote time; releasing the button early makes a shorter hop.
 
 ## Objectives
 - Follow the gold fragments through the valley.
 - Cross the raised platforms and avoid red thorn beds.
 - Reach the midpoint checkpoint.
+- Use the restorative crystal on the upper route if health is missing; it restores up to two hearts.
 - Activate the pale crystal switch near the old arch.
 - Pass the opened gate and enter the portal.
 - There are 11 optional fragments.
 
 ## Systems
-Player movement and animation, jump/gravity/collision, health and invulnerability, fall recovery, two patrol creatures, 11 pickups, crystal switch, gate, checkpoint, HUD, touch controls and final portal.
+Player movement with coyote time, jump buffering and variable jump height; aligned capsule/sprite feet; health, invulnerability and directional knockback; fall recovery; two patrol creatures; 11 animated fragments; one restorative crystal; crystal switch, sealed gate, checkpoint, HUD, visible touch controls and animated final portal.
 
 ## Tests
 `godot --headless --path . --editor --quit`
