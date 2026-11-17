@@ -170,6 +170,10 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 		return true;
 	}
 	if (expected == Variant::OBJECT && p_input.get_type() == Variant::DICTIONARY) {
+		if (p_property.class_name == StringName("Script") || ClassDB::is_parent_class(p_property.class_name, "Script")) {
+			r_error = "Script resources cannot be assigned through the semantic property editor.";
+			return false;
+		}
 		Dictionary resource_spec = p_input;
 		Variant path_value = resource_spec.get("resource_path", Variant());
 		if (resource_spec.size() != 1 || path_value.get_type() != Variant::STRING) {
