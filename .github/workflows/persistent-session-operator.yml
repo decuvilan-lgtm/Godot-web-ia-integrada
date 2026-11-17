@@ -157,7 +157,7 @@ jobs:
           nonlocal_seq=[last_seq]
           initial=send("status")
           if operation=="inspect":
-              screenshot=send("screenshot")
+              screenshot=send("screenshot",include_image=True,scope="page")
               after=send("status")
               extra={"screenshot":screenshot}
               commands_sent=3
@@ -176,7 +176,7 @@ jobs:
                       return isinstance(node,dict) and (node.get("name")==name or any(tree_contains(child,name) for child in node.get("children",[])))
                   if not created_name or not tree_contains(verification.get("result",{}),created_name):
                       raise RuntimeError("The editor acknowledged creation but the follow-up scene tree did not contain the new node")
-              screenshot=send("screenshot")
+              screenshot=send("screenshot",include_image=True,scope="canvas")
               after=send("status")
               extra={"semantic":semantic,"verification":verification,"screenshot":screenshot}
               commands_sent=5 if operation=="semantic-edit" else 4
