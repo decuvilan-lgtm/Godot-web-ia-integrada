@@ -14,6 +14,8 @@ var hearts_label: Label
 var shard_label: Label
 var message_timer := 0.0
 var finished := false
+var portal_visual: Polygon2D
+var world_time := 0.0
 var demo_mode := false
 var demo_elapsed := 0.0
 var playtest_mode := false
@@ -219,7 +221,7 @@ func _build_hud() -> void:
 	shard_label.add_theme_color_override("font_color",Color(1.0,0.85,0.52))
 	row.add_child(shard_label)
 	var controls := Label.new()
-	controls.text = "A / D o ← →  MOVER     ESPACIO  SALTAR     E  ACTIVAR"
+	controls.text = "A / D  MOVER   •   ESPACIO  SALTAR   •   E  INTERACTUAR"
 	controls.position = Vector2(20,676)
 	controls.add_theme_color_override("font_color",Color(0.79,0.9,0.83))
 	controls.add_theme_font_size_override("font_size",15)
