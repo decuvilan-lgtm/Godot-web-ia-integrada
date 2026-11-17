@@ -1,8 +1,7 @@
 {
-  "operation": "preview-smoke",
+  "operation": "stop",
   "session_id": "godot-preview-agent-20261117",
   "issue_number": 61,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark",
-  "validation_round": 2
+  "branch": "test/verdant-valley-development-benchmark"
 }
