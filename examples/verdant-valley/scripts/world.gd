@@ -119,7 +119,7 @@ func _build_decor() -> void:
 func _build_objects() -> void:
 	for p in [Vector2(270,610),Vector2(470,470),Vector2(960,450),Vector2(1190,375),Vector2(1540,465),Vector2(1945,445),Vector2(2200,365),Vector2(2550,465),Vector2(2840,400),Vector2(3300,455),Vector2(3560,375)]:
 		_add_pickup(p)
-	_add_healing_pickup(Vector2(1850,620))
+	_add_healing_pickup(Vector2(1830,490))
 	_add_critter(Vector2(1370,650),1250,1570)
 	_add_critter(Vector2(2390,650),2260,2690)
 	_add_checkpoint(Vector2(1800,650))
@@ -177,9 +177,9 @@ func _add_checkpoint(point:Vector2) -> void:
 	area.collision_mask = 1
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(35,110)
+	rect.size = Vector2(80,360)
 	shape.shape = rect
-	shape.position.y = -55
+	shape.position.y = -180
 	area.add_child(shape)
 	var flag := Polygon2D.new()
 	flag.polygon = PackedVector2Array([Vector2(0,-108),Vector2(54,-90),Vector2(0,-72)])
