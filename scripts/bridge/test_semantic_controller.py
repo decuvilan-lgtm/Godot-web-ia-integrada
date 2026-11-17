@@ -19,6 +19,15 @@ class SemanticControllerValidationTests(unittest.TestCase):
             with self.subTest(action=action):
                 _validate(action, {})
 
+    def test_scene_inspect_node_accepts_bounded_relative_path(self):
+        from semantic_controller import _validate
+        _validate("scene.inspect_node", {"path": "Player/AnimatedSprite2D"})
+
+    def test_scene_inspect_node_rejects_parent_traversal(self):
+        from semantic_controller import _validate
+        with self.assertRaises(ValueError):
+            _validate("scene.inspect_node", {"path": "Player/../../Outside"})
+
     def test_scene_add_node_accepts_safe_request(self):
         from semantic_controller import _validate
         _validate("scene.add_node", {"node_type": "Node2D", "node_name": "VisualRoot", "parent_path": "."})
