@@ -4,8 +4,9 @@
   "issue_number": 63,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark",
-  "ui_action": "press_key",
+  "ui_action": "canvas_click",
   "ui_args": {
-    "key": "Enter"
+    "x": 0.554,
+    "y": 0.625
   }
 }
