@@ -54,7 +54,7 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit","preview-smoke","stop"}:
+          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit","semantic-build","preview-smoke","stop"}:
               raise SystemExit("Unsupported operator verification operation")
 
           semantic_action=request.get("editor_action","editor.get_state")
@@ -188,6 +188,27 @@ jobs:
               after=initial
               extra={"stop":stopped}
               commands_sent=2
+          elif operation=="semantic-build":
+              nodes=request.get("nodes")
+              if not isinstance(nodes,list) or not nodes or len(nodes)>12:
+                  raise SystemExit("semantic-build requires 1-12 node specifications")
+              names=[node.get("node_name") for node in nodes if isinstance(node,dict)]
+              if len(names)!=len(nodes) or len(set(names))!=len(names):
+                  raise SystemExit("semantic-build node specifications must be objects with unique node_name values")
+              created=[]
+              for node_spec in nodes:
+                  result=send("semantic_command",editor_action="scene.add_node",args=node_spec)
+                  created.append(result.get("result",{}).get("created",{}))
+              verification=send("semantic_command",editor_action="scene.get_tree",args={})
+              def tree_contains(node,name):
+                  return isinstance(node,dict) and (node.get("name")==name or any(tree_contains(child,name) for child in node.get("children",[])))
+              missing=[item.get("name") for item in created if not tree_contains(verification.get("result",{}),item.get("name"))]
+              if missing:
+                  raise RuntimeError("Scene tree verification did not find created nodes: "+", ".join(str(name) for name in missing))
+              screenshot=send("screenshot",include_image=True,scope="page")
+              after=send("status")
+              extra={"created":created,"verification":verification,"screenshot":screenshot}
+              commands_sent=len(nodes)+4
           elif operation=="preview-smoke":
               launched={"already_running":True,"title":initial.get("title")} if "(DEBUG)" in str(initial.get("title","")) else send("run_game")
               game_view=send("game_view")
