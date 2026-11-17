@@ -1,5 +1,5 @@
 {
-  "operation": "preview-smoke",
+  "operation": "stop",
   "session_id": "godot-inspector-preview-20261117",
   "issue_number": 65,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
