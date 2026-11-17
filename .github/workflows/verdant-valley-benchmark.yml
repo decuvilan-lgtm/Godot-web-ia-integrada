@@ -128,6 +128,9 @@ jobs:
           editor_unexpected_errors=$(grep -E 'SCRIPT ERROR|ERROR:' artifacts/editor.log | grep -v -E 'Required Vulkan instance extension VK_KHR_surface not found|Condition "err != OK" is true' || true)
           if [ -n "$editor_unexpected_errors" ]; then echo "$editor_unexpected_errors"; exit 1; fi
           grep -q 'PLAYTEST EVENT: pickup collected' artifacts/game.log
+          grep -q 'PLAYTEST EVENT: healing crystal used' artifacts/game.log
+          grep -q 'PLAYTEST EVENT: checkpoint reached' artifacts/game.log
+          grep -q 'PLAYTEST EVENT: critter stomped' artifacts/functional-tests.log
           grep -q 'PLAYTEST EVENT: crystal activated' artifacts/game.log
           grep -q 'PLAYTEST EVENT: portal body_entered body=Player' artifacts/game.log
           grep -q 'PLAYTEST RESULT:.*finished=true' artifacts/game.log
