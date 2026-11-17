@@ -7,6 +7,8 @@ const HEALING_SCRIPT := preload("res://scripts/healing_pickup.gd")
 const SWITCH_SCRIPT := preload("res://scripts/switch.gd")
 const GATE_SCRIPT := preload("res://scripts/gate.gd")
 const CRITTER_SCRIPT := preload("res://scripts/critter.gd")
+const MOSS_TEXTURE := preload("res://assets/environment/moss.png")
+const STONE_TEXTURE := preload("res://assets/environment/stone.png")
 var player: ValleyPlayer
 var gate: Node2D
 var hud: CanvasLayer
@@ -59,27 +61,31 @@ func _build_backdrop() -> void:
 		add_child(sprite)
 
 func _build_terrain() -> void:
+	# One static physics body owns all platform shapes; this avoids a body per platform.
+	var terrain := StaticBody2D.new()
+	terrain.name = "Terrain"
+	terrain.collision_layer = 1
+	terrain.collision_mask = 0
+	add_child(terrain)
 	for data in [[0,650,720,140,"moss"],[760,650,380,140,"moss"],[1210,650,520,140,"moss"],[1780,650,430,140,"moss"],[2220,650,780,140,"moss"],[3060,650,840,140,"moss"],[420,520,170,28,"stone"],[900,505,170,28,"stone"],[1130,430,190,28,"stone"],[1480,520,190,28,"stone"],[1900,500,180,28,"stone"],[2150,420,190,28,"stone"],[2500,520,170,28,"stone"],[2790,455,170,28,"stone"],[3250,510,180,28,"stone"],[3500,430,200,28,"stone"]]:
 		_add_platform(data[0],data[1],data[2],data[3],data[4])
 	for data in [[1060,96],[1670,100],[2070,110],[3350,110]]:
 		_add_hazard(data[0],650,data[1])
 
 func _add_platform(x:float,y:float,w:float,h:float,texture_name:String) -> void:
-	var body := StaticBody2D.new()
-	body.position = Vector2(x+w/2,y+h/2)
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = Vector2(w,h)
 	shape.shape = rect
-	body.add_child(shape)
+	shape.position = Vector2(x+w/2,y+h/2)
+	$Terrain.add_child(shape)
 	var sprite := Sprite2D.new()
-	sprite.texture = load("res://assets/environment/%s.png" % texture_name)
+	sprite.texture = MOSS_TEXTURE if texture_name == "moss" else STONE_TEXTURE
 	sprite.centered = false
-	sprite.position = Vector2(-w/2,-h/2)
+	sprite.position = Vector2(x,y)
 	sprite.scale = Vector2(w/64.0,h/64.0)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	body.add_child(sprite)
-	add_child(body)
+	add_child(sprite)
 
 func _add_hazard(x:float,y:float,w:float) -> void:
 	var area := Area2D.new()
