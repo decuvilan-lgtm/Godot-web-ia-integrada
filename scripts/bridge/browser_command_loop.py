@@ -99,6 +99,7 @@ def _validate(command, session_id, last_seq):
                 raise ValueError("scene.set_property path must stay inside the active scene root")
             if not isinstance(prop,str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}",prop):
                 raise ValueError("scene.set_property property must be a bounded identifier")
+            if prop=="script": raise ValueError("Script assignment is not exposed through the semantic property editor")
             if isinstance(value,bool) or value is None:
                 pass
             elif isinstance(value,(int,float)):
