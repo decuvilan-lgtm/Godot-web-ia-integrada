@@ -20,6 +20,8 @@ OUT=Path("artifacts"); OUT.mkdir(exist_ok=True)
 
 def inject_generated_project_assets(archive_bytes: bytes) -> bytes:
     """Overlay deterministic local artwork into the GitHub project archive without committing binaries."""
+    if not PROJECT_PATH:
+        return archive_bytes
     project = Path(PROJECT_PATH)
     asset_root = project / "assets"
     generated = sorted(path for path in asset_root.rglob("*") if path.is_file()) if asset_root.is_dir() else []
