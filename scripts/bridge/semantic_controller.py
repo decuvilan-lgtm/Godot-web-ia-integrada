@@ -83,7 +83,7 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         "CharacterBody2D", "RigidBody2D", "StaticBody2D", "Area2D", "CollisionShape2D",
         "CollisionPolygon2D", "RayCast2D", "VisibleOnScreenNotifier2D", "Camera2D", "Marker2D",
         "Path2D", "PathFollow2D", "TileMapLayer", "Parallax2D", "RemoteTransform2D",
-        "CanvasLayer", "Control", "Container", "Label", "RichTextLabel", "TextureRect",
+        "CanvasLayer", "Control", "Label", "RichTextLabel", "TextureRect",
         "ColorRect", "Panel", "Button", "TextureButton", "ProgressBar", "VBoxContainer",
         "HBoxContainer", "GridContainer", "MarginContainer", "CenterContainer",
         "SubViewport", "SubViewportContainer", "AnimationPlayer", "AnimationTree", "Timer",
