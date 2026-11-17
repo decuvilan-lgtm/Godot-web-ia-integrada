@@ -94,7 +94,7 @@ La autoría de scripts ocurre como cambios de archivos dentro del workspace aisl
 
 ## Estado real y límites
 
-- La integración de la rama contiene el agente Web de solo lectura y el puente nativo con vocabulario semántico canónico.
+- La integración Web combina consultas de estado/árbol, lectura acotada del Inspector y creación deshacible de nodos; el puente nativo conserva un vocabulario semántico canónico separado.
 - La prueba E2E del proyecto vacío ya ha validado creación del proyecto desde Project Manager, operaciones de escena, recursos, Undo/Redo, preview, capturas y transferencia exacta en ejecuciones anteriores.
 - Las últimas ejecuciones de CI para el commit b42589d completaron los workflows de proyecto vacío, compilación del editor Web y comprobaciones del repositorio.
 - La construcción de niveles/juegos completos en Headless y su ciclo de corrección visual siguen siendo una fase de integración que debe probarse con un proyecto sandbox real; no se declara terminada por las pruebas del puente.
