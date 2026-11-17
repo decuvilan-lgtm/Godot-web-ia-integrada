@@ -212,8 +212,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                             scope=command.get("scope","page")
                             if scope=="canvas":
                                 canvas=_largest_visible_canvas(page)
-                                box=canvas["box"]
-                                clip={"x":max(0,box["x"]),"y":max(0,box["y"]),"width":box["width"],"height":box["height"]}
+                                clip={"x":max(0,canvas["x"]),"y":max(0,canvas["y"]),"width":canvas["width"],"height":canvas["height"]}
                                 image_bytes=page.screenshot(type="jpeg",quality=24,clip=clip,timeout=15000)
                                 if len(image_bytes)>42000:
                                     image_bytes=page.screenshot(type="jpeg",quality=10,clip=clip,timeout=15000)
