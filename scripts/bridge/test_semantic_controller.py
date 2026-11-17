@@ -28,6 +28,27 @@ class SemanticControllerValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate("scene.inspect_node", {"path": "Player/../../Outside"})
 
+    def test_scene_set_property_accepts_vector_and_resource_values(self):
+        from semantic_controller import _validate
+        _validate("scene.set_property", {"path": "Player", "property": "position", "value": [42.0, 84.0]})
+        _validate("scene.set_property", {"path": "Player/Sprite2D", "property": "texture", "value": {"resource_path": "res://assets/hero.png"}})
+
+    def test_scene_set_property_rejects_parent_traversal(self):
+        from semantic_controller import _validate
+        with self.assertRaises(ValueError):
+            _validate("scene.set_property", {"path": "Player/../Outside", "property": "position", "value": [1, 2]})
+
+    def test_scene_set_property_rejects_unsafe_resource_path(self):
+        from semantic_controller import _validate
+        with self.assertRaises(ValueError):
+            _validate("scene.set_property", {"path": "Player", "property": "texture", "value": {"resource_path": "res://../outside.png"}})
+
+    def test_scene_set_property_rejects_unbounded_or_nested_values(self):
+        from semantic_controller import _validate
+        for value in ([1, 2, 3, 4, 5], {"resource_path": "res://x", "extra": 1}, float("inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                _validate("scene.set_property", {"path": "Player", "property": "position", "value": value})
+
     def test_scene_add_node_accepts_safe_request(self):
         from semantic_controller import _validate
         _validate("scene.add_node", {"node_type": "Node2D", "node_name": "VisualRoot", "parent_path": "."})
