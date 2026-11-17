@@ -31,15 +31,17 @@ func run() -> void:
 	var enemies := world.get_tree().get_nodes_in_group("enemies")
 	check(enemies.size()==2,"two patrol creatures are registered")
 	var first_enemy := enemies[0] as ValleyCritter
-	world.player.global_position = first_enemy.global_position + Vector2(-20, 0)
+	world.player.global_position = first_enemy.global_position + Vector2(-40, 0)
 	world.player.velocity = Vector2.ZERO
-	first_enemy._on_detection_body_entered(world.player)
+	world.player.force_update_transform()
+	for i in 3: await physics_frame
 	check(world.player.health==4,"touching a patrol creature removes one heart")
 	check(world.player.velocity.x<0,"enemy contact knocks the player away from the creature")
 	var second_enemy := enemies[1] as ValleyCritter
-	world.player.global_position = second_enemy.global_position + Vector2(0, -24)
-	world.player.velocity = Vector2(0, 200)
-	second_enemy._on_detection_body_entered(world.player)
+	world.player.global_position = second_enemy.global_position + Vector2(0, -50)
+	world.player.velocity = Vector2(0, 500)
+	world.player.force_update_transform()
+	for i in 12: await physics_frame
 	check(second_enemy.is_queued_for_deletion(),"landing on a creature defeats it")
 	check(world.player.velocity.y<0,"stomping a creature bounces the player upward")
 	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
