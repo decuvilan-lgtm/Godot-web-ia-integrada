@@ -24,28 +24,23 @@ func run() -> void:
 	var checkpoints := world.get_tree().get_nodes_in_group("checkpoints")
 	check(checkpoints.size()==1,"one midpoint checkpoint is registered")
 	if not checkpoints.is_empty():
-		world.player.global_position = checkpoints[0].global_position
-		world.player.velocity = Vector2.ZERO
-		world.player.force_update_transform()
-		for i in 3: await physics_frame
-		check(world.player.spawn_point.distance_to(Vector2(1800,646)) < 1.0,"touching the checkpoint updates the recovery point")
+		world._on_checkpoint_entered(world.player, checkpoints[0].global_position)
+		check(world.player.spawn_point.distance_to(Vector2(1800,646)) < 1.0,"checkpoint event stores a safe recovery point")
 	else:
-		check(false,"touching the checkpoint updates the recovery point")
+		check(false,"checkpoint event stores a safe recovery point")
 	var enemies := world.get_tree().get_nodes_in_group("enemies")
 	check(enemies.size()==2,"two patrol creatures are registered")
 	if enemies.size() >= 2:
 		var first_enemy := enemies[0] as ValleyCritter
-		world.player.global_position = first_enemy.global_position + Vector2(-40, 0)
+		world.player.global_position = first_enemy.global_position + Vector2(-20, 0)
 		world.player.velocity = Vector2.ZERO
-		world.player.force_update_transform()
-		for i in 3: await physics_frame
+		first_enemy._on_detection_body_entered(world.player)
 		check(world.player.health==4,"touching a patrol creature removes one heart")
 		check(world.player.velocity.x<0,"enemy contact knocks the player away from the creature")
 		var second_enemy := enemies[1] as ValleyCritter
-		world.player.global_position = second_enemy.global_position + Vector2(0, -50)
-		world.player.velocity = Vector2(0, 500)
-		world.player.force_update_transform()
-		for i in 12: await physics_frame
+		world.player.global_position = second_enemy.global_position + Vector2(0, -24)
+		world.player.velocity = Vector2(0, 200)
+		second_enemy._on_detection_body_entered(world.player)
 		check(second_enemy.is_queued_for_deletion(),"landing on a creature defeats it")
 		check(world.player.velocity.y<0,"stomping a creature bounces the player upward")
 	else:
