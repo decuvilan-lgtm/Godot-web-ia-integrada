@@ -21,7 +21,7 @@ concurrency:
 jobs:
   host:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - name: Check out the test-branch controller
         uses: actions/checkout@v4
@@ -40,12 +40,16 @@ jobs:
           import json, os, re, urllib.parse, urllib.request
           from pathlib import Path
           request=json.loads(Path(".session-host-request.json").read_text(encoding="utf-8"))
+          duration=request.get("duration_seconds",1800)
+          if not isinstance(duration,int) or isinstance(duration,bool) or not 60<=duration<=3600:
+              raise SystemExit("duration_seconds must be an integer between 60 and 3600")
           fields={
               "REPOSITORY": request.get("repository"),
               "BRANCH": request.get("branch"),
               "PROJECT_PATH": request.get("project_path") or "",
               "BROWSER_SESSION_ID": request.get("session_id"),
               "SESSION_ISSUE_NUMBER": str(request.get("issue_number","")),
+              "BROWSER_COMMAND_WINDOW_SECONDS": str(duration),
           }
           if fields["REPOSITORY"] != os.environ["GITHUB_REPOSITORY"]:
               raise SystemExit("Host request repository mismatch")
@@ -148,7 +152,7 @@ jobs:
           COMMIT_SHA: ""
           WAIT_SECONDS: "10"
           IMPORT_TIMEOUT_SECONDS: "480"
-          BROWSER_COMMAND_WINDOW_SECONDS: "1800"
+          BROWSER_COMMAND_WINDOW_SECONDS: ${{ env.BROWSER_COMMAND_WINDOW_SECONDS }}
           SKIP_RELAY_ARTIFACT_UPLOAD: "1"
           BRIDGE_REPOSITORY: ${{ github.repository }}
           EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
