@@ -22,6 +22,11 @@ var world_time := 0.0
 var demo_mode := false
 var demo_elapsed := 0.0
 var playtest_mode := false
+var performance_benchmark_mode := false
+var performance_elapsed := 0.0
+var performance_fps_samples: Array[float] = []
+var performance_process_ms: Array[float] = []
+var performance_physics_ms: Array[float] = []
 var playtest_elapsed := 0.0
 var playtest_reported := false
 var playtest_last_trace_second := -1
@@ -32,6 +37,7 @@ const PLAYTEST_JUMP_TARGETS := [680.0, 940.0, 1300.0, 1600.0, 1940.0, 2320.0, 29
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
 	playtest_mode = OS.get_cmdline_user_args().has("--playtest")
+	performance_benchmark_mode = OS.get_cmdline_user_args().has("--performance-benchmark")
 	print("PLAYTEST INIT: args=", OS.get_cmdline_user_args(), " enabled=", playtest_mode)
 	_setup_input()
 	_build_backdrop()
@@ -345,8 +351,32 @@ func _process_playtest(delta:float) -> void:
 		playtest_reported = true
 		print("PLAYTEST RESULT: position=", player.global_position, " health=", player.health, " shards=", player.shards, " jumps=", playtest_jump_index, " finished=", finished)
 
+func _process_performance_benchmark(delta:float) -> void:
+	performance_elapsed += delta
+	performance_fps_samples.append(float(Engine.get_frames_per_second()))
+	performance_process_ms.append(float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0)
+	performance_physics_ms.append(float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0)
+	if performance_elapsed >= 8.0:
+		var fps_total := 0.0
+		var min_fps := 999999.0
+		var max_process := 0.0
+		var max_physics := 0.0
+		for value in performance_fps_samples:
+			fps_total += value
+			min_fps = minf(min_fps, value)
+		for value in performance_process_ms:
+			max_process = maxf(max_process, value)
+		for value in performance_physics_ms:
+			max_physics = maxf(max_physics, value)
+		var average_fps := fps_total / maxf(1.0, float(performance_fps_samples.size()))
+		print("PERFORMANCE BENCHMARK: duration_s=", snappedf(performance_elapsed, 0.01), " samples=", performance_fps_samples.size(), " avg_fps=", snappedf(average_fps, 0.1), " min_fps=", int(min_fps), " max_process_ms=", snappedf(max_process, 0.01), " max_physics_ms=", snappedf(max_physics, 0.01), " nodes=", get_tree().get_node_count(), " objects=", Performance.get_monitor(Performance.OBJECT_COUNT), " physics_2d_active=", Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS))
+		get_tree().quit()
+
 func _process(delta:float) -> void:
 	if Engine.is_editor_hint(): return
+	if performance_benchmark_mode:
+		_process_performance_benchmark(delta)
+		return
 	if playtest_mode and is_instance_valid(player):
 		_process_playtest(delta)
 	if demo_mode and is_instance_valid(player):
