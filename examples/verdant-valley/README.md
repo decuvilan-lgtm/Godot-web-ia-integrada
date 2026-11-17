@@ -21,7 +21,7 @@ The generated PNGs are deterministic outputs of the committed source generator. 
 - Follow the gold fragments through the valley.
 - Cross the raised platforms and avoid red thorn beds.
 - Reach the midpoint checkpoint.
-- Use the restorative crystal on the upper route if health is missing; it restores up to two hearts.
+- Use the restorative crystal beside the midpoint checkpoint if health is missing; it restores up to two hearts.
 - Activate the pale crystal switch near the old arch.
 - Pass the opened gate and enter the portal.
 - There are 11 optional fragments.
