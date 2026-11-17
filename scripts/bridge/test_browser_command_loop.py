@@ -65,6 +65,15 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(cmd,SESSION,0)
 
+    def test_semantic_inspect_node_accepts_relative_path(self):
+        cmd=self.command("semantic_command",editor_action="scene.inspect_node",args={"path":"Player/AnimatedSprite2D"})
+        self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_inspect_node_rejects_parent_traversal(self):
+        cmd=self.command("semantic_command",editor_action="scene.inspect_node",args={"path":"Player/../../Outside"})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_semantic_add_node_accepts_allowlisted_arguments(self):
         cmd=self.command("semantic_command",editor_action="scene.add_node",args={"node_type":"Node2D","node_name":"VisualRoot"})
         self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
