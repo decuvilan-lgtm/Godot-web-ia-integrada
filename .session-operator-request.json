@@ -1,33 +1,11 @@
 {
-  "operation": "semantic-build",
-  "session_id": "godot-inspector-retry-20261117",
-  "issue_number": 64,
+  "operation": "semantic-inspect",
+  "session_id": "godot-inspector-preview-20261117",
+  "issue_number": 65,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark",
-  "nodes": [
-    {
-      "node_type": "Node2D",
-      "node_name": "AgentGeneratedRoot"
-    },
-    {
-      "node_type": "CharacterBody2D",
-      "node_name": "AgentPlayer",
-      "parent_path": "AgentGeneratedRoot"
-    },
-    {
-      "node_type": "Sprite2D",
-      "node_name": "Visual",
-      "parent_path": "AgentGeneratedRoot/AgentPlayer"
-    },
-    {
-      "node_type": "CollisionShape2D",
-      "node_name": "Hitbox",
-      "parent_path": "AgentGeneratedRoot/AgentPlayer"
-    },
-    {
-      "node_type": "Camera2D",
-      "node_name": "Camera",
-      "parent_path": "AgentGeneratedRoot/AgentPlayer"
-    }
-  ]
+  "editor_action": "scene.inspect_node",
+  "args": {
+    "path": "Player"
+  }
 }
