@@ -159,6 +159,15 @@ jobs:
 
           nonlocal_seq=[last_seq]
           initial=send("status")
+          startup_status_checks=0
+          if operation in {"semantic-inspect","semantic-edit","semantic-build","preview-smoke"}:
+              scene_deadline=time.monotonic()+900
+              while ".tscn" not in str(initial.get("title","")):
+                  if time.monotonic()>=scene_deadline:
+                      raise TimeoutError("The editor surface is open but the project scene did not finish loading")
+                  time.sleep(5)
+                  initial=send("status")
+                  startup_status_checks+=1
           if operation=="inspect":
               screenshot=send("screenshot",include_image=True,scope="page")
               after=send("status")
@@ -229,6 +238,7 @@ jobs:
               after=send("status")
               extra={"canvas_click":canvas_click,"escape_key":escaped,"screenshot":screenshot}
               commands_sent=5
+          commands_sent+=startup_status_checks
           def stable_title(value):
               return re.sub(r"^\(\*\)\s*","",str(value or ""))
           if initial.get("url")!=after.get("url"):
