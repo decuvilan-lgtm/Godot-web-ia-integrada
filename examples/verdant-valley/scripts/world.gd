@@ -25,7 +25,7 @@ var playtest_reported := false
 var playtest_last_trace_second := -1
 var playtest_jump_index := 0
 var playtest_jump_hold := 0.0
-const PLAYTEST_JUMP_TARGETS := [680.0, 940.0, 1570.0, 1940.0, 2930.0, 3250.0]
+const PLAYTEST_JUMP_TARGETS := [680.0, 940.0, 1300.0, 1600.0, 1940.0, 2320.0, 2930.0, 3250.0]
 
 func _ready() -> void:
 	demo_mode = OS.get_cmdline_user_args().has("--demo")
