@@ -1,6 +1,8 @@
 """Semantic, coordinate-free client for the Chromium Godot Controller extension."""
 from __future__ import annotations
 
+import math
+import re
 import secrets
 from typing import Any
 
@@ -11,6 +13,7 @@ ACTIONS = {
     "scene.get_tree": set(),
     "scene.inspect_node": {"path"},
     "scene.add_node": {"node_type", "node_name", "parent_path"},
+    "scene.set_property": {"path", "property", "value"},
 }
 
 
@@ -25,6 +28,45 @@ def _validate(action: str, args: dict[str, Any]) -> None:
             raise ValueError("scene.inspect_node requires one bounded relative path")
         if path.startswith("/") or ".." in path.split("/") or "//" in path:
             raise ValueError("scene.inspect_node path must stay inside the active scene root")
+        return
+    if action == "scene.set_property":
+        if set(args) != {"path", "property", "value"}:
+            raise ValueError("scene.set_property requires path, property, and value")
+        path = args["path"]
+        property_name = args["property"]
+        if not isinstance(path, str) or not path or len(path) > 200:
+            raise ValueError("scene.set_property path must be a bounded relative path")
+        if path.startswith("/") or ".." in path.split("/") or "//" in path:
+            raise ValueError("scene.set_property path must stay inside the active scene root")
+        if not isinstance(property_name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}", property_name):
+            raise ValueError("scene.set_property property must be a bounded identifier")
+        value = args["value"]
+        if isinstance(value, bool) or value is None:
+            pass
+        elif isinstance(value, (int, float)):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("Property numbers must be finite")
+            if abs(value) > 1_000_000_000:
+                raise ValueError("Property numbers exceed the safe range")
+        elif isinstance(value, str):
+            if len(value) > 512:
+                raise ValueError("Property strings are limited to 512 characters")
+        elif isinstance(value, list):
+            if not 2 <= len(value) <= 4 or any(
+                not isinstance(item, (int, float)) or isinstance(item, bool)
+                or (isinstance(item, float) and not math.isfinite(item))
+                or abs(item) > 1_000_000_000
+                for item in value
+            ):
+                raise ValueError("Property arrays must contain 2-4 finite numeric vector/color components")
+        elif isinstance(value, dict):
+            resource_path = value.get("resource_path")
+            if set(value) != {"resource_path"} or not isinstance(resource_path, str):
+                raise ValueError("Object properties accept only a resource_path reference")
+            if not resource_path.startswith("res://") or len(resource_path) > 512 or ".." in resource_path.split("/") or "\\" in resource_path:
+                raise ValueError("Resource paths must stay inside res://")
+        else:
+            raise ValueError("Property value must be a JSON primitive, numeric vector/color array, or resource_path object")
         return
     if action != "scene.add_node":
         if args:
