@@ -22,7 +22,8 @@ El adaptador recibe solicitudes en una cola acotada y procesa las operaciones de
 
 - `editor.list_capabilities`
 - `editor.get_state`
-- `scene.get_tree` (máximo 256 nodos y 16 niveles)
+- `scene.get_tree` (máximo 256 nodos y 16 niveles; rutas relativas a la raíz de la escena)
+- `scene.inspect_node` (hasta 80 propiedades del Inspector, solo lectura, para una ruta relativa validada)
 - `scene.add_node` (creación de un nodo con clase allowlisted, nombre validado y padre dentro de la escena activa)
 
 `scene.add_node` usa `EditorUndoRedoManager`, queda disponible para deshacer y no guarda la escena automáticamente. La lista permitida incluye nodos comunes 2D/Control, no clases arbitrarias. No hay ejecución arbitraria de GDScript, shell, procesos ni acceso libre al filesystem. La edición general de propiedades, scripts y recursos sigue pendiente.
