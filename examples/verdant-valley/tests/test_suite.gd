@@ -21,6 +21,20 @@ func run() -> void:
 	check(world.gate!=null and not world.gate.get("opened"),"exit gate starts closed")
 	check(world.player.health==5,"player starts with five health points")
 	check(world.player.shards==0,"collectible counter starts at zero")
+	var enemies := world.get_tree().get_nodes_in_group("enemies")
+	check(enemies.size()==2,"two patrol creatures are registered")
+	var first_enemy := enemies[0] as ValleyCritter
+	world.player.global_position = first_enemy.global_position + Vector2(-20, 0)
+	world.player.velocity = Vector2.ZERO
+	first_enemy._on_detection_body_entered(world.player)
+	check(world.player.health==4,"touching a patrol creature removes one heart")
+	check(world.player.velocity.x<0,"enemy contact knocks the player away from the creature")
+	var second_enemy := enemies[1] as ValleyCritter
+	world.player.global_position = second_enemy.global_position + Vector2(0, -24)
+	world.player.velocity = Vector2(0, 200)
+	second_enemy._on_detection_body_entered(world.player)
+	check(second_enemy.is_queued_for_deletion(),"landing on a creature defeats it")
+	check(world.player.velocity.y<0,"stomping a creature bounces the player upward")
 	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
 	var pickup_events: Array[Node2D] = []
 	first_pickup.body_entered.connect(func(body:Node2D): pickup_events.append(body))
@@ -31,7 +45,7 @@ func run() -> void:
 	print("DIAGNOSTIC PICKUP: player=", world.player.global_position, " area=", first_pickup.global_position, " area_valid=", is_instance_valid(first_pickup), " player_layer=", world.player.collision_layer, " area_mask=", first_pickup.collision_mask, " area_monitoring=", first_pickup.monitoring, " body_entered_events=", pickup_events.size(), " shards=", world.player.shards)
 	check(world.player.shards==1,"touching a pickup updates the shard counter")
 	world.player.take_damage(1)
-	check(world.player.health==4,"hazard damage reduces health")
+	check(world.player.health==4,"invulnerability prevents immediate repeated damage")
 	world.player.take_damage(1)
 	check(world.player.health==4,"invulnerability prevents immediate repeated damage")
 	var healing_items := world.get_tree().get_nodes_in_group("consumables")
@@ -84,5 +98,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [24 - failures.size(), failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [27 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
