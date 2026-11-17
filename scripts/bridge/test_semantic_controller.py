@@ -38,6 +38,11 @@ class SemanticControllerValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate("scene.set_property", {"path": "Player/../Outside", "property": "position", "value": [1, 2]})
 
+    def test_scene_set_property_rejects_script_attachment(self):
+        from semantic_controller import _validate
+        with self.assertRaises(ValueError):
+            _validate("scene.set_property", {"path": "Player", "property": "script", "value": {"resource_path": "res://main.gd"}})
+
     def test_scene_set_property_rejects_unsafe_resource_path(self):
         from semantic_controller import _validate
         with self.assertRaises(ValueError):
