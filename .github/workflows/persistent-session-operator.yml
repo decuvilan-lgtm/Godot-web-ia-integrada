@@ -191,11 +191,12 @@ jobs:
               if not game_view.get("preview_detected"):
                   raise RuntimeError("F6 was sent but no visible game-preview canvas was detected")
               pointer=send("game_click",x=0.5,y=0.5)
-              keyboard=send("game_input",key="Space",duration_ms=150)
+              movement=send("game_input",key="d",duration_ms=650)
+              jump=send("game_input",key="Space",duration_ms=180)
               screenshot=send("screenshot")
               after=send("status")
-              extra={"run_game":launched,"game_view":game_view,"pointer_input":pointer,"keyboard_input":keyboard,"screenshot":screenshot,"input_note":"Pointer and Space inputs were delivered to the visible Game canvas; no project-specific gameplay reaction is inferred."}
-              commands_sent=7
+              extra={"run_game":launched,"game_view":game_view,"pointer_input":pointer,"movement_input":movement,"jump_input":jump,"screenshot":screenshot,"input_note":"A mouse click, right-movement key and jump key were delivered to the visible Game canvas; the screenshot is retained for visual review."}
+              commands_sent=8
           else:
               canvas_click=send("canvas_click",x=0.02,y=0.02)
               escaped=send("press_key",key="Escape")
