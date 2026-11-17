@@ -22,8 +22,7 @@ for _ in range(150):
     r = random.choice([1, 1, 2])
     d.rectangle((x-r, y-r, x+r, y+r), fill=(174, 215, 190, random.randrange(100, 225)))
 # Soft moon halo and crisp crescent.
-d.ellipse((3210, 100, 3450, 340), fill=(29, 52, 66, 255))
-d.ellipse((3250, 140, 3410, 300), fill=(37, 64, 72, 255))
+d.ellipse((3255, 145, 3425, 315), fill=(29, 52, 66, 255))
 d.ellipse((3290, 170, 3410, 290), fill=(226, 231, 184, 245))
 d.ellipse((3330, 150, 3450, 270), fill=(25, 48, 61, 255))
 # Thin clouds break the empty upper sky without competing with the player.
