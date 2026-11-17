@@ -254,7 +254,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                         key=command["key"]
                         page.keyboard.down(key)
                         try:
-                            page.wait_for_timeout(command.get("duration_ms",150))
+                            time.sleep(command.get("duration_ms",150)/1000.0)
                         finally:
                             page.keyboard.up(key)
                         result={"frame_index":canvas["frame_index"],"canvas_index":canvas["index"],"key":key,"duration_ms":command.get("duration_ms",150),"released":True}
