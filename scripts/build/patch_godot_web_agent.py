@@ -43,7 +43,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tgetCapabilities() {
 \t\t\treturn {
 \t\t\t\tprotocol: 1,
-\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.inspect_node", "scene.add_node"]
+\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.inspect_node", "scene.add_node", "scene.set_property"]
 \t\t\t};
 \t\t},
 \t\tdispatch(request) {
@@ -116,6 +116,90 @@ EMSCRIPTEN_KEEPALIVE void godot_web_agent_submit(const char *p_json) {
 }
 }
 
+static bool godot_web_agent_convert_property_value(const Variant &p_input, const PropertyInfo &p_property, Variant &r_output, String &r_error) {
+	const Variant::Type expected = p_property.type;
+	if (expected == Variant::VECTOR2 && p_input.get_type() == Variant::ARRAY) {
+		Array values = p_input;
+		if (values.size() == 2 && values[0].is_num() && values[1].is_num()) {
+			r_output = Vector2(double(values[0]), double(values[1]));
+			return true;
+		}
+	}
+	if (expected == Variant::VECTOR2I && p_input.get_type() == Variant::ARRAY) {
+		Array values = p_input;
+		if (values.size() == 2 && values[0].is_num() && values[1].is_num()) {
+			r_output = Vector2i(int(values[0]), int(values[1]));
+			return true;
+		}
+	}
+	if (expected == Variant::VECTOR3 && p_input.get_type() == Variant::ARRAY) {
+		Array values = p_input;
+		if (values.size() == 3 && values[0].is_num() && values[1].is_num() && values[2].is_num()) {
+			r_output = Vector3(double(values[0]), double(values[1]), double(values[2]));
+			return true;
+		}
+	}
+	if (expected == Variant::COLOR && p_input.get_type() == Variant::ARRAY) {
+		Array values = p_input;
+		if ((values.size() == 3 || values.size() == 4) && values[0].is_num() && values[1].is_num() && values[2].is_num() &&
+				(values.size() == 3 || values[3].is_num())) {
+			r_output = Color(double(values[0]), double(values[1]), double(values[2]), values.size() == 4 ? double(values[3]) : 1.0);
+			return true;
+		}
+	}
+	if (expected == Variant::NODE_PATH && p_input.get_type() == Variant::STRING) {
+		r_output = NodePath(String(p_input));
+		return true;
+	}
+	if (expected == Variant::STRING_NAME && p_input.get_type() == Variant::STRING) {
+		r_output = StringName(String(p_input));
+		return true;
+	}
+	if (expected == Variant::INT && p_input.get_type() == Variant::FLOAT) {
+		r_output = int64_t(double(p_input));
+		return true;
+	}
+	if (expected == Variant::FLOAT && p_input.get_type() == Variant::INT) {
+		r_output = double(int64_t(p_input));
+		return true;
+	}
+	if (expected == Variant::OBJECT && p_input.get_type() == Variant::DICTIONARY) {
+		Dictionary resource_spec = p_input;
+		Variant path_value = resource_spec.get("resource_path", Variant());
+		if (resource_spec.size() != 1 || path_value.get_type() != Variant::STRING) {
+			r_error = "Object properties accept only a resource_path reference.";
+			return false;
+		}
+		String resource_path = path_value;
+		if (!resource_path.begins_with("res://") || resource_path.length() > 512 ||
+				resource_path.find("..") != -1 || resource_path.find("\\\\") != -1) {
+			r_error = "Resource paths must be bounded paths inside res://.";
+			return false;
+		}
+		if (p_property.class_name.is_empty() || !ClassDB::is_parent_class(p_property.class_name, "Resource")) {
+			r_error = "The target property is not a Resource reference.";
+			return false;
+		}
+		Ref<Resource> resource = ResourceLoader::load(resource_path);
+		if (resource.is_null()) {
+			r_error = "Godot could not load the requested project resource.";
+			return false;
+		}
+		if (!ClassDB::is_parent_class(resource->get_class(), p_property.class_name) && resource->get_class() != p_property.class_name) {
+			r_error = "The loaded resource type does not match the target property.";
+			return false;
+		}
+		r_output = resource;
+		return true;
+	}
+	if (p_input.get_type() == expected) {
+		r_output = p_input;
+		return true;
+	}
+	r_error = "The JSON value type does not match the Godot Inspector property type.";
+	return false;
+}
+
 static Dictionary godot_web_agent_node_to_dict(Node *p_scene_root, Node *p_node, int &r_count, int p_depth) {
 \tDictionary result;
 \tresult["name"] = p_node->get_name();
@@ -159,6 +243,7 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tcommands.push_back("scene.get_tree");
 			commands.push_back("scene.inspect_node");
 			commands.push_back("scene.add_node");
+			commands.push_back("scene.set_property");
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = Dictionary();
 \t\t\tDictionary result;
@@ -231,6 +316,74 @@ void WebToolsEditorPlugin::_process_requests() {
 				result["properties_truncated"] = property_count >= 80;
 				response["ok"] = true;
 				response["result"] = result;
+			}
+		} else if (command == "scene.set_property") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", Variant());
+			Variant property_value = args.get("property", Variant());
+			Variant value = args.get("value", Variant());
+			bool argument_types_valid = path_value.get_type() == Variant::STRING &&
+				property_value.get_type() == Variant::STRING;
+			String path = path_value;
+			String property_name = property_value;
+			bool path_valid = argument_types_valid && args.size() == 3 && args.has("path") &&
+				args.has("property") && args.has("value") && !path.is_empty() && path.length() <= 200 &&
+				!path.begins_with("/") && path.find("..") == -1 && path.find("//") == -1;
+			bool property_valid = argument_types_valid && !property_name.is_empty() &&
+				property_name.length() <= 80 && property_name.is_valid_identifier();
+			Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+			Node *target = path_valid && root ? (path == "." ? root : root->get_node_or_null(NodePath(path))) : nullptr;
+			if (!path_valid || !property_valid) {
+				response["error"] = "INVALID_PROPERTY_REQUEST";
+				response["message"] = "Property assignment requires a bounded relative node path and property name.";
+			} else if (root == nullptr) {
+				response["error"] = "NO_ACTIVE_SCENE";
+				response["message"] = "There is no active edited scene.";
+			} else if (target == nullptr || (target != root && !root->is_ancestor_of(target))) {
+				response["error"] = "NODE_NOT_FOUND";
+				response["message"] = "The requested node does not exist inside the active edited scene.";
+			} else {
+				List<PropertyInfo> property_list;
+				target->get_property_list(&property_list);
+				bool found = false;
+				PropertyInfo selected_property;
+				for (const PropertyInfo &property : property_list) {
+					if (property.name == StringName(property_name) &&
+							(property.usage & PROPERTY_USAGE_EDITOR) &&
+							!(property.usage & PROPERTY_USAGE_READ_ONLY)) {
+						selected_property = property;
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					response["error"] = "PROPERTY_NOT_EDITABLE";
+					response["message"] = "The requested property is not exposed as an editable Inspector property.";
+				} else {
+					Variant converted_value;
+					String conversion_error;
+					if (!godot_web_agent_convert_property_value(value, selected_property, converted_value, conversion_error)) {
+						response["error"] = "INVALID_PROPERTY_VALUE";
+						response["message"] = conversion_error;
+					} else {
+						Variant previous_value = target->get(selected_property.name);
+						EditorUndoRedoManager *undo_redo = get_undo_redo();
+						undo_redo->create_action("AI: Set " + property_name);
+						undo_redo->add_do_property(target, selected_property.name, converted_value);
+						undo_redo->add_undo_property(target, selected_property.name, previous_value);
+						undo_redo->commit_action();
+						Variant actual_value = target->get(selected_property.name);
+						Dictionary result;
+						result["path"] = path == "." ? String(".") : String(root->get_path_to(target));
+						result["property"] = property_name;
+						result["previous_value"] = String(previous_value);
+						result["value"] = String(actual_value);
+						result["undo_available"] = true;
+						result["saved_automatically"] = false;
+						response["ok"] = true;
+						response["result"] = result;
+					}
+				}
 			}
 		} else if (command == "scene.add_node") {
 			Dictionary args = request.get("args", Dictionary());
