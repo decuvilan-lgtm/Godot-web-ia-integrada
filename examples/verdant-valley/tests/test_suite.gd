@@ -21,6 +21,13 @@ func run() -> void:
 	check(world.gate!=null and not world.gate.get("opened"),"exit gate starts closed")
 	check(world.player.health==5,"player starts with five health points")
 	check(world.player.shards==0,"collectible counter starts at zero")
+	var checkpoints := world.get_tree().get_nodes_in_group("checkpoints")
+	check(checkpoints.size()==1,"one midpoint checkpoint is registered")
+	world.player.global_position = checkpoints[0].global_position
+	world.player.velocity = Vector2.ZERO
+	world.player.force_update_transform()
+	for i in 3: await physics_frame
+	check(world.player.spawn_point.distance_to(Vector2(1800,646)) < 1.0,"touching the checkpoint updates the recovery point")
 	var enemies := world.get_tree().get_nodes_in_group("enemies")
 	check(enemies.size()==2,"two patrol creatures are registered")
 	var first_enemy := enemies[0] as ValleyCritter
@@ -100,5 +107,5 @@ func run() -> void:
 	await physics_frame
 	check(world.player.global_position.y<900,"fall recovery returns player to a safe checkpoint")
 	check(world.player.health==3,"fall recovery consumes one health point")
-	print("TEST SUMMARY: %d passed, %d failed" % [30 - failures.size(), failures.size()])
+	print("TEST SUMMARY: %d passed, %d failed" % [32 - failures.size(), failures.size()])
 	quit(1 if not failures.is_empty() else 0)
