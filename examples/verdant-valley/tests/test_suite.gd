@@ -23,27 +23,33 @@ func run() -> void:
 	check(world.player.shards==0,"collectible counter starts at zero")
 	var checkpoints := world.get_tree().get_nodes_in_group("checkpoints")
 	check(checkpoints.size()==1,"one midpoint checkpoint is registered")
-	world.player.global_position = checkpoints[0].global_position
-	world.player.velocity = Vector2.ZERO
-	world.player.force_update_transform()
-	for i in 3: await physics_frame
-	check(world.player.spawn_point.distance_to(Vector2(1800,646)) < 1.0,"touching the checkpoint updates the recovery point")
+	if not checkpoints.is_empty():
+		world.player.global_position = checkpoints[0].global_position
+		world.player.velocity = Vector2.ZERO
+		world.player.force_update_transform()
+		for i in 3: await physics_frame
+		check(world.player.spawn_point.distance_to(Vector2(1800,646)) < 1.0,"touching the checkpoint updates the recovery point")
+	else:
+		check(false,"touching the checkpoint updates the recovery point")
 	var enemies := world.get_tree().get_nodes_in_group("enemies")
 	check(enemies.size()==2,"two patrol creatures are registered")
-	var first_enemy := enemies[0] as ValleyCritter
-	world.player.global_position = first_enemy.global_position + Vector2(-40, 0)
-	world.player.velocity = Vector2.ZERO
-	world.player.force_update_transform()
-	for i in 3: await physics_frame
-	check(world.player.health==4,"touching a patrol creature removes one heart")
-	check(world.player.velocity.x<0,"enemy contact knocks the player away from the creature")
-	var second_enemy := enemies[1] as ValleyCritter
-	world.player.global_position = second_enemy.global_position + Vector2(0, -50)
-	world.player.velocity = Vector2(0, 500)
-	world.player.force_update_transform()
-	for i in 12: await physics_frame
-	check(second_enemy.is_queued_for_deletion(),"landing on a creature defeats it")
-	check(world.player.velocity.y<0,"stomping a creature bounces the player upward")
+	if enemies.size() >= 2:
+		var first_enemy := enemies[0] as ValleyCritter
+		world.player.global_position = first_enemy.global_position + Vector2(-40, 0)
+		world.player.velocity = Vector2.ZERO
+		world.player.force_update_transform()
+		for i in 3: await physics_frame
+		check(world.player.health==4,"touching a patrol creature removes one heart")
+		check(world.player.velocity.x<0,"enemy contact knocks the player away from the creature")
+		var second_enemy := enemies[1] as ValleyCritter
+		world.player.global_position = second_enemy.global_position + Vector2(0, -50)
+		world.player.velocity = Vector2(0, 500)
+		world.player.force_update_transform()
+		for i in 12: await physics_frame
+		check(second_enemy.is_queued_for_deletion(),"landing on a creature defeats it")
+		check(world.player.velocity.y<0,"stomping a creature bounces the player upward")
+	else:
+		check(false,"patrol creatures support contact and stomp")
 	var first_pickup := world.get_tree().get_nodes_in_group("collectibles")[0]
 	var pickup_events: Array[Node2D] = []
 	first_pickup.body_entered.connect(func(body:Node2D): pickup_events.append(body))
