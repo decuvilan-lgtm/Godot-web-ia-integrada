@@ -2,7 +2,8 @@
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark",
   "project_path": "examples/verdant-valley",
-  "session_id": "godot-preview-agent-20261117",
+  "session_id": "godot-live-visual-20261117",
   "editor_artifact_run_id": 43969932360,
-  "issue_number": 61
+  "issue_number": 62,
+  "duration_seconds": 1800
 }
