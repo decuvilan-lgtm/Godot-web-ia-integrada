@@ -39,7 +39,9 @@ def inject_generated_project_assets(archive_bytes: bytes) -> bytes:
             if archive_path not in names:
                 additions.append((archive_path, file_path))
         if not additions:
+            print(f"PROJECT ASSET OVERLAY: archive already contains generated assets for {PROJECT_PATH}")
             return archive_bytes
+        print(f"PROJECT ASSET OVERLAY: injecting {len(additions)} generated files for {PROJECT_PATH}")
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
             for info in source.infolist():
