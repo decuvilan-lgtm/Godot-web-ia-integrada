@@ -27,7 +27,7 @@ The generated PNGs are deterministic outputs of the committed source generator. 
 - There are 11 optional fragments.
 
 ## Systems
-Player movement with coyote time, jump buffering and variable jump height; aligned capsule/sprite feet; health, invulnerability and directional knockback; fall recovery; two patrol creatures; 11 animated fragments; one restorative crystal; crystal switch, sealed gate, checkpoint, HUD, visible touch controls and animated final portal.
+Player movement with coyote time, jump buffering and variable jump height; aligned capsule/sprite feet; health, invulnerability and directional knockback; fall recovery; two patrol creatures that can be avoided or stomped for a bounce; 11 animated fragments; one restorative crystal; crystal switch, sealed gate, checkpoint, HUD, visible touch controls and animated final portal.
 
 ## Tests
 `godot --headless --path . --editor --quit`
