@@ -59,10 +59,16 @@ jobs:
 
           semantic_action=request.get("editor_action","editor.get_state")
           semantic_args=request.get("args",{})
-          semantic_read_allowlist={"editor.get_state","editor.list_capabilities","scene.get_tree"}
+          semantic_read_allowlist={"editor.get_state","editor.list_capabilities","scene.get_tree","scene.inspect_node"}
           if operation=="semantic-inspect":
-              if semantic_action not in semantic_read_allowlist or semantic_args!={}:
-                  raise SystemExit("Semantic inspection only permits read-only, zero-argument editor queries")
+              if semantic_action not in semantic_read_allowlist or not isinstance(semantic_args,dict):
+                  raise SystemExit("Semantic inspection only permits allowlisted read-only editor queries")
+              if semantic_action=="scene.inspect_node":
+                  path=semantic_args.get("path")
+                  if set(semantic_args)!={"path"} or not isinstance(path,str) or not path or len(path)>200 or path.startswith("/") or ".." in path.split("/") or "//" in path:
+                      raise SystemExit("scene.inspect_node requires one bounded relative path inside the active scene")
+              elif semantic_args!={}:
+                  raise SystemExit("This read-only editor query does not accept arguments")
           if operation=="semantic-edit":
               if semantic_action!="scene.add_node" or not isinstance(semantic_args,dict):
                   raise SystemExit("Semantic edit currently permits only scene.add_node")
