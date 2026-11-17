@@ -54,7 +54,7 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke","semantic-inspect","semantic-edit","semantic-build","preview-smoke","stop"}:
+          if operation not in {"inspect","interaction-smoke","ui-action","semantic-inspect","semantic-edit","semantic-build","preview-smoke","stop"}:
               raise SystemExit("Unsupported operator verification operation")
 
           semantic_action=request.get("editor_action","editor.get_state")
@@ -192,6 +192,16 @@ jobs:
               after=send("status")
               extra={"semantic":semantic,"verification":verification,"screenshot":screenshot}
               commands_sent=5 if operation=="semantic-edit" else 4
+          elif operation=="ui-action":
+              ui_action=request.get("ui_action")
+              ui_args=request.get("ui_args",{})
+              if ui_action not in {"click_text","press_key","canvas_click","assert_text"} or not isinstance(ui_args,dict):
+                  raise SystemExit("ui-action must use a bounded browser UI action and an object of arguments")
+              ui_result=send(ui_action,**ui_args)
+              screenshot=send("screenshot",include_image=True,scope="page")
+              after=send("status")
+              extra={"ui_action":ui_result,"screenshot":screenshot}
+              commands_sent=4
           elif operation=="stop":
               stopped=send("stop")
               after=initial
