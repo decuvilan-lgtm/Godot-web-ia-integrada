@@ -108,6 +108,10 @@ def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, ret
             last_error=exc
         except urllib.error.URLError as exc:
             last_error=exc
+        except (TimeoutError, ConnectionError) as exc:
+            # urllib may surface socket read timeouts directly, not as URLError.
+            # Treat these as transient too so a sleeping Free Relay can finish waking.
+            last_error=exc
         if time.monotonic()>=deadline:
             raise RuntimeError(f"Relay did not become ready within {retry_seconds}s: {last_error}") from last_error
         time.sleep(min(delay, max(1,deadline-time.monotonic())))
