@@ -129,6 +129,7 @@ jobs:
           issue_path=f"/repos/{repo}/issues/{issue_number}/comments"
           ready_marker="<!-- godot-browser-host-ready -->"
           ready_deadline=time.monotonic()+900
+          ready_poll_seconds=2.0
           comments=[]
           while time.monotonic()<ready_deadline:
               issue_state=api_call(f"/repos/{repo}/issues/{issue_number}")
@@ -152,7 +153,7 @@ jobs:
                       break
               if ready:
                   break
-              time.sleep(5)
+              time.sleep(ready_poll_seconds)
           else:
               raise TimeoutError("Workflow A did not publish a ready marker for this browser session")
           last_seq=0
@@ -167,14 +168,18 @@ jobs:
                   if isinstance(seq,int) and not isinstance(seq,bool):
                       last_seq=max(last_seq,seq)
 
+          command_timings=[]
           def send(action, **fields):
+              send_started=time.monotonic()
+              poll_count=0
               nonlocal_seq[0]+=1
               command={"protocol":1,"session_id":session_id,"seq":nonlocal_seq[0],"action":action,**fields}
               created=api_call(issue_path,"POST",{"body":json.dumps(command,ensure_ascii=False)})
               command_id=created["id"]
               deadline=time.monotonic()+150
               while time.monotonic()<deadline:
-                  current=api_call(issue_path+"?per_page=100&sort=created&direction=asc")
+                  poll_count+=1
+                  current=api_call(issue_path+"?per_page=100&sort=created&direction=desc")
                   for comment in current:
                       body=comment.get("body") or ""
                       marker="<!-- godot-browser-result -->"
@@ -186,8 +191,12 @@ jobs:
                           value=result.get("result",{})
                           if not value.get("ok",False):
                               raise RuntimeError("Browser command failed: "+str(value.get("error","unknown error")))
+                          elapsed_ms=round((time.monotonic()-send_started)*1000,2)
+                          timing={"seq":nonlocal_seq[0],"action":action,"round_trip_ms":elapsed_ms,"result_polls":poll_count,"a_processing_ms":value.get("bridge_timing",{}).get("a_processing_ms")}
+                          command_timings.append(timing)
+                          value["_bridge_timing"]=timing
                           return value
-                  time.sleep(5)
+                  time.sleep(1.0)
               raise TimeoutError(f"Timed out waiting for browser command {action}")
 
           nonlocal_seq=[last_seq]
@@ -198,7 +207,7 @@ jobs:
               while ".tscn" not in str(initial.get("title","")):
                   if time.monotonic()>=scene_deadline:
                       raise TimeoutError("The editor surface is open but the project scene did not finish loading")
-                  time.sleep(5)
+                  time.sleep(2.0)
                   initial=send("status")
                   startup_status_checks+=1
           if operation=="inspect":
@@ -332,7 +341,12 @@ jobs:
               raise RuntimeError("F6 did not leave the running game in its expected debug preview state")
           if not after.get("visible_canvases"):
               raise RuntimeError("The same browser session no longer exposes a visible canvas")
-          result={"workflow":"B-operator","operation":operation,"session_id":session_id,
+          latency_values=sorted(item["round_trip_ms"] for item in command_timings)
+          def percentile(values, fraction):
+              if not values: return None
+              return values[min(len(values)-1, max(0, int((len(values)-1)*fraction + 0.999999)))]
+          bridge_timing={"commands":command_timings,"count":len(latency_values),"min_ms":min(latency_values) if latency_values else None,"median_ms":percentile(latency_values,0.5),"p95_ms":percentile(latency_values,0.95),"max_ms":max(latency_values) if latency_values else None}
+          result={"workflow":"B-operator","operation":operation,"session_id":session_id,"bridge_timing":bridge_timing,
                   "issue_number":issue_number,"commands_sent":commands_sent,**extra,
                   "initial_status":initial,"final_status":after,"session_kept_open":operation!="stop"}
           Path("operator-result.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
