@@ -1,0 +1,32 @@
+name: A/B artifact transport validation
+
+on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - "scripts/bridge/artifacts.py"
+      - "tests/test_ab_artifacts.py"
+      - ".github/workflows/ab-artifact-validation.yml"
+  pull_request:
+    paths:
+      - "scripts/bridge/artifacts.py"
+      - "tests/test_ab_artifacts.py"
+      - ".github/workflows/ab-artifact-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Compile artifact transport module
+        run: python -m py_compile scripts/bridge/artifacts.py
+      - name: Run artifact transfer contract tests
+        run: PYTHONPATH=. python -m unittest discover -s tests -p 'test_ab_artifacts.py' -v
