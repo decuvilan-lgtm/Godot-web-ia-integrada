@@ -116,7 +116,7 @@ jobs:
           CURRENT_BRIDGE_SHA="$(sha256sum browser-extension/page-bridge.js | awk '{print $1}')"
           test "$BUILT_PATCHER_SHA" = "$CURRENT_PATCHER_SHA"
           test "$BUILT_BRIDGE_SHA" = "$CURRENT_BRIDGE_SHA"
-          GODOT_RELAY_URL="" GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$ACTUAL_SHA" bash scripts/build-web.sh
+          GODOT_WEB_EDITOR_ARCHIVE="$ZIP_FILE" GODOT_WEB_EDITOR_SHA256="$ACTUAL_SHA" bash scripts/build-web.sh
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -155,7 +155,6 @@ jobs:
           WAIT_SECONDS: "10"
           IMPORT_TIMEOUT_SECONDS: "480"
           BROWSER_COMMAND_WINDOW_SECONDS: ${{ env.BROWSER_COMMAND_WINDOW_SECONDS }}
-          SKIP_RELAY_ARTIFACT_UPLOAD: "1"
           BRIDGE_REPOSITORY: ${{ github.repository }}
           EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
