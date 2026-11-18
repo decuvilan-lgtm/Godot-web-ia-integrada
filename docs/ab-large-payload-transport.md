@@ -104,3 +104,21 @@ Use gzip for text/JSON and preserve binary images/video as binary. Split large a
 ## Important distinction
 
 Neon Realtime is useful for live database-query subscriptions, but it is not the large-file transport. WebSocket carries control messages; Object Storage carries bytes; Postgres stores durable command state and artifact metadata.
+
+
+## First implementation slice
+
+The repository now contains `scripts/bridge/artifacts.py`:
+
+- `pack_json_artifact(payload, session_id=...)` creates deterministic UTF-8 JSON gzip bytes and a manifest with compressed and expanded SHA-256 hashes.
+- `unpack_json_artifact(bytes, manifest)` verifies the protocol, kind, encoding, compressed size/hash, expanded size/hash, then decodes JSON.
+- `upload_artifact(url, bytes)` and `download_artifact(url, manifest)` transfer through HTTPS presigned URLs. Redirects are refused so signed capabilities are not forwarded to another host.
+- Current client-side bounds are 64 MiB compressed and 256 MiB expanded JSON. Artifact kinds are allowlisted.
+
+Automated tests live in `tests/test_ab_artifacts.py`. Focused CI run: [A/B artifact transport validation](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/44405952207) — passed after correcting the corruption test to mutate a byte without changing the payload length.
+
+The additive manifest-table proposal is `sql/001_ab_artifacts.sql`. It references the existing workspace, session, and device records and enforces bounded sizes, allowed content types/kinds, and SHA-256 format. **It has not been applied to Neon.** The existing branch schema was inspected read-only; device records already contain a token hash and revocation timestamp.
+
+## Not live yet
+
+These primitives are not connected to the running A/B session yet. The next required pieces are the Neon Function that authenticates devices and issues scoped upload/download URLs, the manifest finalization endpoint that verifies object metadata, and the A/B adapters that exchange artifact IDs instead of inline payloads. GitHub Issues remains the active fallback until an end-to-end real-browser test passes.
