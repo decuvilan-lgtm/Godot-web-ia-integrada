@@ -19,7 +19,7 @@ class ArtifactTests(unittest.TestCase):
     def test_rejects_corrupted_bytes(self):
         data, manifest = pack_json_artifact({"large": "context"}, session_id="session-abc")
         with self.assertRaisesRegex(ArtifactError, "SHA-256"):
-            unpack_json_artifact(data + b"x", manifest)
+            unpack_json_artifact(data[:-1] + bytes([data[-1] ^ 1]), manifest)
 
     def test_rejects_invalid_kind_and_url(self):
         with self.assertRaises(ArtifactError):
