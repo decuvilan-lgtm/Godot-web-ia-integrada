@@ -11,7 +11,7 @@ except ImportError:  # Support unittest discovery with scripts/bridge as the sta
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
-POLL_SECONDS=5
+POLL_SECONDS=4.0  # Keep the 60-minute worst-case session below GitHub's 1,000 requests/hour token budget.
 SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.inspect_node":{"path"},"scene.add_node":{"node_type","node_name","parent_path"},"scene.set_property":{"path","property","value"}}
 ALLOWED_KEYS={"F5","F6","F8","w","a","s","d","e","f","W","A","S","D","E","F","Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
