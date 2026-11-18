@@ -12,7 +12,6 @@ permissions:
   contents: read
   actions: read
   issues: write
-  id-token: write
 
 concurrency:
   group: godot-session-host-${{ github.repository }}
@@ -151,7 +150,6 @@ jobs:
 
       - name: Open Godot Web and hold the exact browser for Workflow B
         env:
-          RELAY_URL: https://godot-web-ia-relay-test.onrender.com
           LOCAL_EDITOR_DIR: public
           COMMIT_SHA: ""
           WAIT_SECONDS: "10"
