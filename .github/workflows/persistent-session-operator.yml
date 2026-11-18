@@ -54,7 +54,7 @@ jobs:
               raise SystemExit("Invalid browser session ID")
           if not isinstance(issue_number,int) or isinstance(issue_number,bool) or issue_number<1:
               raise SystemExit("Invalid command-channel issue number")
-          if operation not in {"inspect","interaction-smoke","ui-action","semantic-inspect","semantic-edit","semantic-build","preview-smoke","stop"}:
+          if operation not in {"inspect","interaction-smoke","ui-action","semantic-inspect","semantic-edit","semantic-build","preview-smoke","latency-benchmark","stop"}:
               raise SystemExit("Unsupported operator verification operation")
 
           semantic_action=request.get("editor_action","editor.get_state")
@@ -202,7 +202,7 @@ jobs:
           nonlocal_seq=[last_seq]
           initial=send("status")
           startup_status_checks=0
-          if operation in {"semantic-inspect","semantic-edit","semantic-build","preview-smoke"}:
+          if operation in {"semantic-inspect","semantic-edit","semantic-build","preview-smoke","latency-benchmark"}:
               scene_deadline=time.monotonic()+900
               while ".tscn" not in str(initial.get("title","")):
                   if time.monotonic()>=scene_deadline:
@@ -210,7 +210,20 @@ jobs:
                   time.sleep(2.0)
                   initial=send("status")
                   startup_status_checks+=1
-          if operation=="inspect":
+          latency_benchmark=None
+          if operation=="latency-benchmark":
+              # Two warm-ups, then twelve measured semantic round trips on the same live A session.
+              for index in range(2):
+                  send("semantic_command",editor_action="editor.get_state",args={})
+              samples=[]
+              for index in range(12):
+                  response=send("semantic_command",editor_action="editor.get_state",args={})
+                  samples.append(response["_bridge_timing"])
+              after=send("status")
+              latency_benchmark={"warmup_commands":2,"measured_commands":len(samples),"samples":samples}
+              extra={"latency_benchmark":latency_benchmark}
+              commands_sent=16
+          elif operation=="inspect":
               screenshot=send("screenshot",include_image=True,scope="page")
               after=send("status")
               extra={"screenshot":screenshot}
@@ -346,6 +359,9 @@ jobs:
               if not values: return None
               return values[min(len(values)-1, max(0, int((len(values)-1)*fraction + 0.999999)))]
           bridge_timing={"commands":command_timings,"count":len(latency_values),"min_ms":min(latency_values) if latency_values else None,"median_ms":percentile(latency_values,0.5),"p95_ms":percentile(latency_values,0.95),"max_ms":max(latency_values) if latency_values else None}
+          if latency_benchmark is not None:
+              measured=sorted(item["round_trip_ms"] for item in latency_benchmark["samples"])
+              latency_benchmark.update({"min_ms":min(measured),"median_ms":percentile(measured,0.5),"p95_ms":percentile(measured,0.95),"max_ms":max(measured)})
           result={"workflow":"B-operator","operation":operation,"session_id":session_id,"bridge_timing":bridge_timing,
                   "issue_number":issue_number,"commands_sent":commands_sent,**extra,
                   "initial_status":initial,"final_status":after,"session_kept_open":operation!="stop"}
