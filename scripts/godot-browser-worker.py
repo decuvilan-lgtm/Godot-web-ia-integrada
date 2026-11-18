@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Godot Web browser worker running only inside a GitHub Actions job."""
 from __future__ import annotations
-import base64, hashlib, io, json, os, re, shutil, tempfile, threading, time, urllib.parse, urllib.request, zipfile
+import json, os, re, shutil, tempfile, threading, time, urllib.parse, urllib.request, zipfile
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -300,7 +300,7 @@ def main():
         finally:
             # Do not close Chromium here: keep the editor alive through the evidence round-trip.
             pass
-    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"bridge_repository":bridge_repository,"oidc_preflight":oidc_preflight,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"editor_build_sha":EDITOR_BUILD_SHA,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":[name for name in ("editor-install-dialog.png","editor-final.png","browser-command-log.json") if (OUT/name).exists()]+sorted(p.name for p in OUT.glob("command-*.png") if p.is_file())}
+    manifest={"schema_version":1,"worker_backend":"github-actions-hosted-runner","browser_lifetime":"single-workflow-job","session_reconstruction":"fresh-browser-import-at-exact-sha","task_id":task_id,"completed_at":time.time(),"repository":REPOSITORY,"bridge_repository":bridge_repository,"project_archive_source":"GitHub API","branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"editor_build_sha":EDITOR_BUILD_SHA,"session_id":session_id,"summary":"Godot Web import and visual inspection on runner-owned Chromium","result":{"ok":failure is None,"failure":failure,"readiness":readiness,"inspection":inspection,"console_errors":errors[-100:],"page_errors":page_errors[-100:],"failed_requests":failed[-100:]},"events":events[-500:],"checkpoint":{"repository":REPOSITORY,"branch":BRANCH,"project_path":PROJECT_PATH,"commit_sha":sha,"editor_url":url,"viewport":{"width":1365,"height":768},"storage_state_saved":False,"reconstruction_mode":"fresh-browser-import"},"artifacts":[name for name in ("editor-install-dialog.png","editor-final.png","browser-command-log.json") if (OUT/name).exists()]+sorted(p.name for p in OUT.glob("command-*.png") if p.is_file())}
     (OUT/"task-result.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     bundle=OUT/"godot-browser-worker-task.zip"
     with zipfile.ZipFile(bundle,"w",zipfile.ZIP_DEFLATED) as z:
@@ -309,34 +309,16 @@ def main():
             z.write(OUT/artifact_name,"artifacts/"+artifact_name)
     payload=bundle.read_bytes()
     if len(payload)>32*1024*1024: raise ValueError("Evidence bundle exceeds 32 MiB")
-    if os.environ.get("SKIP_RELAY_ARTIFACT_UPLOAD","").lower() in {"1","true","yes"}:
-        (OUT/"worker-summary.json").write_text(json.dumps({
-            "backend":"GitHub Actions hosted runner",
-            "session_id":session_id,
-            "browser_session_scope":"this workflow job only",
-            "artifact_storage":"GitHub Actions workflow artifact",
-            "import_ok":failure is None,
-            "failure":failure,
-        },indent=2),encoding="utf-8")
-        if failure:
-            raise RuntimeError(failure)
-        return
-    digest=hashlib.sha256(payload).hexdigest()
-    upload_url=f"{RELAY_URL}/v1/persistent-sessions/worker-artifacts/{session_id}"
-    upload_headers={"Authorization":"Bearer "+oidc_token(),"Content-Type":"application/zip","X-Artifact-SHA256":digest}
-    try:
-        uploaded=json.loads(relay_request(upload_url,method="POST",headers=upload_headers,data=payload,timeout=90,retry_seconds=360))
-    except urllib.error.HTTPError as exc:
-        detail=exc.read().decode("utf-8","replace")[:500]
-        (OUT/"relay-upload-error.json").write_text(json.dumps({"stage":"artifact_upload","http_status":exc.code,"detail":detail,"oidc_claims":oidc_claim_summary(upload_headers["Authorization"].removeprefix("Bearer "))},indent=2),encoding="utf-8")
-        raise RuntimeError(f"Relay artifact upload rejected: HTTP {exc.code}: {detail}") from exc
-    (OUT/"worker-upload.json").write_text(json.dumps(uploaded,indent=2),encoding="utf-8")
-    download_headers={"Authorization":"Bearer "+oidc_token()}
-    recovered=relay_request(RELAY_URL+uploaded["artifact_url"],headers=download_headers,timeout=90,retry_seconds=180)
-    if hashlib.sha256(recovered).hexdigest()!=uploaded["artifact_sha256"]: raise RuntimeError("Neon evidence round-trip SHA-256 mismatch")
-    with zipfile.ZipFile(io.BytesIO(recovered)) as z:
-        if z.testzip(): raise RuntimeError("Persisted evidence ZIP failed integrity check")
-    (OUT/"worker-summary.json").write_text(json.dumps({"backend":"GitHub Actions hosted runner","session_id":session_id,"artifact_id":uploaded["artifact_id"],"artifact_sha256":uploaded["artifact_sha256"],"storage":"Neon Object Storage","browser_session_scope":"this workflow job only","reconstruction":"new job reopens exact repository SHA","import_ok":failure is None},indent=2),encoding="utf-8")
-    if failure: raise RuntimeError(failure)
+    (OUT/"worker-summary.json").write_text(json.dumps({
+        "backend":"GitHub Actions hosted runner",
+        "session_id":session_id,
+        "browser_session_scope":"this workflow job only",
+        "project_archive_source":"GitHub API",
+        "artifact_storage":"GitHub Actions workflow artifact",
+        "import_ok":failure is None,
+        "failure":failure,
+    },indent=2),encoding="utf-8")
+    if failure:
+        raise RuntimeError(failure)
 
 if __name__=="__main__": main()
