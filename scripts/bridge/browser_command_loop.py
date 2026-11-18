@@ -225,6 +225,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                 body=(item.get("body") or "").strip()
                 if not body.startswith("{") or not body.endswith("}"):
                     continue
+                command_started=time.monotonic()
                 try:
                     command=json.loads(body)
                     seq,action=_validate(command,session_id,last_seq)
@@ -347,12 +348,13 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                     else:
                         stopped=True
                         result={"stopped":True}
+                    result["bridge_timing"]={"a_processing_ms":round((time.monotonic()-command_started)*1000,2)}
                     processed+=1
                     command_ok=not (action=="semantic_command" and result.get("ok") is False)
                     log.append({"comment_id":comment_id,"seq":seq,"action":action,"ok":command_ok,"result":result})
                     _post_result(repo,issue,token,comment_id,{"ok":command_ok,**result})
                 except Exception as exc:
-                    error={"ok":False,"error":f"{type(exc).__name__}: {str(exc)[:400]}"}
+                    error={"ok":False,"error":f"{type(exc).__name__}: {str(exc)[:400]}","bridge_timing":{"a_processing_ms":round((time.monotonic()-command_started)*1000,2)}}
                     log.append({"comment_id":comment_id,"ok":False,"error":error["error"]})
                     try: _post_result(repo,issue,token,comment_id,error)
                     except Exception: pass
