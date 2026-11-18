@@ -9,7 +9,6 @@ from bridge.browser_command_loop import run_command_loop
 from bridge.project_assets import inject_generated_project_assets
 from bridge.semantic_controller import execute_semantic_command
 
-RELAY_URL=os.environ.get("RELAY_URL","https://godot-web-ia-relay.onrender.com").rstrip("/")
 EDITOR_URL=os.environ.get("EDITOR_URL","https://godot-web-ia-integrada-rt2l.onrender.com/")
 REPOSITORY=os.environ["REPOSITORY"]; BRANCH=os.environ.get("BRANCH","main")
 PROJECT_PATH=os.environ.get("PROJECT_PATH",""); REQUESTED_SHA=os.environ.get("COMMIT_SHA","").lower()
@@ -34,12 +33,25 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
             if len(parts)!=6 or parts[1:3]!=["v1","github"] or parts[5]!="archive":
                 self.send_error(404)
                 return
-            target=RELAY_URL+self.path
-            request=urllib.request.Request(target,headers={
-                "Accept":"application/zip, application/json",
+            owner,repo_name=parts[3],parts[4]
+            if f"{owner}/{repo_name}".lower()!=REPOSITORY.lower():
+                self.send_error(403,"Archive repository does not match the validated host request")
+                return
+            query=urllib.parse.parse_qs(parsed.query)
+            requested_ref=(query.get("ref") or [""])[0]
+            if not requested_ref or not re.fullmatch(r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})",requested_ref):
+                self.send_error(400,"A full immutable commit SHA is required")
+                return
+            target=f"https://api.github.com/repos/{owner}/{repo_name}/zipball/{urllib.parse.quote(requested_ref,safe='')}"
+            headers={
+                "Accept":"application/vnd.github+json",
                 "User-Agent":"Godot-Web-Local-Archive-Proxy",
                 "Cache-Control":"no-store",
-            })
+            }
+            token=os.environ.get("GITHUB_TOKEN","")
+            if token:
+                headers["Authorization"]="Bearer "+token
+            request=urllib.request.Request(target,headers=headers)
             try:
                 with urllib.request.urlopen(request,timeout=90) as response:
                     body=response.read(128*1024*1024+1)
@@ -47,10 +59,11 @@ class IsolatedEditorHandler(SimpleHTTPRequestHandler):
                         self.send_error(413,"GitHub project archive exceeds 128 MiB")
                         return
                     body=inject_generated_project_assets(body, PROJECT_PATH, Path(PROJECT_PATH))
-                    self.send_response(response.status)
-                    for header in ("Content-Type","X-GitHub-Ref","X-GitHub-Commit-SHA","Cache-Control"):
-                        if response.headers.get(header):
-                            self.send_header(header,response.headers[header])
+                    self.send_response(200)
+                    self.send_header("Content-Type","application/zip")
+                    self.send_header("X-GitHub-Ref",requested_ref)
+                    self.send_header("X-GitHub-Commit-SHA",requested_ref.lower())
+                    self.send_header("Cache-Control","no-store")
                     self.send_header("Content-Length",str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
@@ -92,31 +105,6 @@ def prepare_extension(source_dir, target_dir, origin):
         item["matches"]=[match]
     (target_dir/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 
-def relay_request(url, *, method="GET", headers=None, data=None, timeout=90, retry_seconds=360):
-    """Retry only transient startup/deploy failures while Render rolls out the API."""
-    deadline=time.monotonic()+retry_seconds
-    delay=5
-    last_error=None
-    while True:
-        request=urllib.request.Request(url,data=data,method=method,headers=headers or {})
-        try:
-            with urllib.request.urlopen(request,timeout=timeout) as response:
-                return response.read()
-        except urllib.error.HTTPError as exc:
-            if exc.code not in {404,502,503,504}:
-                raise
-            last_error=exc
-        except urllib.error.URLError as exc:
-            last_error=exc
-        except (TimeoutError, ConnectionError) as exc:
-            # urllib may surface socket read timeouts directly, not as URLError.
-            # Treat these as transient too so a sleeping Free Relay can finish waking.
-            last_error=exc
-        if time.monotonic()>=deadline:
-            raise RuntimeError(f"Relay did not become ready within {retry_seconds}s: {last_error}") from last_error
-        time.sleep(min(delay, max(1,deadline-time.monotonic())))
-        delay=min(delay+5,25)
-
 def post_host_ready_comment(repo, issue_number, token, session_id, sha, inspection):
     """Publish a readiness marker so Workflow B never races the import."""
     if not issue_number or not token:
@@ -142,41 +130,6 @@ def post_host_ready_comment(repo, issue_number, token, session_id, sha, inspecti
         response.read()
 
 
-def oidc_token():
-    url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience=godot-web-ia-relay"
-    req=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
-    with urllib.request.urlopen(req,timeout=30) as res: return json.loads(res.read())["value"]
-
-def oidc_claim_summary(token):
-    """Return only non-secret identity claims for safe diagnostics."""
-    try:
-        payload=token.split(".")[1]
-        payload += "=" * (-len(payload) % 4)
-        claims=json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
-        return {key:claims.get(key) for key in ("repository","ref","workflow_ref","aud","iss","sub")}
-    except Exception:
-        return {"claims":"unavailable"}
-
-def relay_oidc_preflight():
-    # Wake a suspended Free relay before minting the short-lived OIDC token.
-    relay_request(RELAY_URL+"/health",timeout=30,retry_seconds=360)
-    token=oidc_token()
-    claims=oidc_claim_summary(token)
-    try:
-        raw=relay_request(
-            RELAY_URL+"/v1/persistent-sessions",
-            headers={"Authorization":"Bearer "+token},
-            timeout=30,
-            retry_seconds=15,
-        )
-        sessions=json.loads(raw).get("sessions",[])
-        return {"ok":True,"active_sessions":len(sessions),"claims":claims}
-    except urllib.error.HTTPError as exc:
-        detail=exc.read().decode("utf-8","replace")[:400]
-        raise RuntimeError(
-            f"Relay OIDC preflight rejected identity: HTTP {exc.code}: {detail}; claims={json.dumps(claims,ensure_ascii=False)}"
-        ) from exc
-
 def resolve_sha():
     if REQUESTED_SHA: sha=REQUESTED_SHA
     else:
@@ -191,7 +144,6 @@ def main():
     if not 60<=IMPORT_TIMEOUT<=600: raise ValueError("IMPORT_TIMEOUT_SECONDS must be 60-600")
     sha=resolve_sha(); session_id=os.environ.get("BROWSER_SESSION_ID", f"gha-{RUN_ID}-{ATTEMPT}"); task_id=f"github-actions-{RUN_ID}-{ATTEMPT}"
     bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
-    oidc_preflight=relay_oidc_preflight()
     editor_server=None
     local_editor_dir=os.environ.get("LOCAL_EDITOR_DIR","").strip()
     if local_editor_dir:
