@@ -22,6 +22,8 @@ on:
       - "scripts/bridge/artifacts.py"
       - "tests/test_ab_artifacts.py"
       - "neon/functions/abbridge/**"
+      - "sql/001_ab_artifacts.sql"
+      - "sql/002_ephemeral_github_oidc_devices.sql"
       - "scripts/bridge/test_browser_command_loop.py"
       - "scripts/bridge/test_semantic_controller.py"
       - "scripts/bridge/semantic_controller.py"
@@ -110,6 +112,7 @@ jobs:
           host_source=Path(".github/workflows/persistent-session-host.yml").read_text(encoding="utf-8")
           worker_source=Path("scripts/godot-browser-worker.py").read_text(encoding="utf-8")
           command_loop_source=Path("scripts/bridge/browser_command_loop.py").read_text(encoding="utf-8")
+          function_source=Path("neon/functions/abbridge/index.mjs").read_text(encoding="utf-8")
           web_agent_patcher=Path("scripts/build/patch_godot_web_agent.py").read_text(encoding="utf-8")
           render_source=Path("render-relay.yaml").read_text(encoding="utf-8")
           docs=Path("docs/persistent-godot-session.md").read_text(encoding="utf-8")
@@ -139,10 +142,12 @@ jobs:
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
               "Workflow A publishes its ready marker": "post_host_ready_comment" in worker_source,
           "Workflow A can create a durable Neon session": "create_transport_session" in worker_source and '"transport_session_id":transport_session_id' in worker_source,
-    "Workflow A obtains a short-lived OIDC device identity": "request_github_actions_oidc_token" in worker_source and "issue_transport_device_token" in worker_source,
-    "Workflow B obtains a short-lived OIDC device identity": "id-token: write" in operator_source and "request_github_actions_oidc_token" in operator_source and "issue_transport_device_token" in operator_source,
+          "Workflow A obtains a short-lived OIDC device identity": "request_github_actions_oidc_token" in worker_source and "issue_transport_device_token" in worker_source,
+          "Workflow B obtains a short-lived OIDC device identity": "id-token: write" in operator_source and "request_github_actions_oidc_token" in operator_source and "issue_transport_device_token" in operator_source,
 
           "Workflow A command loop can use Neon leases and artifact results": "claim_transport_command" in command_loop_source and "complete_transport_command" in command_loop_source and "upload_json_artifact" in command_loop_source,
+              "Neon Function validates short-lived GitHub OIDC identities": "jwtVerify" in function_source and "AUTHORIZED_WORKFLOWS" in function_source and "payload.workflow_ref" in function_source and "expires_at" in function_source,
+              "Neon Function uses bounded server-side command long polling": "wait_ms" in function_source and "setTimeout(resolve, 250)" in function_source,
               "Workflow A keeps browser commands available after optional warnings": "if browser_ready and not page.is_closed()" in worker_source and "semantic_controller_probe" in worker_source,
               "Workflow A stores evidence in GitHub Actions": "actions/upload-artifact@v4" in host_source and "artifact_storage" in worker_source and "GitHub Actions workflow artifact" in worker_source,
               "Workflow B isolates concurrency by request revision": "group: godot-session-operator-" in operator_source and "cancel-in-progress: false" in operator_source,
