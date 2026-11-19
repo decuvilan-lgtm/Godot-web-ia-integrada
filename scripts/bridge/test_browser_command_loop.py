@@ -73,6 +73,27 @@ class BrowserCommandValidationTests(unittest.TestCase):
         cmd=self.command("semantic_command",editor_action="scene.get_tree",args={})
         self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
 
+    def test_semantic_project_file_and_resource_actions_are_accepted(self):
+        for editor_action, args in (
+            ("project.list_files", {}),
+            ("project.read_file", {"path": "res://scripts/player.gd"}),
+            ("project.write_file", {"path": "res://scripts/player.gd", "content": "extends Node2D\\n"}),
+            ("resource.inspect", {"path": "res://scenes/main.tscn"}),
+            ("scene.save", {}),
+        ):
+            with self.subTest(editor_action=editor_action):
+                cmd=self.command("semantic_command",editor_action=editor_action,args=args)
+                self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
+
+    def test_semantic_project_write_rejects_large_or_unsafe_content(self):
+        for args in (
+            {"path": "res://../outside.gd", "content": "x"},
+            {"path": "res://assets/texture.png", "content": "x"},
+            {"path": "res://scripts/player.gd", "content": "x" * 10001},
+        ):
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                _validate(self.command("semantic_command",editor_action="project.write_file",args=args),SESSION,0)
+
     def test_semantic_command_rejects_unknown_editor_action(self):
         cmd=self.command("semantic_command",editor_action="execute_script",args={"code":"print(1)"})
         with self.assertRaises(ValueError):
