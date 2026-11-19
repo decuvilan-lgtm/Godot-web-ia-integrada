@@ -41,6 +41,7 @@ jobs:
           from scripts.bridge.artifacts import (
               join_transport_session, enqueue_transport_command,
               fetch_transport_command_result, download_json_artifact,
+              request_github_actions_oidc_token, issue_transport_device_token,
           )
 
           operator_started=time.monotonic()
