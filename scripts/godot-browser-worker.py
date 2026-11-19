@@ -199,6 +199,20 @@ def main():
         page.on("requestfailed",lambda r: failed.append({"url":r.url[:500],"error":str(r.failure)[:500]}))
         try:
             page.goto(url,wait_until="domcontentloaded",timeout=90000)
+            # Godot Web presents a first-run acknowledgement modal on a fresh
+            # Chromium profile. Dismiss it before waiting for the project import;
+            # otherwise the import connector can remain blocked behind the modal.
+            welcome=page.get_by_text("OK - Don't Show Again",exact=True)
+            if welcome.count() and welcome.first.is_visible():
+                welcome.first.click(timeout=10000)
+                page.wait_for_timeout(1500)
+                events.append({"type":"editor.welcome_dismissed","text":"OK - Don't Show Again"})
+            else:
+                welcome_button=page.get_by_role("button",name=re.compile(r"OK\\s*-\\s*Don't Show Again",re.I))
+                if welcome_button.count() and welcome_button.first.is_visible():
+                    welcome_button.first.click(timeout=10000)
+                    page.wait_for_timeout(1500)
+                    events.append({"type":"editor.welcome_dismissed","text":"accessible button"})
             if WAIT_SECONDS: page.wait_for_timeout(min(max(WAIT_SECONDS,0),120)*1000)
             deadline=time.monotonic()+IMPORT_TIMEOUT; poll=0
             while time.monotonic()<deadline:
