@@ -19,6 +19,9 @@ on:
       - "scripts/test_patch_web_shell.py"
       - "scripts/godot-browser-worker.py"
       - "scripts/bridge/browser_command_loop.py"
+      - "scripts/bridge/artifacts.py"
+      - "tests/test_ab_artifacts.py"
+      - "neon/functions/abbridge/**"
       - "scripts/bridge/test_browser_command_loop.py"
       - "scripts/bridge/test_semantic_controller.py"
       - "scripts/bridge/semantic_controller.py"
@@ -118,7 +121,7 @@ jobs:
               "expiry uses each session duration": "now - session.created_at >= session.max_duration_seconds" in relay_source,
               "idle cleanup cannot pre-empt configured duration": "IDLE_TTL = max(MAX_SESSION_DURATION_SECONDS" in relay_source,
               "Workflow B uses a branch-scoped request file": '".session-operator-request.json"' in operator_source,
-              "Workflow B sends commands through the issue channel": "issues/" in operator_source and '"protocol":1' in operator_source and '"action":action' in operator_source,
+              "Workflow B supports durable Neon command queue with GitHub fallback": "enqueue_transport_command" in operator_source and "fetch_transport_command_result" in operator_source and "issues/" in operator_source and '"action":action' in operator_source,
           "Workflow B supports coordinate-free semantic inspection": '"semantic-inspect"' in operator_source and '"editor.get_state"' in operator_source and '"scene.get_tree"' in operator_source,
           "Workflow B semantic inspection is coordinate-free": "semantic_read_allowlist" in operator_source and '"semantic-inspect"' in operator_source,
           "Workflow B supports one scoped semantic edit": '"semantic-edit"' in operator_source and '"scene.add_node"' in operator_source and "allowed_node_types" in operator_source,
@@ -135,6 +138,8 @@ jobs:
               "Workflow A imports an immutable project revision": "resolve_sha()" in worker_source and '"expected_sha":sha' in worker_source,
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
               "Workflow A publishes its ready marker": "post_host_ready_comment" in worker_source,
+          "Workflow A can create a durable Neon session": "create_transport_session" in worker_source and '"transport_session_id":transport_session_id' in worker_source,
+          "Workflow A command loop can use Neon leases and artifact results": "claim_transport_command" in command_loop_source and "complete_transport_command" in command_loop_source and "upload_json_artifact" in command_loop_source,
               "Workflow A keeps browser commands available after optional warnings": "if browser_ready and not page.is_closed()" in worker_source and "semantic_controller_probe" in worker_source,
               "Workflow A stores evidence in GitHub Actions": "actions/upload-artifact@v4" in host_source and "artifact_storage" in worker_source and "GitHub Actions workflow artifact" in worker_source,
               "Workflow B isolates concurrency by request revision": "group: godot-session-operator-" in operator_source and "cancel-in-progress: false" in operator_source,
