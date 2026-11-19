@@ -1,0 +1,42 @@
+name: Build Neon A/B bridge deployment bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - "neon/functions/abbridge/**"
+      - ".github/workflows/build-abbridge-bundle.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/verdant-valley-development-benchmark
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: neon/functions/abbridge/package.json
+      - name: Install production dependencies
+        working-directory: neon/functions/abbridge
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Validate and package deployable Function
+        working-directory: neon/functions/abbridge
+        run: |
+          node --check index.mjs
+          node --input-type=module -e "import('./index.mjs').then(() => console.log('Function module loaded'))"
+          zip -qr "$GITHUB_WORKSPACE/abbridge-deployment.zip" index.mjs package.json node_modules
+          unzip -t "$GITHUB_WORKSPACE/abbridge-deployment.zip"
+          ls -lh "$GITHUB_WORKSPACE/abbridge-deployment.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abbridge-deployment-bundle
+          path: abbridge-deployment.zip
+          retention-days: 3
