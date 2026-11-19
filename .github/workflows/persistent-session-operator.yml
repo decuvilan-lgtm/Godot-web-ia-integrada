@@ -31,7 +31,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
-          AB_API_URL: ${{ vars.AB_API_URL }}
+          AB_API_URL: https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech
           AB_DEVICE_TOKEN: ${{ secrets.AB_AGENT_DEVICE_TOKEN }}
         run: |
           set -euo pipefail
