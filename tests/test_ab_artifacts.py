@@ -64,7 +64,6 @@ class ArtifactTests(unittest.TestCase):
             mock.patch("scripts.bridge.artifacts._control_request", side_effect=responses) as control,
             mock.patch("scripts.bridge.artifacts.upload_artifact") as upload,
         ):
-             mock.patch("scripts.bridge.artifacts.upload_artifact") as upload:
             result = __import__("scripts.bridge.artifacts", fromlist=["upload_json_artifact"]).upload_json_artifact(
                 "https://api.example", "device-token", {"scene": "Main"}, session_id="session-abc"
             )
