@@ -8,6 +8,5 @@
     "@aws-sdk/s3-request-presigner": "^3.900.0",
     "@neon/functions": "^1.0.0",
     "pg": "^8.16.3",
-    "jose": "^6.1.0"
   }
 }
