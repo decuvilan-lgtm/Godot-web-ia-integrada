@@ -153,7 +153,7 @@ jobs:
               "Workflow A exports request variables safely": "chr(10)" in host_source,
               "Workflow A does not call Render Relay": "RELAY_URL" not in worker_source and "oidc_preflight" not in worker_source and "relay_request(" not in worker_source,
               "Workflow A authenticates branch SHA lookup": '"Authorization":"Bearer "+os.environ.get("GITHUB_TOKEN","")' in worker_source,
-              "A and B share the same browser session ID": "session_id" in operator_source and "session_id" in command_loop_source,
+              "A and B share the same browser session ID": "session_id" in bridge_request_source and "session_id" in command_loop_source,
               "The issue command loop trusts the user and GitHub Actions bot": 'TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}' in command_loop_source,
               "Relay validates mouse bounds": "_validate_mouse_point" in relay_source and "outside the editor viewport" in relay_source,
               "Godot editor dispatches both input and change events": 'new Event("input", { bubbles: true })' in editor_patcher and 'new Event("change", { bubbles: true })' in editor_patcher,
