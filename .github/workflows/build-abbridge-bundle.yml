@@ -31,7 +31,12 @@ jobs:
         working-directory: neon/functions/abbridge
         run: |
           npx --yes esbuild@0.25.12 index.mjs --bundle --minify --platform=node --format=cjs --packages=bundle --external:node:* --outfile=dist/index.js
-          printf '\nconst __abbridge_export = module.exports;\nmodule.exports = (typeof __abbridge_export?.fetch === \\\"function\\\") ? __abbridge_export : __abbridge_export?.default;\n' >> dist/index.js
+          cat >> dist/index.js <<'EOF'
+          const __abbridge_export = module.exports;
+          module.exports = typeof __abbridge_export?.fetch === "function"
+            ? __abbridge_export
+            : __abbridge_export?.default;
+          EOF
           node --check dist/index.js
           node -e "const handler=require('./dist/index.js'); if(typeof handler.fetch!=='function') throw new Error('Bundle default export is not a fetch handler: '+Object.keys(handler||{})); console.log('Bundled Function fetch handler loaded')"
           cd dist
