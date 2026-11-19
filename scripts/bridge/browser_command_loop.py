@@ -20,7 +20,7 @@ API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
 MAX_TEXT=500
 POLL_SECONDS=4.0  # Keep the 60-minute worst-case session below GitHub's 1,000 requests/hour token budget.
-SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"scene.get_tree":set(),"scene.inspect_node":{"path"},"scene.add_node":{"node_type","node_name","parent_path"},"scene.set_property":{"path","property","value"}}
+SEMANTIC_ACTIONS={"editor.get_state":set(),"editor.list_capabilities":set(),"project.list_files":set(),"project.read_file":{"path"},"project.write_file":{"path","content"},"resource.inspect":{"path"},"scene.get_tree":set(),"scene.inspect_node":{"path"},"scene.add_node":{"node_type","node_name","parent_path"},"scene.set_property":{"path","property","value"},"scene.save":set()}
 ALLOWED_KEYS={"F5","F6","F8","w","a","s","d","e","f","W","A","S","D","E","F","Escape","Enter","Tab","Space","Backspace","Delete","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift+Tab","Control+A","Control+Z","Control+Y","Control+S"}
 
 def _api(url, token, method="GET", payload=None):
@@ -93,6 +93,14 @@ def _validate(command, session_id, last_seq):
         args=command.get("args",{})
         if editor_action not in SEMANTIC_ACTIONS or not isinstance(args,dict) or set(args)-SEMANTIC_ACTIONS[editor_action]:
             raise ValueError("semantic_command arguments do not match the action allowlist")
+        if editor_action in {"project.read_file","project.write_file","resource.inspect"}:
+            path=args.get("path")
+            if set(args)-SEMANTIC_ACTIONS[editor_action] or not isinstance(path,str) or not path.startswith("res://") or len(path)>512 or ".." in path.split("/") or "\\" in path or "//" in path:
+                raise ValueError("Project operation requires a bounded safe res:// path")
+            if editor_action in {"project.read_file","project.write_file"} and Path(path).suffix.lower() not in {".gd",".tscn",".tres",".godot",".cfg",".json",".txt",".md"}:
+                raise ValueError("Only allowlisted text project files can be read or written")
+            if editor_action=="project.write_file" and (not isinstance(args.get("content"),str) or len(args["content"].encode("utf-8"))>10000):
+                raise ValueError("project.write_file content is limited to 10,000 UTF-8 bytes")
         if editor_action=="scene.inspect_node":
             path=args.get("path")
             if set(args)!={"path"} or not isinstance(path,str) or not path or len(path)>200:
