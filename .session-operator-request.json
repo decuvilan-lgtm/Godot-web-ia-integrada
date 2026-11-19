@@ -1,7 +1,14 @@
 {
-  "operation": "latency-benchmark",
-  "session_id": "neon-20261119-03",
-  "issue_number": 71,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
-  "branch": "test/verdant-valley-development-benchmark"
+  "branch": "test/verdant-valley-development-benchmark",
+  "request_id": "a-observe-0001",
+  "transport_session_id": "f2e3e53c-0fa7-4828-aa43-2289bc101c4f",
+  "command": {
+    "action": "screenshot",
+    "args": {
+      "include_image": true,
+      "scope": "page"
+    }
+  },
+  "timeout_seconds": 180
 }
