@@ -31,7 +31,7 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         path = args.get("path")
         if not isinstance(path, str) or not path.startswith("res://") or len(path) > 512:
             raise ValueError(f"{action} requires a bounded res:// path")
-        if ".." in path.split("/") or "\\" in path or "//" in path:
+        if ".." in path.split("/") or "\\" in path or "//" in path[6:]:
             raise ValueError("Project paths must not traverse outside res://")
         if action in {"project.read_file", "project.write_file"}:
             extension = "." + path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
