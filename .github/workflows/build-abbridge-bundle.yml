@@ -10,7 +10,7 @@ on:
       - ".github/workflows/build-abbridge-bundle.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   bundle:
@@ -40,3 +40,16 @@ jobs:
           name: abbridge-deployment-bundle
           path: abbridge-deployment.zip
           retention-days: 3
+      - name: Publish base64 archive chunks for the Neon deployment API
+        run: |
+          mkdir -p .github/abbridge-bundle
+          base64 -w0 abbridge-deployment.zip > /tmp/abbridge-deployment.b64
+          rm -f .github/abbridge-bundle/part-*.b64
+          split -b 400000 -d --additional-suffix=.b64 /tmp/abbridge-deployment.b64 .github/abbridge-bundle/part-
+          printf '%s\n' "$GITHUB_SHA" > .github/abbridge-bundle/source-commit.txt
+          printf '%s\n' "$(find .github/abbridge-bundle -maxdepth 1 -name 'part-*.b64' | wc -l)" > .github/abbridge-bundle/part-count.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/abbridge-bundle
+          git commit -m "Publish staging A/B bridge deployment bundle"
+          git push origin HEAD:test/verdant-valley-development-benchmark
