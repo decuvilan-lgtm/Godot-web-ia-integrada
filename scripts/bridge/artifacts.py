@@ -157,6 +157,93 @@ def download_artifact(url: str, manifest: dict[str, Any], *, timeout: int = 60) 
     return data
 
 
+def _control_request(api_base: str, token: str, path: str, payload: dict[str, Any], *, timeout: int = 20) -> dict[str, Any]:
+    """Call the authenticated artifact control-plane API without exposing its bearer token."""
+    _validate_transfer_url(api_base)
+    parsed = urllib.parse.urlsplit(api_base)
+    if parsed.query or parsed.path not in ("", "/") or not isinstance(path, str) or not path.startswith("/"):
+        raise ArtifactError("Invalid artifact control-plane endpoint")
+    if not isinstance(token, str) or not token or len(token) > 4096 or any(ch.isspace() for ch in token):
+        raise ArtifactError("A valid device bearer token is required")
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(
+        api_base.rstrip("/") + path,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            raw = response.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise ArtifactError("Artifact control response is too large")
+    except urllib.error.HTTPError as exc:
+        raise ArtifactError("Artifact control request failed with HTTP " + str(exc.code)) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise ArtifactError("Artifact control request failed before completion") from exc
+    try:
+        result = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ArtifactError("Artifact control response is not valid JSON") from exc
+    if not isinstance(result, dict):
+        raise ArtifactError("Artifact control response must be a JSON object")
+    return result
+
+
+def upload_json_artifact(
+    api_base: str,
+    token: str,
+    payload: Any,
+    *,
+    session_id: str,
+    kind: str = "context_bundle",
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Request a scoped upload URL, upload bytes, and finalize the manifest."""
+    packed, manifest = pack_json_artifact(payload, session_id=session_id, kind=kind)
+    authorization = _control_request(api_base, token, "/v1/artifacts/upload-url", {"manifest": manifest})
+    upload_url = authorization.get("upload_url")
+    returned_id = authorization.get("artifact_id")
+    if not isinstance(upload_url, str) or returned_id != manifest["artifact_id"]:
+        raise ArtifactError("Artifact API returned an invalid upload authorization")
+    upload_artifact(upload_url, packed, content_type=manifest["content_type"], timeout=timeout)
+    finalized = _control_request(
+        api_base, token, "/v1/artifacts/finalize",
+        {"artifact_id": manifest["artifact_id"], "sha256": manifest["sha256"]},
+    )
+    if finalized.get("status") != "ready" or finalized.get("artifact_id") != manifest["artifact_id"]:
+        raise ArtifactError("Artifact API did not confirm successful finalization")
+    return {"artifact_id": manifest["artifact_id"], "manifest": manifest}
+
+
+def download_json_artifact(
+    api_base: str,
+    token: str,
+    artifact_id: str,
+    *,
+    timeout: int = 60,
+) -> Any:
+    """Request a session-scoped download URL and verify the full artifact before decoding."""
+    try:
+        uuid.UUID(artifact_id)
+    except (ValueError, AttributeError) as exc:
+        raise ArtifactError("artifact_id must be a UUID") from exc
+    authorization = _control_request(
+        api_base, token, "/v1/artifacts/download-url", {"artifact_id": artifact_id},
+    )
+    manifest = authorization.get("manifest")
+    download_url = authorization.get("download_url")
+    if not isinstance(manifest, dict) or manifest.get("artifact_id") != artifact_id or not isinstance(download_url, str):
+        raise ArtifactError("Artifact API returned an invalid download authorization")
+    packed = download_artifact(download_url, manifest, timeout=timeout)
+    return unpack_json_artifact(packed, manifest)
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Presigned URLs are single-origin capabilities; redirects are never followed."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
