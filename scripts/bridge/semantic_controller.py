@@ -10,6 +10,11 @@ CHANNEL = "GODOT_CONTROLLER_BRIDGE_V1"
 ACTIONS = {
     "editor.get_state": set(),
     "editor.list_capabilities": set(),
+    "project.list_files": set(),
+    "project.read_file": {"path"},
+    "project.write_file": {"path", "content"},
+    "resource.inspect": {"path"},
+    "scene.save": set(),
     "scene.get_tree": set(),
     "scene.inspect_node": {"path"},
     "scene.add_node": {"node_type", "node_name", "parent_path"},
@@ -22,6 +27,21 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         raise ValueError(f"Unsupported semantic editor action: {action}")
     if not isinstance(args, dict) or set(args) - ACTIONS[action]:
         raise ValueError("Invalid arguments for semantic editor action")
+    if action in {"project.read_file", "project.write_file", "resource.inspect"}:
+        path = args.get("path")
+        if not isinstance(path, str) or not path.startswith("res://") or len(path) > 512:
+            raise ValueError(f"{action} requires a bounded res:// path")
+        if ".." in path.split("/") or "\\" in path or "//" in path:
+            raise ValueError("Project paths must not traverse outside res://")
+        if action in {"project.read_file", "project.write_file"}:
+            extension = "." + path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
+            if extension not in {".gd", ".tscn", ".tres", ".godot", ".cfg", ".json", ".txt", ".md"}:
+                raise ValueError("Only allowlisted text project files can be read or written")
+        if action == "project.write_file":
+            content = args.get("content")
+            if not isinstance(content, str) or len(content.encode("utf-8")) > 10000:
+                raise ValueError("project.write_file content is limited to 10,000 UTF-8 bytes")
+        return
     if action == "scene.inspect_node":
         path = args.get("path")
         if set(args) != {"path"} or not isinstance(path, str) or not path or len(path) > 200:
@@ -70,7 +90,8 @@ def _validate(action: str, args: dict[str, Any]) -> None:
         else:
             raise ValueError("Property value must be a JSON primitive, numeric vector/color array, or resource_path object")
         return
-    if action != "scene.add_node":
+    if action not in {"scene.add_node"}:
+
         if args:
             raise ValueError("Read-only editor queries do not accept arguments")
         return
