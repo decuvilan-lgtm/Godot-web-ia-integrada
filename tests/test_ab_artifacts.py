@@ -53,5 +53,42 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(request.data, b"payload")
 
 
+    def test_upload_flow_requires_server_finalization(self):
+        data, manifest = pack_json_artifact({"scene": "Main"}, session_id="session-abc")
+        responses = [
+            {"artifact_id": manifest["artifact_id"], "upload_url": "https://storage.example/put"},
+            {"artifact_id": manifest["artifact_id"], "status": "ready"},
+        ]
+        with mock.patch("scripts.bridge.artifacts._control_request", side_effect=responses) as control, \
+             mock.patch("scripts.bridge.artifacts.upload_artifact") as upload:
+            result = __import__("scripts.bridge.artifacts", fromlist=["upload_json_artifact"]).upload_json_artifact(
+                "https://api.example", "device-token", {"scene": "Main"}, session_id="session-abc"
+            )
+        self.assertEqual(result["artifact_id"], manifest["artifact_id"])
+        self.assertEqual(control.call_count, 2)
+        upload.assert_called_once()
+        self.assertEqual(upload.call_args.args[0], "https://storage.example/put")
+
+    def test_download_flow_checks_artifact_identity_and_hash(self):
+        from scripts.bridge.artifacts import download_json_artifact
+        data, manifest = pack_json_artifact({"scene": "Main"}, session_id="session-abc")
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={
+            "artifact_id": manifest["artifact_id"],
+            "download_url": "https://storage.example/get",
+            "manifest": manifest,
+        }), mock.patch("scripts.bridge.artifacts.download_artifact", return_value=data):
+            self.assertEqual(
+                download_json_artifact("https://api.example", "device-token", manifest["artifact_id"]),
+                {"scene": "Main"},
+            )
+
+    def test_control_plane_rejects_non_origin_base_and_bad_token(self):
+        from scripts.bridge.artifacts import _control_request
+        with self.assertRaises(ArtifactError):
+            _control_request("https://api.example/path", "token", "/v1/artifacts/upload-url", {})
+        with self.assertRaises(ArtifactError):
+            _control_request("https://api.example", "bad token", "/v1/artifacts/upload-url", {})
+
+
 if __name__ == "__main__":
     unittest.main()
