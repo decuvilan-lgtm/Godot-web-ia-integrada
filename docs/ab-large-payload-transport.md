@@ -122,3 +122,17 @@ The additive manifest-table proposal is `sql/001_ab_artifacts.sql`. It reference
 ## Not live yet
 
 These primitives are not connected to the running A/B session yet. The next required pieces are the Neon Function that authenticates devices and issues scoped upload/download URLs, the manifest finalization endpoint that verifies object metadata, and the A/B adapters that exchange artifact IDs instead of inline payloads. GitHub Issues remains the active fallback until an end-to-end real-browser test passes.
+
+
+## Client API contract (v1)
+
+The Python client now exposes `upload_json_artifact(...)` and `download_json_artifact(...)`. They expect an authenticated control-plane API at the origin (HTTPS, no path/query) and use these routes:
+
+- `POST /v1/artifacts/upload-url` with `{ "manifest": ... }` → `{ "artifact_id": "...", "upload_url": "https://..." }`.
+- Client performs a direct `PUT` to the short-lived URL using the manifest content type.
+- `POST /v1/artifacts/finalize` with `{ "artifact_id": "...", "sha256": "..." }` → `{ "artifact_id": "...", "status": "ready" }`.
+- `POST /v1/artifacts/download-url` with `{ "artifact_id": "..." }` → `{ "artifact_id": "...", "download_url": "https://...", "manifest": ... }`.
+
+Every control-plane request uses the device bearer token. The client never logs it, refuses non-HTTPS control/storage URLs and redirects, bounds response sizes, and validates the downloaded bytes and expanded JSON before returning a payload. The API must enforce device/session membership on every route; possession of an artifact UUID alone is not authorization.
+
+The device token hash convention for the pending Function implementation is SHA-256 hex of the bearer token, compared against `command_center.devices.token_hash`; revoked devices must be rejected. The database already has `workspace_id`, `device_kind`, `installation_id`, `token_hash`, and `revoked_at` fields. No device currently exists on the inspected branch, so provisioning/pairing remains a prerequisite to a live test.
