@@ -249,3 +249,5 @@ The archived Workflow B artifact for run [44249881250](https://github.com/decuvi
 | A-side processing range | 7.23–570.68 ms |
 
 This is the **GitHub Issues transport baseline**, not a Neon measurement. The several-second round trip, despite generally sub-200 ms A-side processing, shows that polling and comment transport dominate much of the wait. The new 250 ms Neon polling cadence is intended to reduce that overhead; only a live Neon A/B benchmark can confirm the improvement.
+
+The staging A/B workflows now point directly at the staging Function URL, so no `AB_API_URL` repository variable is needed. The only remaining GitHub configuration inputs are the two device-token secrets: `AB_WEB_DEVICE_TOKEN` for Workflow A and `AB_AGENT_DEVICE_TOKEN` for ephemeral Workflow B.
