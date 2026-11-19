@@ -207,3 +207,29 @@ DATABASE_URL="..." node neon/functions/abbridge/provision-device.mjs --workspace
 ```
 
 Save the first token as GitHub Actions secret `AB_WEB_DEVICE_TOKEN` and the second as `AB_AGENT_DEVICE_TOKEN`; set repository variable `AB_API_URL` to the deployed Function invocation URL. Do not paste tokens into source files, issue comments, or chat. The script has deliberately not been run because the only identified Neon branch is the protected-by-convention production/default branch.
+
+## Ephemeral B / iterative agent loop
+
+Workflow B is a **one-shot worker**, not a resident agent or always-on service. One GitHub Actions run receives one bounded request, waits for A's already-open browser session, joins the Neon session, sends its requested command sequence, uploads the result artifact, and exits. It does not keep a process alive to think or wait for the next task.
+
+The outer agent (ChatGPT) owns the iterative reasoning loop:
+1. Read the result artifact from the completed B run, including screenshots and structured observations.
+2. Inspect the evidence and decide the next bounded operation.
+3. Submit a new request, which starts a fresh ephemeral B run.
+4. Repeat until the requested outcome is verified; then stop issuing B jobs.
+
+A remains the long-lived owner of the actual Chromium session. B never creates a second browser or takes ownership of A's page.
+
+### Latency instrumentation
+
+The one-shot B result records:
+- GitHub readiness-marker wait (separate from the Neon A/B connection);
+- Neon session-join request duration;
+- first A command round trip;
+- per-command B round trip, result-poll count, and A-side processing time;
+- minimum, median, p95, and maximum command round trips for the latency benchmark;
+- total B operator runtime.
+
+In Neon mode A polls for commands every 250 ms and sends a session heartbeat every 20 seconds. B polls for results every 250 ms. The GitHub Issues fallback retains its slower polling cadence to stay within GitHub API budgets. These are configured polling intervals, not measured end-to-end latency guarantees.
+
+The Neon staging branch is `ab-transport-staging`. It is a child of `production`, is not the default branch, and has the additive `command_center.artifacts` table applied. The `production` branch was not modified.
