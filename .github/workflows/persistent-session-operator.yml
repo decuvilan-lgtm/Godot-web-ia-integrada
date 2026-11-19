@@ -43,6 +43,7 @@ jobs:
               fetch_transport_command_result, download_json_artifact,
           )
 
+          operator_started=time.monotonic()
           request_path=Path(".session-operator-request.json")
           if not request_path.is_file():
               print("No operator request file; ignoring request-file deletion event")
@@ -134,8 +135,10 @@ jobs:
 
           issue_path=f"/repos/{repo}/issues/{issue_number}/comments"
           ready_marker="<!-- godot-browser-host-ready -->"
-          ready_deadline=time.monotonic()+900
+          ready_started=time.monotonic()
+          ready_deadline=ready_started+900
           ready_poll_seconds=2.0
+          ready_marker_wait_ms=None
           comments=[]
           transport_session_id=None
           while time.monotonic()<ready_deadline:
@@ -164,13 +167,18 @@ jobs:
               time.sleep(ready_poll_seconds)
           else:
               raise TimeoutError("Workflow A did not publish a ready marker for this browser session")
+          ready_marker_wait_ms=round((time.monotonic()-ready_started)*1000,2)
           neon_api=os.environ.get("AB_API_URL","").strip()
           neon_token=os.environ.get("AB_DEVICE_TOKEN","").strip()
           neon_mode=bool(neon_api and neon_token)
           if neon_mode:
               if not isinstance(transport_session_id,str) or not re.fullmatch(r"[0-9a-fA-F-]{36}",transport_session_id):
                   raise RuntimeError("Workflow A did not publish a valid Neon transport session ID")
+              join_started=time.monotonic()
               join_transport_session(neon_api,neon_token,transport_session_id)
+              neon_join_ms=round((time.monotonic()-join_started)*1000,2)
+          else:
+              neon_join_ms=None
           last_seq=0
           for item in comments:
               body=(item.get("body") or "").strip()
@@ -211,7 +219,7 @@ jobs:
                           command_timings.append(timing)
                           value["_bridge_timing"]=timing
                           return value
-                      time.sleep(1.0)
+                      time.sleep(0.25)
                   raise TimeoutError(f"Timed out waiting for Neon browser command {action}")
               command={"protocol":1,"session_id":session_id,"seq":nonlocal_seq[0],"action":action,**fields}
               created=api_call(issue_path,"POST",{"body":json.dumps(command,ensure_ascii=False)})
@@ -402,7 +410,10 @@ jobs:
           if latency_benchmark is not None:
               measured=sorted(item["round_trip_ms"] for item in latency_benchmark["samples"])
               latency_benchmark.update({"min_ms":min(measured),"median_ms":percentile(measured,0.5),"p95_ms":percentile(measured,0.95),"max_ms":max(measured)})
-          result={"workflow":"B-operator","operation":operation,"session_id":session_id,"bridge_timing":bridge_timing,
+          result={"workflow":"B-operator-ephemeral","operation":operation,"session_id":session_id,
+                  "connection_timing":{"ready_marker_wait_ms":ready_marker_wait_ms,"neon_join_ms":neon_join_ms,
+                                       "first_command_round_trip_ms":initial.get("_bridge_timing",{}).get("round_trip_ms")},
+                  "operator_runtime_ms":round((time.monotonic()-operator_started)*1000,2),"bridge_timing":bridge_timing,
                   "issue_number":issue_number,"commands_sent":commands_sent,**extra,
                   "initial_status":initial,"final_status":after,"session_kept_open":operation!="stop"}
           Path("operator-result.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
