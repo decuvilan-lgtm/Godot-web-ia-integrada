@@ -12,7 +12,7 @@ This policy governs every user-issued task that uses the persistent Godot browse
 
 1. Start or reuse the authorized A session for the requested task. Do not treat a workflow's `queued`, `in_progress`, or successful startup status as task completion.
 2. Observe A for **10 full minutes** before issuing the first task-specific B request. During that period, inspect the available state/evidence at reasonable intervals and record meaningful changes, errors, readiness, and whether the same browser session remains alive.
-3. After the observation period, ChatGPT determines the next action from the user's request and the evidence. It sends that explicit action through B. B transports it without changing its meaning.
+3. After the observation period, ChatGPT determines the next action from the user's request and the evidence. It sends that explicit action through one B request. **Each B invocation carries exactly one command**; do not batch future decisions or follow-up actions into the same request. B transports the command without changing its meaning.
 4. Wait for the actual A-side command result. Acknowledgement that a command was enqueued or claimed is not execution evidence.
 5. After **each B request has been executed**, observe A for another **10 full minutes** before deciding on the next B request. Repeat this cycle for every additional B request.
 6. ChatGPT verifies the requested outcome using returned state, screenshots, editor/project evidence, and any relevant tests. If verification fails, diagnose and issue another explicit B request, followed by another 10-minute observation period.
