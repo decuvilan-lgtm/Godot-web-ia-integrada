@@ -26,9 +26,15 @@ El adaptador procesa las solicitudes en el hilo principal del editor. Las respue
 - scene.get_tree (jerarquía limitada, con rutas relativas a la raíz de la escena)
 - scene.inspect_node (lectura acotada de propiedades visibles en el Inspector para un nodo)
 - scene.add_node (creación de nodos allowlisted, deshacible y sin guardado automático)
+- scene.set_property (edición de propiedades expuestas por el Inspector, con Undo/Redo)
+- project.list_files (inventario recursivo acotado del proyecto)
+- project.read_file (lectura UTF-8 de scripts, escenas y configuración)
+- project.write_file (escritura UTF-8 verificada de scripts, escenas y configuración; máximo 10 KB por operación)
+- resource.inspect (carga y consulta del tipo de un recurso)
+- scene.save (guardado explícito de la escena activa con comprobación del resultado de Godot)
 - Workflow B puede agrupar hasta 12 llamadas `scene.add_node` en una construcción secuencial y verificar que todos los nodos aparecen en el árbol.
 
-El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, con nombre, tipo y valor serializado. La edición de propiedades, recursos y scripts sigue pendiente.
+El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, con nombre, tipo y valor serializado. La edición de propiedades utiliza el historial Undo/Redo. Los scripts se editan como archivos de texto UTF-8 mediante `project.write_file`; los cambios se leen de vuelta para verificar el contenido.
 
 El árbol está limitado por profundidad y número de nodos. `scene.add_node` solo acepta clases de nodo allowlisted, nombres identificadores y padres dentro de la escena activa. Usa el historial Undo/Redo del editor y no guarda automáticamente. La extensión y el cliente rechazan comandos fuera de la allowlist. La edición de propiedades, recursos y scripts sigue pendiente.
 
@@ -61,4 +67,4 @@ La prueba manual con artefacto de compilación se ejecuta mediante .github/workf
 
 ## Limitaciones
 
-El control Web ya puede crear nodos de una lista fija; todavía no edita propiedades ni recursos. Tampoco sustituye a Godot Headless para pruebas técnicas. La edición avanzada pendiente debe incorporarse al agente Web para mantener el flujo móvil sin depender de una PC; el puente nativo es opcional y separado. La captura de vídeo del navegador muestra la sesión Chromium, no garantiza capturar una ventana de juego externa del escritorio.
+El control Web ya puede crear nodos de una lista fija; todavía no edita propiedades ni recursos. Tampoco sustituye a Godot Headless para pruebas técnicas. La escritura actual cubre archivos de texto del proyecto, no importación binaria de imágenes/audio/modelos ni transferencias grandes por fragmentos. Esas operaciones requieren el canal de artefactos y un ciclo de importación/validación adicional. El agente tampoco sustituye a Godot Headless para pruebas técnicas; el puente nativo es opcional y separado. La captura de vídeo del navegador muestra la sesión Chromium, no garantiza capturar una ventana de juego externa del escritorio.
