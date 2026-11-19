@@ -1,5 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createHash, createPublicKey, randomBytes, randomUUID, verify as verifySignature } from "node:crypto";
 import { Pool } from "pg";
 import { attachDatabasePool } from "@neon/functions";
 import {
@@ -14,9 +13,10 @@ const ALLOWED_KINDS = new Set([
   "video", "project_archive", "logs", "animation_frames", "command_result",
 ]);
 const BUCKET = process.env.AB_ARTIFACT_BUCKET || "godot-visual-captures";
-const GITHUB_OIDC_JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
+const GITHUB_OIDC_JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks";
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_OIDC_AUDIENCE = "godot-abbridge";
+let githubJwksCache = { expiresAt: 0, keys: [] };
 const AUTHORIZED_WORKFLOWS = new Map([
   ["decuvilan-lgtm/Godot-web-ia-integrada/.github/workflows/persistent-session-host.yml@refs/heads/test/verdant-valley-development-benchmark", "web_editor"],
   ["decuvilan-lgtm/Godot-web-ia-integrada/.github/workflows/persistent-session-operator.yml@refs/heads/test/verdant-valley-development-benchmark", "agent_controller"],
@@ -109,10 +109,28 @@ async function issueDevice(request) {
   if (!token) return json({ error: "unauthorized" }, 401);
   let payload;
   try {
-    ({ payload } = await jwtVerify(token, GITHUB_OIDC_JWKS, {
-      issuer: GITHUB_OIDC_ISSUER,
-      audience: GITHUB_OIDC_AUDIENCE,
-    }));
+    const parts = token.split(".");
+    if (parts.length !== 3) throw new Error("malformed_jwt");
+    const decode = (value) => JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const header = decode(parts[0]);
+    payload = decode(parts[1]);
+    if (header.alg !== "RS256" || typeof header.kid !== "string") throw new Error("unsupported_jwt");
+    if (typeof payload.exp !== "number" || payload.exp <= Math.floor(Date.now() / 1000)
+        || payload.iss !== GITHUB_OIDC_ISSUER
+        || !(Array.isArray(payload.aud) ? payload.aud.includes(GITHUB_OIDC_AUDIENCE) : payload.aud === GITHUB_OIDC_AUDIENCE)
+        || (payload.nbf && payload.nbf > Math.floor(Date.now() / 1000))) throw new Error("invalid_claims");
+    if (githubJwksCache.expiresAt <= Date.now()) {
+      const response = await fetch(GITHUB_OIDC_JWKS_URL, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error("jwks_fetch_failed");
+      const jwks = await response.json();
+      if (!Array.isArray(jwks.keys)) throw new Error("invalid_jwks");
+      githubJwksCache = { keys: jwks.keys, expiresAt: Date.now() + 10 * 60 * 1000 };
+    }
+    const jwk = githubJwksCache.keys.find((key) => key.kid === header.kid && key.kty === "RSA" && key.use === "sig");
+    if (!jwk) throw new Error("signing_key_not_found");
+    const publicKey = createPublicKey({ key: jwk, format: "jwk" });
+    const valid = verifySignature("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), publicKey, Buffer.from(parts[2], "base64url"));
+    if (!valid) throw new Error("signature_invalid");
   } catch {
     return json({ error: "invalid_github_oidc_token" }, 401);
   }
