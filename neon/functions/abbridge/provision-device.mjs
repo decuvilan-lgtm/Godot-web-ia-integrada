@@ -27,8 +27,8 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 try {
   const result = await pool.query(
     `INSERT INTO command_center.devices
-       (id, workspace_id, device_kind, label, installation_id, token_hash, created_at)
-     SELECT $1, id, $2, $3, $4, $5, now()
+       (id, workspace_id, device_kind, label, installation_id, token_hash, expires_at, created_at)
+     SELECT $1, id, $2, $3, $4, $5, now() + interval '2 hours', now()
        FROM command_center.workspaces
       WHERE slug = $6
      RETURNING id, workspace_id, device_kind, label`,
