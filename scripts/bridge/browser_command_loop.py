@@ -239,9 +239,9 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                     command_id = claimed["id"]
                     start_transport_command(neon_api, neon_token, command_id)
                     command_payload = {
+                        **(claimed.get("args") or {}),
                         "protocol": 1, "session_id": session_id,
                         "seq": last_seq + 1, "action": claimed["action"],
-                        **(claimed.get("args") or {}),
                     }
                     comments = [{
                         "id": last_seq + 1,
