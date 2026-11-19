@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { attachDatabasePool } from "@neon/functions";
 import {
@@ -20,10 +20,12 @@ const s3 = new S3Client({
   region: process.env.AWS_REGION,
   endpoint: process.env.AWS_ENDPOINT_URL_S3,
   forcePathStyle: true,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  ...(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    ? { credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      } }
+    : {}),
 });
 
 function json(data, status = 200) {
@@ -85,7 +87,13 @@ function validManifest(m) {
 async function bodyJson(request) {
   const length = Number(request.headers.get("content-length") || 0);
   if (length > 32 * 1024) throw new Error("request_too_large");
-  return await request.json();
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength > 32 * 1024) throw new Error("request_too_large");
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error("invalid_json");
+  }
 }
 async function uploadUrl(device, request) {
   const body = await bodyJson(request);
