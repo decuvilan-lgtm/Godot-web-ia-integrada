@@ -30,11 +30,11 @@ jobs:
       - name: Bundle Function and production dependencies into one module
         working-directory: neon/functions/abbridge
         run: |
-          npx --yes esbuild@0.25.12 index.mjs --bundle --minify --platform=node --format=esm --packages=bundle --external:node:* --outfile=dist/index.mjs
-          node --check dist/index.mjs
-          node --input-type=module -e "import('./dist/index.mjs').then(() => console.log('Bundled Function module loaded'))"
+          npx --yes esbuild@0.25.12 index.mjs --bundle --minify --platform=node --format=cjs --packages=bundle --external:node:* --outfile=dist/index.js
+          node --check dist/index.js
+          node -e "require('./dist/index.js'); console.log('Bundled Function module loaded')"
           cd dist
-          zip -q "$GITHUB_WORKSPACE/abbridge-deployment.zip" index.mjs
+          zip -q "$GITHUB_WORKSPACE/abbridge-deployment.zip" index.js
           unzip -t "$GITHUB_WORKSPACE/abbridge-deployment.zip"
           ls -lh "$GITHUB_WORKSPACE/abbridge-deployment.zip"
       - uses: actions/upload-artifact@v4
