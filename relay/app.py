@@ -32,9 +32,17 @@ MAX_MESSAGE_BYTES = 256 * 1024
 ALLOWED_ACTIONS = {"ping", "project.get_state", "project.list_files", "scene.inspect", "scene.open", "scene.select_node", "script.read"}
 
 app = FastAPI(title="Godot Web IA Relay", version=APP_VERSION)
+# The browser worker serves the editor from an ephemeral loopback port. Permit
+# only loopback origins (not arbitrary hosts) so the editor can fetch its
+# immutable GitHub project archive from this relay without opening CORS broadly.
+LOCAL_EDITOR_ORIGIN_REGEX = os.environ.get(
+    "LOCAL_EDITOR_ORIGIN_REGEX",
+    r"^https?://(?:127\\.0\\.0\\.1|localhost)(?::[0-9]+)?$",
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "https://godot-web-ia-integrada-rt2l.onrender.com").split(","),
+    allow_origins=[origin.strip() for origin in os.environ.get("ALLOWED_ORIGINS", "https://godot-web-ia-integrada-rt2l.onrender.com").split(",") if origin.strip()],
+    allow_origin_regex=LOCAL_EDITOR_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Command-Center-Admin", "X-Command-Id", "X-Frame-Index", "X-Project-Path", "X-Base-SHA256", "X-File-SHA256", "Last-Event-ID"],
