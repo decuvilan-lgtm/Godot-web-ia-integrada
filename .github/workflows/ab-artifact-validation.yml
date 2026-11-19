@@ -33,7 +33,9 @@ jobs:
         with:
           node-version: "24"
       - name: Check Neon artifact Function syntax
-        run: node --check neon/functions/abbridge/index.mjs
+        run: |
+          node --check neon/functions/abbridge/index.mjs
+          node --check neon/functions/abbridge/provision-device.mjs
       - name: Compile A/B transport and browser worker modules
         run: python -m py_compile scripts/bridge/artifacts.py scripts/bridge/browser_command_loop.py scripts/godot-browser-worker.py
       - name: Run artifact transfer contract tests
