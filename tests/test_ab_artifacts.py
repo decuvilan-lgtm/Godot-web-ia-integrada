@@ -113,5 +113,29 @@ class ArtifactTests(unittest.TestCase):
             unpack_json_artifact(data, dict(manifest, sha256="not-a-digest"))
 
 
+    def test_session_lifecycle_helpers_validate_server_identity(self):
+        from scripts.bridge.artifacts import (
+            create_transport_session, join_transport_session, heartbeat_transport_session,
+        )
+        session_id = "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        with mock.patch("scripts.bridge.artifacts._control_request", side_effect=[
+            {"session_id": session_id, "status": "waiting"},
+            {"session_id": session_id, "status": "connected"},
+            {"session_id": session_id, "status": "connected"},
+        ]) as control:
+            self.assertEqual(create_transport_session("https://api.example", "token")["session_id"], session_id)
+            self.assertEqual(join_transport_session("https://api.example", "token", session_id)["status"], "connected")
+            self.assertEqual(heartbeat_transport_session("https://api.example", "token", session_id)["status"], "connected")
+        self.assertEqual(control.call_count, 3)
+
+    def test_session_helpers_reject_cross_session_response(self):
+        from scripts.bridge.artifacts import join_transport_session
+        session_id = "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        other_id = "a8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={"session_id": other_id}):
+            with self.assertRaisesRegex(ArtifactError, "different session"):
+                join_transport_session("https://api.example", "token", session_id)
+
+
 if __name__ == "__main__":
     unittest.main()
