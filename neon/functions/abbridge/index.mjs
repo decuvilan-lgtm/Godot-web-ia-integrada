@@ -144,6 +144,137 @@ async function sessionHeartbeat(device, request) {
   return json({ session_id: result.rows[0].id, status: result.rows[0].status, expires_at: result.rows[0].expires_at });
 }
 
+const ALLOWED_COMMAND_ACTIONS = new Set([
+  "status", "screenshot", "click_text", "fill_placeholder", "wait",
+  "assert_text", "canvas_click", "canvas_drag", "canvas_scroll",
+  "press_key", "type_text", "semantic_command", "run_game", "game_view",
+  "game_click", "game_input", "stop",
+]);
+async function enqueueCommand(device, request) {
+  const body = await bodyJson(request);
+  const targets = new Set(["web_editor", "android_editor", "agent_controller"]);
+  if (!targets.has(body?.target) || body.target === device.device_kind) {
+    return json({ error: "invalid_command_target" }, 400);
+  }
+  if (!ALLOWED_COMMAND_ACTIONS.has(body?.action)) return json({ error: "action_not_allowed" }, 400);
+  if (!isUuid(body?.session_id) || !await sessionMembership(device, body.session_id)) {
+    return json({ error: "session_forbidden" }, 403);
+  }
+  if (!body.args || typeof body.args !== "object" || Array.isArray(body.args)) {
+    return json({ error: "command_args_must_be_object" }, 400);
+  }
+  if (typeof body.idempotency_key !== "string" || body.idempotency_key.length < 1 || body.idempotency_key.length > 128) {
+    return json({ error: "invalid_idempotency_key" }, 400);
+  }
+  const priority = Number.isInteger(body.priority) && body.priority >= -10 && body.priority <= 10 ? body.priority : 0;
+  const ttl = Number.isInteger(body.ttl_seconds) && body.ttl_seconds >= 15 && body.ttl_seconds <= 3600 ? body.ttl_seconds : 300;
+  const result = await pool.query(
+    `INSERT INTO command_center.commands
+       (workspace_id, session_id, origin_device_id, target, action, args,
+        status, priority, idempotency_key, created_at, expires_at, attempt_count)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,'queued',$7,$8,now(),now() + ($9 * interval '1 second'),0)
+     ON CONFLICT (workspace_id, idempotency_key) DO NOTHING
+     RETURNING id, status, created_at`,
+    [device.workspace_id, body.session_id, device.id, body.target, body.action,
+      JSON.stringify(body.args), priority, body.idempotency_key, ttl],
+  );
+  if (result.rowCount !== 1) {
+    const existing = await pool.query(
+      "SELECT id, status, created_at FROM command_center.commands WHERE workspace_id = $1 AND idempotency_key = $2",
+      [device.workspace_id, body.idempotency_key],
+    );
+    return json({ error: "idempotency_key_conflict", existing: existing.rows[0] || null }, 409);
+  }
+  return json({ command: result.rows[0] }, 201);
+}
+async function claimCommand(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.session_id) || !await sessionMembership(device, body.session_id)) {
+    return json({ error: "session_forbidden" }, 403);
+  }
+  const result = await pool.query(
+    `WITH candidate AS (
+       SELECT id
+         FROM command_center.commands
+        WHERE workspace_id = $1 AND session_id = $2 AND target = $3
+          AND (expires_at IS NULL OR expires_at > now())
+          AND (status = 'queued' OR (status IN ('claimed','running') AND claim_expires_at < now()))
+        ORDER BY priority DESC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+     )
+     UPDATE command_center.commands c
+        SET status = 'claimed', claimed_by_device = $4, claimed_at = now(),
+            claim_expires_at = now() + interval '60 seconds',
+            attempt_count = attempt_count + 1
+       FROM candidate
+      WHERE c.id = candidate.id
+      RETURNING c.id, c.session_id, c.target, c.action, c.args,
+                c.idempotency_key, c.attempt_count, c.claim_expires_at`,
+    [device.workspace_id, body.session_id, device.device_kind, device.id],
+  );
+  return json({ command: result.rows[0] || null });
+}
+async function startCommand(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.command_id)) return json({ error: "invalid_command_id" }, 400);
+  const result = await pool.query(
+    `UPDATE command_center.commands
+        SET status = 'running', claim_expires_at = now() + interval '60 seconds'
+      WHERE id = $1 AND workspace_id = $2 AND claimed_by_device = $3
+        AND status = 'claimed' AND claim_expires_at > now()
+      RETURNING id, status, claim_expires_at`,
+    [body.command_id, device.workspace_id, device.id],
+  );
+  if (result.rowCount !== 1) return json({ error: "command_lease_lost" }, 409);
+  return json({ command: result.rows[0] });
+}
+async function renewCommandLease(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.command_id)) return json({ error: "invalid_command_id" }, 400);
+  const result = await pool.query(
+    `UPDATE command_center.commands
+        SET claim_expires_at = now() + interval '60 seconds'
+      WHERE id = $1 AND workspace_id = $2 AND claimed_by_device = $3
+        AND status IN ('claimed','running') AND claim_expires_at > now()
+      RETURNING id, claim_expires_at`,
+    [body.command_id, device.workspace_id, device.id],
+  );
+  if (result.rowCount !== 1) return json({ error: "command_lease_lost" }, 409);
+  return json({ command: result.rows[0] });
+}
+async function completeCommand(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.command_id) || typeof body.ok !== "boolean"
+      || !body.result || typeof body.result !== "object" || Array.isArray(body.result)) {
+    return json({ error: "invalid_command_result" }, 400);
+  }
+  const duration = Number.isInteger(body.duration_ms) && body.duration_ms >= 0 && body.duration_ms <= 3600000
+    ? body.duration_ms : null;
+  const errorCode = typeof body.error_code === "string" ? body.error_code.slice(0, 100) : null;
+  const errorMessage = typeof body.error_message === "string" ? body.error_message.slice(0, 500) : null;
+  const status = body.ok ? "succeeded" : "failed";
+  const result = await pool.query(
+    `WITH updated AS (
+       UPDATE command_center.commands
+          SET status = $2, finished_at = now(), claim_expires_at = NULL,
+              error_code = $5, error_message = $6
+        WHERE id = $1 AND workspace_id = $3 AND claimed_by_device = $4
+          AND status IN ('claimed','running') AND claim_expires_at > now()
+        RETURNING id
+     )
+     INSERT INTO command_center.command_results
+       (id, command_id, ok, result, error_code, error_message, duration_ms, created_at)
+     SELECT gen_random_uuid(), id, $7, $8::jsonb, $5, $6, $9, now()
+       FROM updated
+     RETURNING command_id`,
+    [body.command_id, status, device.workspace_id, device.id, errorCode, errorMessage,
+      body.ok, JSON.stringify(body.result), duration],
+  );
+  if (result.rowCount !== 1) return json({ error: "command_lease_lost_or_already_completed" }, 409);
+  return json({ command_id: body.command_id, status });
+}
+
 async function uploadUrl(device, request) {
   const body = await bodyJson(request);
   const manifest = body?.manifest;
@@ -260,6 +391,11 @@ export default {
       if (url.pathname === "/v1/sessions" && request.method === "POST") return await createSession(device);
       if (url.pathname === "/v1/sessions/join" && request.method === "POST") return await joinSession(device, request);
       if (url.pathname === "/v1/sessions/heartbeat" && request.method === "POST") return await sessionHeartbeat(device, request);
+      if (url.pathname === "/v1/commands/enqueue") return await enqueueCommand(device, request);
+      if (url.pathname === "/v1/commands/claim") return await claimCommand(device, request);
+      if (url.pathname === "/v1/commands/start") return await startCommand(device, request);
+      if (url.pathname === "/v1/commands/lease") return await renewCommandLease(device, request);
+      if (url.pathname === "/v1/commands/complete") return await completeCommand(device, request);
       if (url.pathname === "/v1/artifacts/upload-url") return await uploadUrl(device, request);
       if (url.pathname === "/v1/artifacts/finalize") return await finalize(device, request);
       if (url.pathname === "/v1/artifacts/download-url") return await downloadUrl(device, request);
