@@ -260,6 +260,54 @@ def download_json_artifact(
     return unpack_json_artifact(packed, manifest)
 
 
+
+def request_github_actions_oidc_token(*, audience: str = "godot-abbridge") -> str:
+    """Request a short-lived GitHub Actions OIDC JWT without logging its value."""
+    request_url = __import__("os").environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+    request_token = __import__("os").environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+    parsed = urllib.parse.urlsplit(request_url)
+    if (parsed.scheme != "https" or not parsed.hostname
+            or not parsed.hostname.endswith(".actions.githubusercontent.com")
+            or not request_token):
+        raise ArtifactError("GitHub Actions OIDC identity is unavailable")
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query.append(("audience", audience))
+    url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), ""))
+    request = urllib.request.Request(url, headers={"Authorization": "Bearer " + request_token})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            raw = response.read(128 * 1024 + 1)
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise ArtifactError("GitHub Actions OIDC request failed") from exc
+    if len(raw) > 128 * 1024:
+        raise ArtifactError("GitHub Actions OIDC response is too large")
+    try:
+        value = json.loads(raw.decode("utf-8")).get("value")
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError) as exc:
+        raise ArtifactError("GitHub Actions OIDC response is invalid") from exc
+    if not isinstance(value, str) or not value or len(value) > 16_384:
+        raise ArtifactError("GitHub Actions did not return an OIDC token")
+    return value
+
+
+def issue_transport_device_token(
+    api_base: str,
+    oidc_token: str,
+    *,
+    expected_kind: str,
+) -> str:
+    """Exchange a verified GitHub workflow identity for a two-hour device token."""
+    if expected_kind not in {"web_editor", "agent_controller"}:
+        raise ArtifactError("Unsupported expected device role")
+    result = _control_request(api_base, oidc_token, "/v1/devices/issue", {})
+    if result.get("device_kind") != expected_kind:
+        raise ArtifactError("Device provisioning returned an unexpected role")
+    token = result.get("device_token")
+    if not isinstance(token, str) or len(token) < 32:
+        raise ArtifactError("Device provisioning returned an invalid token")
+    return token
+
+
 def create_transport_session(api_base: str, token: str) -> dict[str, Any]:
     """Create a durable session from a web_editor or android_editor device."""
     result = _control_request(api_base, token, "/v1/sessions", {})
