@@ -130,7 +130,7 @@ jobs:
               "Workflow B waits for A ready marker": "godot-browser-host-ready" in operator_source,
               "Workflow B waits for a correlated browser result": "godot-browser-result" in operator_source and "command_id" in operator_source,
               "Workflow A runs Chromium on the GitHub runner": "scripts/godot-browser-worker.py" in host_source and "runs-on: ubuntu-24.04" in host_source,
-              "Workflow A builds and serves the verified editor locally without Render": "LOCAL_EDITOR_DIR: public" in host_source and "id-token: write" not in host_source and "RELAY_URL" not in host_source,
+              "Workflow A builds and serves the verified editor locally without Render": "LOCAL_EDITOR_DIR: public" in host_source and "id-token: write" in host_source and "RELAY_URL" not in host_source,
               "Workflow A downloads a successful custom editor artifact": "actions/download-artifact@v8" in host_source and "godot-web-editor-agent-" in host_source and "EDITOR_BUILD_SHA" in host_source,
               "Workflow A verifies editor source parity": "BUILT_PATCHER_SHA" in host_source and "BUILT_BRIDGE_SHA" in host_source and "CURRENT_PATCHER_SHA" in host_source and "CURRENT_BRIDGE_SHA" in host_source,
               "Workflow A uses a same-origin GitHub archive proxy": "LOCAL_EDITOR_DIR: public" in host_source and "api.github.com/repos/" in worker_source and "zipball/" in worker_source,
@@ -139,6 +139,9 @@ jobs:
               "Workflow A keeps the browser available for B": "BROWSER_COMMAND_WINDOW_SECONDS" in host_source and "run_command_loop" in worker_source,
               "Workflow A publishes its ready marker": "post_host_ready_comment" in worker_source,
           "Workflow A can create a durable Neon session": "create_transport_session" in worker_source and '"transport_session_id":transport_session_id' in worker_source,
+    "Workflow A obtains a short-lived OIDC device identity": "request_github_actions_oidc_token" in worker_source and "issue_transport_device_token" in worker_source,
+    "Workflow B obtains a short-lived OIDC device identity": "id-token: write" in operator_source and "request_github_actions_oidc_token" in operator_source and "issue_transport_device_token" in operator_source,
+
           "Workflow A command loop can use Neon leases and artifact results": "claim_transport_command" in command_loop_source and "complete_transport_command" in command_loop_source and "upload_json_artifact" in command_loop_source,
               "Workflow A keeps browser commands available after optional warnings": "if browser_ready and not page.is_closed()" in worker_source and "semantic_controller_probe" in worker_source,
               "Workflow A stores evidence in GitHub Actions": "actions/upload-artifact@v4" in host_source and "artifact_storage" in worker_source and "GitHub Actions workflow artifact" in worker_source,
