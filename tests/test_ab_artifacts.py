@@ -200,5 +200,28 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(control.call_count, 2)
 
 
+    def test_command_claim_uses_bounded_server_long_poll(self):
+        from scripts.bridge.artifacts import claim_transport_command
+        session_id = "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={"command": None}) as control:
+            self.assertIsNone(claim_transport_command(
+                "https://api.example", "token", session_id, wait_ms=7500,
+            ))
+        args, kwargs = control.call_args
+        self.assertEqual(args[2], "/v1/commands/claim")
+        self.assertEqual(args[3], {"session_id": session_id, "wait_ms": 7500})
+        self.assertEqual(kwargs["timeout"], 20)
+
+    def test_command_claim_rejects_unbounded_wait(self):
+        from scripts.bridge.artifacts import claim_transport_command
+        session_id = "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        for wait_ms in (-1, 10_001, True):
+            with self.subTest(wait_ms=wait_ms):
+                with self.assertRaisesRegex(ArtifactError, "wait_ms"):
+                    claim_transport_command(
+                        "https://api.example", "token", session_id, wait_ms=wait_ms,
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()
