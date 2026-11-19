@@ -437,3 +437,20 @@ jobs:
           path: operator-result.json
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Close the temporary command channel after B finishes
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const request = JSON.parse(fs.readFileSync('.session-operator-request.json', 'utf8'));
+            const issue = Number(request.issue_number);
+            if (Number.isInteger(issue) && issue > 0) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue,
+                state: 'closed'
+              });
+            }
