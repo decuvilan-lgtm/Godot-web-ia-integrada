@@ -6,7 +6,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
-from bridge.artifacts import create_transport_session
+from bridge.artifacts import (
+    create_transport_session, request_github_actions_oidc_token,
+    issue_transport_device_token,
+)
 from bridge.project_assets import inject_generated_project_assets
 from bridge.semantic_controller import execute_semantic_command
 
@@ -146,7 +149,11 @@ def main():
     if not 60<=IMPORT_TIMEOUT<=600: raise ValueError("IMPORT_TIMEOUT_SECONDS must be 60-600")
     sha=resolve_sha(); session_id=os.environ.get("BROWSER_SESSION_ID", f"gha-{RUN_ID}-{ATTEMPT}"); task_id=f"github-actions-{RUN_ID}-{ATTEMPT}"
     transport_session_id=None
-    if os.environ.get("AB_API_URL") and os.environ.get("AB_DEVICE_TOKEN"):
+    if os.environ.get("AB_API_URL"):
+        oidc_token=request_github_actions_oidc_token()
+        os.environ["AB_DEVICE_TOKEN"]=issue_transport_device_token(
+            os.environ["AB_API_URL"], oidc_token, expected_kind="web_editor"
+        )
         transport_session_id=create_transport_session(
             os.environ["AB_API_URL"], os.environ["AB_DEVICE_TOKEN"]
         )["session_id"]
