@@ -93,5 +93,25 @@ class ArtifactTests(unittest.TestCase):
             _control_request("https://api.example", "bad token", "/v1/artifacts/upload-url", {})
 
 
+    def test_large_context_bundle_round_trip(self):
+        from scripts.bridge.artifacts import MAX_UNCOMPRESSED_BYTES
+        payload = {
+            "scene_tree": [{"path": "Root/Node" + str(i), "properties": {"text": "context" * 80}}
+                           for i in range(2500)],
+            "selected_scripts": ["extends Node2D\n" + "var value = 1\n" * 100 for _ in range(20)],
+        }
+        data, manifest = pack_json_artifact(payload, session_id="session-large")
+        self.assertLessEqual(len(data), 64 * 1024 * 1024)
+        self.assertLessEqual(manifest["uncompressed_size_bytes"], MAX_UNCOMPRESSED_BYTES)
+        self.assertEqual(unpack_json_artifact(data, manifest), payload)
+
+    def test_manifest_rejects_boolean_size_and_invalid_digest(self):
+        data, manifest = pack_json_artifact({"safe": True}, session_id="session-abc")
+        with self.assertRaisesRegex(ArtifactError, "compressed size"):
+            unpack_json_artifact(data, dict(manifest, size_bytes=True))
+        with self.assertRaisesRegex(ArtifactError, "SHA-256"):
+            unpack_json_artifact(data, dict(manifest, sha256="not-a-digest"))
+
+
 if __name__ == "__main__":
     unittest.main()
