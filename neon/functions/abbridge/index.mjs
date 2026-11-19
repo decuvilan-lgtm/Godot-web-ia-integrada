@@ -180,10 +180,14 @@ async function enqueueCommand(device, request) {
   );
   if (result.rowCount !== 1) {
     const existing = await pool.query(
-      "SELECT id, status, created_at FROM command_center.commands WHERE workspace_id = $1 AND idempotency_key = $2",
-      [device.workspace_id, body.idempotency_key],
+      `SELECT id, status, created_at
+         FROM command_center.commands
+        WHERE workspace_id = $1 AND session_id = $2
+          AND origin_device_id = $3 AND idempotency_key = $4`,
+      [device.workspace_id, body.session_id, device.id, body.idempotency_key],
     );
-    return json({ error: "idempotency_key_conflict", existing: existing.rows[0] || null }, 409);
+    if (existing.rowCount === 1) return json({ command: existing.rows[0] });
+    return json({ error: "idempotency_key_conflict" }, 409);
   }
   return json({ command: result.rows[0] }, 201);
 }
