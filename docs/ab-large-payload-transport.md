@@ -194,3 +194,16 @@ The existing Workflow A browser worker and Workflow B operator now have an opt-i
 The new queue/result endpoints use the existing `commands` and `command_results` schema. A-side claims are role-scoped and lease-protected. B's idempotency key includes the Workflow B run ID, so a retry within one run is repeatable without colliding with later operator runs.
 
 **Activation is intentionally still off.** The required repository variable/secrets are not assumed to exist, the device rows have not been provisioned, the Function has not been deployed, and the artifact table migration has not been applied. The inspected Neon branch is named `production` and is the default branch, so I have not modified its schema or deployed anything there. Keep the existing GitHub path until a non-production Neon branch has been prepared and the full A/B session test passes.
+
+
+### Device provisioning (not executed)
+
+`neon/functions/abbridge/provision-device.mjs` creates one device record and a random 256-bit bearer token. Only the SHA-256 token hash is stored in Postgres; the raw token is printed once. After selecting a **non-production** branch and setting its `DATABASE_URL`, install the Function package dependencies and run it twice:
+
+```sh
+npm install --prefix neon/functions/abbridge
+DATABASE_URL="..." node neon/functions/abbridge/provision-device.mjs --workspace default --kind web_editor --label "A browser host"
+DATABASE_URL="..." node neon/functions/abbridge/provision-device.mjs --workspace default --kind agent_controller --label "B operator"
+```
+
+Save the first token as GitHub Actions secret `AB_WEB_DEVICE_TOKEN` and the second as `AB_AGENT_DEVICE_TOKEN`; set repository variable `AB_API_URL` to the deployed Function invocation URL. Do not paste tokens into source files, issue comments, or chat. The script has deliberately not been run because the only identified Neon branch is the protected-by-convention production/default branch.
