@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import io
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -57,7 +58,6 @@ def pack_json_artifact(
         uuid.UUID(session_id)
     except (ValueError, AttributeError):
         # Existing browser session IDs may be human-readable; constrain their alphabet.
-        import re
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", session_id):
             raise ArtifactError("Invalid session_id")
     artifact_id = artifact_id or str(uuid.uuid4())
@@ -96,7 +96,23 @@ def unpack_json_artifact(data: bytes, manifest: dict[str, Any]) -> Any:
         raise ArtifactError("Unexpected artifact encoding or content type")
     if manifest.get("kind") not in ALLOWED_KINDS:
         raise ArtifactError("Unsupported artifact kind")
-    if len(data) > MAX_COMPRESSED_BYTES or len(data) != manifest.get("size_bytes"):
+    compressed_size = manifest.get("size_bytes")
+    expanded_size = manifest.get("uncompressed_size_bytes")
+    if (not isinstance(compressed_size, int) or isinstance(compressed_size, bool)
+            or not 0 <= compressed_size <= MAX_COMPRESSED_BYTES):
+        raise ArtifactError("Invalid compressed size in manifest")
+    if (not isinstance(expanded_size, int) or isinstance(expanded_size, bool)
+            or not 0 <= expanded_size <= MAX_UNCOMPRESSED_BYTES):
+        raise ArtifactError("Invalid expanded size in manifest")
+    if not re.fullmatch(r"[a-f0-9]{64}", str(manifest.get("sha256", ""))):
+        raise ArtifactError("Invalid compressed SHA-256 in manifest")
+    if not re.fullmatch(r"[a-f0-9]{64}", str(manifest.get("uncompressed_sha256", ""))):
+        raise ArtifactError("Invalid expanded SHA-256 in manifest")
+    try:
+        uuid.UUID(manifest.get("artifact_id", ""))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise ArtifactError("Invalid artifact_id in manifest") from exc
+    if len(data) != compressed_size:
         raise ArtifactError("Artifact byte length does not match its manifest")
     if _sha256(data) != manifest.get("sha256"):
         raise ArtifactError("Artifact SHA-256 mismatch")
