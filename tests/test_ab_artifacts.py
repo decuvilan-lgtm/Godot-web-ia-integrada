@@ -223,5 +223,24 @@ class ArtifactTests(unittest.TestCase):
                     )
 
 
+    def test_github_oidc_device_exchange_checks_role(self):
+        from scripts.bridge.artifacts import issue_transport_device_token
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={
+            "device_kind": "agent_controller", "device_token": "x" * 43,
+        }) as control:
+            token = issue_transport_device_token(
+                "https://api.example", "oidc.jwt.value", expected_kind="agent_controller",
+            )
+        self.assertEqual(token, "x" * 43)
+        self.assertEqual(control.call_args.args[2], "/v1/devices/issue")
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={
+            "device_kind": "web_editor", "device_token": "x" * 43,
+        }):
+            with self.assertRaisesRegex(ArtifactError, "unexpected role"):
+                issue_transport_device_token(
+                    "https://api.example", "oidc.jwt.value", expected_kind="agent_controller",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
