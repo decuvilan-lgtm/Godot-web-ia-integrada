@@ -99,9 +99,10 @@ async function createSession(device) {
   if (device.device_kind !== "web_editor" && device.device_kind !== "android_editor") {
     return json({ error: "device_role_cannot_create_session" }, 403);
   }
+  const ownerColumn = device.device_kind === "web_editor" ? "web_device_id" : "android_device_id";
   const result = await pool.query(
     `INSERT INTO command_center.sessions
-       (workspace_id, web_device_id, status, protocol_version, expires_at, last_activity_at, metadata)
+       (workspace_id, ${ownerColumn}, status, protocol_version, expires_at, last_activity_at, metadata)
      VALUES ($1, $2, 'waiting', 1, now() + interval '1 hour', now(), '{}'::jsonb)
      RETURNING id, status, expires_at`,
     [device.workspace_id, device.id],
