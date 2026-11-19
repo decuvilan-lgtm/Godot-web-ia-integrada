@@ -1,7 +1,7 @@
 {
   "operation": "latency-benchmark",
-  "session_id": "latency-20261118-b2a",
-  "issue_number": 68,
+  "session_id": "neon-20261119-01",
+  "issue_number": 69,
   "repository": "decuvilan-lgtm/Godot-web-ia-integrada",
   "branch": "test/verdant-valley-development-benchmark"
 }
