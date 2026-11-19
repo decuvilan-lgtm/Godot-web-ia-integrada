@@ -1,0 +1,35 @@
+name: Bridge transport validation
+run-name: Bridge validation — ${{ github.run_id }}
+
+on:
+  push:
+    branches:
+      - test/verdant-valley-development-benchmark
+    paths:
+      - ".github/workflows/bridge-validation.yml"
+      - "scripts/bridge/bridge_request.py"
+      - "scripts/bridge/artifacts.py"
+      - "tests/test_bridge_request.py"
+      - "tests/test_ab_artifacts.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile bridge adapter
+        run: python -m py_compile scripts/bridge/bridge_request.py scripts/bridge/artifacts.py
+      - name: Test bridge request contract
+        run: python -m unittest discover -s tests -p 'test_bridge_request.py' -v
+      - name: Test artifact transport helpers
+        run: python -m unittest discover -s tests -p 'test_ab_artifacts.py' -v
