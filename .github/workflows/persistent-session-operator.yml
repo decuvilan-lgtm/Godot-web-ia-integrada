@@ -405,6 +405,9 @@ jobs:
           latency_values=sorted(item["round_trip_ms"] for item in command_timings)
           def percentile(values, fraction):
               if not values: return None
+              if fraction == 0.5 and len(values) % 2 == 0:
+                  middle=len(values)//2
+                  return round((values[middle-1]+values[middle])/2,2)
               return values[min(len(values)-1, max(0, int((len(values)-1)*fraction + 0.999999)))]
           bridge_timing={"commands":command_timings,"count":len(latency_values),"min_ms":min(latency_values) if latency_values else None,"median_ms":percentile(latency_values,0.5),"p95_ms":percentile(latency_values,0.95),"max_ms":max(latency_values) if latency_values else None}
           if latency_benchmark is not None:
