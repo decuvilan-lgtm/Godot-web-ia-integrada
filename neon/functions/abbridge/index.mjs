@@ -247,6 +247,26 @@ async function renewCommandLease(device, request) {
   if (result.rowCount !== 1) return json({ error: "command_lease_lost" }, 409);
   return json({ command: result.rows[0] });
 }
+async function getCommandResult(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.command_id)) return json({ error: "invalid_command_id" }, 400);
+  const result = await pool.query(
+    `SELECT c.status, cr.ok, cr.result, cr.error_code, cr.error_message, cr.duration_ms
+       FROM command_center.commands c
+       LEFT JOIN command_center.command_results cr ON cr.command_id = c.id
+      WHERE c.id = $1 AND c.workspace_id = $2 AND c.origin_device_id = $3`,
+    [body.command_id, device.workspace_id, device.id],
+  );
+  if (result.rowCount !== 1) return json({ error: "command_not_found" }, 404);
+  const row = result.rows[0];
+  if (!row.ok && !row.result) return json({ ready: false, status: row.status });
+  return json({
+    ready: true, status: row.status, ok: row.ok, result: row.result,
+    error_code: row.error_code, error_message: row.error_message,
+    duration_ms: row.duration_ms,
+  });
+}
+
 async function completeCommand(device, request) {
   const body = await bodyJson(request);
   if (!isUuid(body?.command_id) || typeof body.ok !== "boolean"
@@ -399,6 +419,7 @@ export default {
       if (url.pathname === "/v1/commands/claim") return await claimCommand(device, request);
       if (url.pathname === "/v1/commands/start") return await startCommand(device, request);
       if (url.pathname === "/v1/commands/lease") return await renewCommandLease(device, request);
+      if (url.pathname === "/v1/commands/result") return await getCommandResult(device, request);
       if (url.pathname === "/v1/commands/complete") return await completeCommand(device, request);
       if (url.pathname === "/v1/artifacts/upload-url") return await uploadUrl(device, request);
       if (url.pathname === "/v1/artifacts/finalize") return await finalize(device, request);
