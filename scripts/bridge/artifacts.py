@@ -296,6 +296,77 @@ def heartbeat_transport_session(api_base: str, token: str, session_id: str) -> d
     return result
 
 
+def enqueue_transport_command(
+    api_base: str,
+    token: str,
+    *,
+    session_id: str,
+    target: str,
+    action: str,
+    args: dict[str, Any],
+    idempotency_key: str,
+    priority: int = 0,
+    ttl_seconds: int = 300,
+) -> dict[str, Any]:
+    """Persist a small A/B command; large context/results should be artifact references."""
+    if not isinstance(args, dict):
+        raise ArtifactError("Command args must be an object")
+    result = _control_request(api_base, token, "/v1/commands/enqueue", {
+        "session_id": session_id, "target": target, "action": action,
+        "args": args, "idempotency_key": idempotency_key,
+        "priority": priority, "ttl_seconds": ttl_seconds,
+    })
+    command = result.get("command")
+    if not isinstance(command, dict) or not isinstance(command.get("id"), str):
+        raise ArtifactError("Command API returned an invalid enqueue response")
+    return command
+
+
+def claim_transport_command(api_base: str, token: str, session_id: str) -> dict[str, Any] | None:
+    result = _control_request(api_base, token, "/v1/commands/claim", {"session_id": session_id})
+    command = result.get("command")
+    if command is not None and not isinstance(command, dict):
+        raise ArtifactError("Command API returned an invalid claim response")
+    return command
+
+
+def start_transport_command(api_base: str, token: str, command_id: str) -> dict[str, Any]:
+    result = _control_request(api_base, token, "/v1/commands/start", {"command_id": command_id})
+    command = result.get("command")
+    if not isinstance(command, dict) or command.get("id") != command_id:
+        raise ArtifactError("Command API returned an invalid start response")
+    return command
+
+
+def renew_transport_command_lease(api_base: str, token: str, command_id: str) -> dict[str, Any]:
+    result = _control_request(api_base, token, "/v1/commands/lease", {"command_id": command_id})
+    command = result.get("command")
+    if not isinstance(command, dict) or command.get("id") != command_id:
+        raise ArtifactError("Command API returned an invalid lease response")
+    return command
+
+
+def complete_transport_command(
+    api_base: str,
+    token: str,
+    command_id: str,
+    *,
+    ok: bool,
+    result: dict[str, Any],
+    duration_ms: int | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> dict[str, Any]:
+    response = _control_request(api_base, token, "/v1/commands/complete", {
+        "command_id": command_id, "ok": ok, "result": result,
+        "duration_ms": duration_ms, "error_code": error_code,
+        "error_message": error_message,
+    })
+    if response.get("command_id") != command_id or response.get("status") not in {"succeeded", "failed"}:
+        raise ArtifactError("Command API returned an invalid completion response")
+    return response
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Presigned URLs are single-origin capabilities; redirects are never followed."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
