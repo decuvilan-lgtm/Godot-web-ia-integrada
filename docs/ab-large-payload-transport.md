@@ -136,3 +136,18 @@ The Python client now exposes `upload_json_artifact(...)` and `download_json_art
 Every control-plane request uses the device bearer token. The client never logs it, refuses non-HTTPS control/storage URLs and redirects, bounds response sizes, and validates the downloaded bytes and expanded JSON before returning a payload. The API must enforce device/session membership on every route; possession of an artifact UUID alone is not authorization.
 
 The device token hash convention for the pending Function implementation is SHA-256 hex of the bearer token, compared against `command_center.devices.token_hash`; revoked devices must be rejected. The database already has `workspace_id`, `device_kind`, `installation_id`, `token_hash`, and `revoked_at` fields. No device currently exists on the inspected branch, so provisioning/pairing remains a prerequisite to a live test.
+
+
+## Neon artifact control Function
+
+An initial Function implementation is now in `neon/functions/abbridge/`:
+
+- `index.mjs` implements `GET /health` and the three authenticated artifact routes defined above.
+- `package.json` declares Node 24 dependencies for Neon Functions, Postgres, and the AWS S3-compatible SDK.
+- Device authentication hashes the bearer token with SHA-256 and compares it to `devices.token_hash`; `revoked_at` devices are rejected.
+- Session access is restricted to the device IDs attached to that active workspace session.
+- Uploads create a pending manifest under a server-generated workspace/session object key, issue a five-minute presigned PUT, and only become downloadable after finalization checks the stored object's byte length and content type.
+- Downloads require a ready artifact and a currently authorized session member. The signed GET URL expires after five minutes.
+- Control request bodies are capped at 32 KiB; object bytes travel directly between the client and private object storage.
+
+The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function has not been deployed, and the SQL has not been applied. The deployment still requires confirming the Neon Function environment receives the existing bucket's AWS-compatible variables, applying the reviewed schema, and provisioning two device identities (web editor and agent controller). There are no device rows on the inspected branch yet.
