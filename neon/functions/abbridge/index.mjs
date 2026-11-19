@@ -196,28 +196,38 @@ async function claimCommand(device, request) {
   if (!isUuid(body?.session_id) || !await sessionMembership(device, body.session_id)) {
     return json({ error: "session_forbidden" }, 403);
   }
-  const result = await pool.query(
-    `WITH candidate AS (
-       SELECT id
-         FROM command_center.commands
-        WHERE workspace_id = $1 AND session_id = $2 AND target = $3
-          AND (expires_at IS NULL OR expires_at > now())
-          AND (status = 'queued' OR (status IN ('claimed','running') AND claim_expires_at < now()))
-        ORDER BY priority DESC, created_at ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT 1
-     )
-     UPDATE command_center.commands c
-        SET status = 'claimed', claimed_by_device = $4, claimed_at = now(),
-            claim_expires_at = now() + interval '60 seconds',
-            attempt_count = attempt_count + 1
-       FROM candidate
-      WHERE c.id = candidate.id
-      RETURNING c.id, c.session_id, c.target, c.action, c.args,
-                c.idempotency_key, c.attempt_count, c.claim_expires_at`,
-    [device.workspace_id, body.session_id, device.device_kind, device.id],
-  );
-  return json({ command: result.rows[0] || null });
+  // Hold one HTTP request open while checking Postgres every 250 ms.
+  // This gives A low command-pickup latency without a network poll every 250 ms.
+  const waitMs = Number.isInteger(body.wait_ms) && body.wait_ms >= 0
+    ? Math.min(body.wait_ms, 10_000) : 0;
+  const deadline = Date.now() + waitMs;
+  do {
+    const result = await pool.query(
+      `WITH candidate AS (
+         SELECT id
+           FROM command_center.commands
+          WHERE workspace_id = $1 AND session_id = $2 AND target = $3
+            AND (expires_at IS NULL OR expires_at > now())
+            AND (status = 'queued' OR (status IN ('claimed','running') AND claim_expires_at < now()))
+          ORDER BY priority DESC, created_at ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+       )
+       UPDATE command_center.commands c
+          SET status = 'claimed', claimed_by_device = $4, claimed_at = now(),
+              claim_expires_at = now() + interval '60 seconds',
+              attempt_count = attempt_count + 1
+         FROM candidate
+        WHERE c.id = candidate.id
+        RETURNING c.id, c.session_id, c.target, c.action, c.args,
+                  c.idempotency_key, c.attempt_count, c.claim_expires_at`,
+      [device.workspace_id, body.session_id, device.device_kind, device.id],
+    );
+    if (result.rows[0]) return json({ command: result.rows[0] });
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (true);
+  return json({ command: null });
 }
 async function startCommand(device, request) {
   const body = await bodyJson(request);
