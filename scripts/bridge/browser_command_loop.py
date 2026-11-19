@@ -237,7 +237,7 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                 if now-last_transport_heartbeat>=20.0:
                     heartbeat_transport_session(neon_api, neon_token, session_id)
                     last_transport_heartbeat=now
-                claimed = claim_transport_command(neon_api, neon_token, session_id)
+                claimed = claim_transport_command(neon_api, neon_token, session_id, wait_ms=10_000)
                 comments = []
                 if claimed:
                     command_id = claimed["id"]
@@ -426,9 +426,9 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
         except Exception as exc:
             log.append({"poll_error":f"{type(exc).__name__}: {str(exc)[:300]}"})
         remaining = max(0, deadline - time.monotonic())
-        if remaining:
-            # Neon A/B is a short-lived request/response session: poll quickly, but
-            # keep the legacy GitHub fallback under its API request budget.
-            time.sleep(min(0.25 if neon_mode else POLL_SECONDS, remaining))
+        if remaining and not neon_mode:
+            # Neon mode already waited inside the bounded long-poll claim request.
+            # Preserve the slower cadence only for the legacy GitHub fallback.
+            time.sleep(min(POLL_SECONDS, remaining))
     Path(out_dir,"browser-command-log.json").write_text(json.dumps(log,ensure_ascii=False,indent=2),encoding="utf-8")
     return {"enabled":True,"processed_commands":processed,"last_sequence":last_seq,"stopped_by_command":stopped,"duration_seconds":int(max(0,time.monotonic()-started_at)),"log_file":"browser-command-log.json"}
