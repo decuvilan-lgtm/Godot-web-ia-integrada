@@ -31,11 +31,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
+          AB_API_URL: ${{ vars.AB_API_URL }}
+          AB_DEVICE_TOKEN: ${{ secrets.AB_AGENT_DEVICE_TOKEN }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, os, re, time, urllib.error, urllib.parse, urllib.request
           from pathlib import Path
+          from scripts.bridge.artifacts import (
+              join_transport_session, enqueue_transport_command,
+              fetch_transport_command_result, download_json_artifact,
+          )
 
           request_path=Path(".session-operator-request.json")
           if not request_path.is_file():
@@ -131,6 +137,7 @@ jobs:
           ready_deadline=time.monotonic()+900
           ready_poll_seconds=2.0
           comments=[]
+          transport_session_id=None
           while time.monotonic()<ready_deadline:
               issue_state=api_call(f"/repos/{repo}/issues/{issue_number}")
               if issue_state.get("state")=="closed":
@@ -149,6 +156,7 @@ jobs:
                   try: marker=json.loads(ready_payload)
                   except Exception: continue
                   if marker.get("session_id")==session_id and marker.get("commit_sha"):
+                      transport_session_id=marker.get("transport_session_id")
                       ready=True
                       break
               if ready:
@@ -156,6 +164,13 @@ jobs:
               time.sleep(ready_poll_seconds)
           else:
               raise TimeoutError("Workflow A did not publish a ready marker for this browser session")
+          neon_api=os.environ.get("AB_API_URL","").strip()
+          neon_token=os.environ.get("AB_DEVICE_TOKEN","").strip()
+          neon_mode=bool(neon_api and neon_token)
+          if neon_mode:
+              if not isinstance(transport_session_id,str) or not re.fullmatch(r"[0-9a-fA-F-]{36}",transport_session_id):
+                  raise RuntimeError("Workflow A did not publish a valid Neon transport session ID")
+              join_transport_session(neon_api,neon_token,transport_session_id)
           last_seq=0
           for item in comments:
               body=(item.get("body") or "").strip()
@@ -173,6 +188,31 @@ jobs:
               send_started=time.monotonic()
               poll_count=0
               nonlocal_seq[0]+=1
+              if neon_mode:
+                  created=enqueue_transport_command(
+                      neon_api, neon_token, session_id=transport_session_id,
+                      target="web_editor", action=action, args=fields,
+                      idempotency_key=f"{transport_session_id}:{nonlocal_seq[0]}",
+                      ttl_seconds=240,
+                  )
+                  command_id=created["id"]
+                  deadline=time.monotonic()+150
+                  while time.monotonic()<deadline:
+                      poll_count+=1
+                      response=fetch_transport_command_result(neon_api,neon_token,command_id)
+                      if response:
+                          value=response.get("result") or {}
+                          if isinstance(value,dict) and value.get("artifact_id"):
+                              value=download_json_artifact(neon_api,neon_token,value["artifact_id"])
+                          if not response.get("ok",False) or not isinstance(value,dict) or not value.get("ok",False):
+                              raise RuntimeError("Browser command failed: "+str(value.get("error",response.get("error_message","unknown error"))))
+                          elapsed_ms=round((time.monotonic()-send_started)*1000,2)
+                          timing={"seq":nonlocal_seq[0],"action":action,"round_trip_ms":elapsed_ms,"result_polls":poll_count,"a_processing_ms":value.get("bridge_timing",{}).get("a_processing_ms")}
+                          command_timings.append(timing)
+                          value["_bridge_timing"]=timing
+                          return value
+                      time.sleep(1.0)
+                  raise TimeoutError(f"Timed out waiting for Neon browser command {action}")
               command={"protocol":1,"session_id":session_id,"seq":nonlocal_seq[0],"action":action,**fields}
               created=api_call(issue_path,"POST",{"body":json.dumps(command,ensure_ascii=False)})
               command_id=created["id"]
