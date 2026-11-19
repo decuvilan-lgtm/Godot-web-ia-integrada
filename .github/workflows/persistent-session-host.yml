@@ -158,6 +158,8 @@ jobs:
           BRIDGE_REPOSITORY: ${{ github.repository }}
           EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AB_API_URL: ${{ vars.AB_API_URL }}
+          AB_DEVICE_TOKEN: ${{ secrets.AB_WEB_DEVICE_TOKEN }}
         run: python scripts/godot-browser-worker.py
 
       - name: Upload browser evidence
