@@ -27,6 +27,11 @@ jobs:
           ref: ${{ github.ref_name }}
           persist-credentials: false
 
+      - name: Validate bridge code and request-envelope tests
+        run: |
+          python3 -m py_compile scripts/bridge/bridge_request.py
+          python3 -m unittest discover -s tests -p 'test_bridge_request.py' -v
+
       - name: Forward exactly one operator-supplied command to A
         env:
           AB_API_URL: https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech
