@@ -95,6 +95,54 @@ async function bodyJson(request) {
     throw new Error("invalid_json");
   }
 }
+async function createSession(device) {
+  if (device.device_kind !== "web_editor" && device.device_kind !== "android_editor") {
+    return json({ error: "device_role_cannot_create_session" }, 403);
+  }
+  const result = await pool.query(
+    `INSERT INTO command_center.sessions
+       (workspace_id, web_device_id, status, protocol_version, expires_at, last_activity_at, metadata)
+     VALUES ($1, $2, 'waiting', 1, now() + interval '1 hour', now(), '{}'::jsonb)
+     RETURNING id, status, expires_at`,
+    [device.workspace_id, device.id],
+  );
+  return json({ session_id: result.rows[0].id, status: result.rows[0].status, expires_at: result.rows[0].expires_at }, 201);
+}
+async function joinSession(device, request) {
+  if (device.device_kind !== "agent_controller" && device.device_kind !== "android_editor") {
+    return json({ error: "device_role_cannot_join_session" }, 403);
+  }
+  const body = await bodyJson(request);
+  if (!isUuid(body?.session_id)) return json({ error: "invalid_session_id" }, 400);
+  const column = device.device_kind === "agent_controller" ? "agent_device_id" : "android_device_id";
+  const result = await pool.query(
+    `UPDATE command_center.sessions
+        SET ${column} = $1, status = 'connected', last_activity_at = now(),
+            expires_at = GREATEST(expires_at, now() + interval '1 hour')
+      WHERE id = $2 AND workspace_id = $3 AND status IN ('waiting', 'connected')
+        AND expires_at > now() AND (${column} IS NULL OR ${column} = $1)
+      RETURNING id, status, expires_at`,
+    [device.id, body.session_id, device.workspace_id],
+  );
+  if (result.rowCount !== 1) return json({ error: "session_unavailable" }, 404);
+  return json({ session_id: result.rows[0].id, status: result.rows[0].status, expires_at: result.rows[0].expires_at });
+}
+async function sessionHeartbeat(device, request) {
+  const body = await bodyJson(request);
+  if (!isUuid(body?.session_id)) return json({ error: "invalid_session_id" }, 400);
+  const result = await pool.query(
+    `UPDATE command_center.sessions
+        SET last_activity_at = now(), expires_at = GREATEST(expires_at, now() + interval '1 hour')
+      WHERE id = $1 AND workspace_id = $2 AND status IN ('waiting', 'connected', 'paused')
+        AND expires_at > now()
+        AND $3 = ANY(ARRAY[web_device_id, android_device_id, agent_device_id])
+      RETURNING id, status, expires_at`,
+    [body.session_id, device.workspace_id, device.id],
+  );
+  if (result.rowCount !== 1) return json({ error: "session_unavailable" }, 404);
+  return json({ session_id: result.rows[0].id, status: result.rows[0].status, expires_at: result.rows[0].expires_at });
+}
+
 async function uploadUrl(device, request) {
   const body = await bodyJson(request);
   const manifest = body?.manifest;
@@ -208,6 +256,9 @@ export default {
     const device = await authenticate(request);
     if (!device) return json({ error: "unauthorized" }, 401);
     try {
+      if (url.pathname === "/v1/sessions" && request.method === "POST") return await createSession(device);
+      if (url.pathname === "/v1/sessions/join" && request.method === "POST") return await joinSession(device, request);
+      if (url.pathname === "/v1/sessions/heartbeat" && request.method === "POST") return await sessionHeartbeat(device, request);
       if (url.pathname === "/v1/artifacts/upload-url") return await uploadUrl(device, request);
       if (url.pathname === "/v1/artifacts/finalize") return await finalize(device, request);
       if (url.pathname === "/v1/artifacts/download-url") return await downloadUrl(device, request);
