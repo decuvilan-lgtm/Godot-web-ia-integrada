@@ -37,7 +37,7 @@ app = FastAPI(title="Godot Web IA Relay", version=APP_VERSION)
 # immutable GitHub project archive from this relay without opening CORS broadly.
 LOCAL_EDITOR_ORIGIN_REGEX = os.environ.get(
     "LOCAL_EDITOR_ORIGIN_REGEX",
-    r"^https?://(?:127\\.0\\.0\\.1|localhost)(?::[0-9]+)?$",
+    r"^https?://(?:127\.0\.0\.1|localhost)(?::[0-9]+)?$",
 )
 app.add_middleware(
     CORSMiddleware,
