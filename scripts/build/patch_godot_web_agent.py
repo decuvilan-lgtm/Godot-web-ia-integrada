@@ -328,7 +328,7 @@ void WebToolsEditorPlugin::_process_requests() {
 				} else {
 					Dictionary result;
 					result["path"] = path;
-					result["content"] = file->get_as_utf8_string();
+					result["content"] = file->get_as_text();
 					result["bytes"] = file->get_length();
 					response["ok"] = true;
 					response["result"] = result;
@@ -400,13 +400,18 @@ void WebToolsEditorPlugin::_process_requests() {
 				response["error"] = "SCENE_NOT_SAVED";
 				response["message"] = "There is no active scene with a destination path.";
 			} else {
-				EditorInterface::get_singleton()->save_scene();
+				Error save_error = EditorInterface::get_singleton()->save_scene();
+				if (save_error != OK) {
+					response["error"] = "SCENE_SAVE_FAILED";
+					response["message"] = "Godot returned an error while saving the active scene.";
+				} else {
 				Dictionary result;
 				result["scene_path"] = root->get_scene_file_path();
 				result["save_requested"] = true;
 				result["saved_automatically"] = false;
 				response["ok"] = true;
 				response["result"] = result;
+				}
 			}
 		} else if (command == "scene.get_tree") {
 \t\t\tNode *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
