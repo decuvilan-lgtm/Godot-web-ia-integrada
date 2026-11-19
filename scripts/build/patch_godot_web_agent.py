@@ -29,6 +29,7 @@ BRIDGE_BLOCK = r'''
 #include "core/io/dir_access.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_file_system.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "core/object/class_db.h"
 #include "core/os/memory.h"
@@ -317,14 +318,14 @@ void WebToolsEditorPlugin::_process_requests() {
 			if (args.size() != 1 || path_value.get_type() != Variant::STRING || !godot_web_agent_safe_text_path(path)) {
 				response["error"] = "INVALID_PROJECT_PATH";
 				response["message"] = "Read requires a bounded, allowlisted res:// text file path.";
-			} else if (!FileAccess::file_exists(path)) {
-				response["error"] = "FILE_NOT_FOUND";
-				response["message"] = "The requested project file does not exist.";
 			} else {
 				Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
-				if (file.is_null() || file->get_length() > 262144) {
+				if (file.is_null()) {
+					response["error"] = "FILE_NOT_FOUND";
+					response["message"] = "The requested project file does not exist or cannot be opened.";
+				} else if (file->get_length() > 262144) {
 					response["error"] = "FILE_READ_LIMIT";
-					response["message"] = "The file is unavailable or exceeds the 256 KiB read limit.";
+					response["message"] = "The file exceeds the 256 KiB read limit.";
 				} else {
 					Dictionary result;
 					result["path"] = path;
