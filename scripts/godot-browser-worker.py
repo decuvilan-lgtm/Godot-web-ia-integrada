@@ -6,6 +6,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from bridge.browser_command_loop import run_command_loop
+from bridge.artifacts import create_transport_session
 from bridge.project_assets import inject_generated_project_assets
 from bridge.semantic_controller import execute_semantic_command
 
@@ -105,12 +106,13 @@ def prepare_extension(source_dir, target_dir, origin):
         item["matches"]=[match]
     (target_dir/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 
-def post_host_ready_comment(repo, issue_number, token, session_id, sha, inspection):
+def post_host_ready_comment(repo, issue_number, token, session_id, sha, inspection, transport_session_id=None):
     """Publish a readiness marker so Workflow B never races the import."""
     if not issue_number or not token:
         return
     body="<!-- godot-browser-host-ready -->\\n"+json.dumps({
         "session_id":session_id,
+        "transport_session_id":transport_session_id,
         "commit_sha":sha,
         "visual_status":inspection.get("visual_validation",{}).get("status"),
         "scene_title":inspection.get("visual_validation",{}).get("scene_title"),
@@ -143,6 +145,11 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}",REPOSITORY): raise ValueError("Invalid repository")
     if not 60<=IMPORT_TIMEOUT<=600: raise ValueError("IMPORT_TIMEOUT_SECONDS must be 60-600")
     sha=resolve_sha(); session_id=os.environ.get("BROWSER_SESSION_ID", f"gha-{RUN_ID}-{ATTEMPT}"); task_id=f"github-actions-{RUN_ID}-{ATTEMPT}"
+    transport_session_id=None
+    if os.environ.get("AB_API_URL") and os.environ.get("AB_DEVICE_TOKEN"):
+        transport_session_id=create_transport_session(
+            os.environ["AB_API_URL"], os.environ["AB_DEVICE_TOKEN"]
+        )["session_id"]
     bridge_repository=os.environ.get("BRIDGE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY") or "decuvilan-lgtm/Godot-web-ia-integrada"
     editor_server=None
     local_editor_dir=os.environ.get("LOCAL_EDITOR_DIR","").strip()
@@ -260,7 +267,7 @@ def main():
                     "gameplay_verified":False,
                     "note":"A visible Godot scene editor is not proof that the game runs; project resource errors are reported separately."
                 }
-                post_host_ready_comment(bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"), os.environ.get("GITHUB_TOKEN", ""), session_id, sha, inspection)
+                post_host_ready_comment(bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"), os.environ.get("GITHUB_TOKEN", ""), session_id, sha, inspection, transport_session_id)
             try:
                 semantic_probe=execute_semantic_command(page,"editor.list_capabilities",timeout_ms=12000)
                 inspection["semantic_controller_probe"]={
@@ -287,7 +294,7 @@ def main():
             if browser_ready and not page.is_closed():
                 command_session=run_command_loop(
                     page, bridge_repository, os.environ.get("SESSION_ISSUE_NUMBER"),
-                    os.environ.get("GITHUB_TOKEN", ""), session_id, OUT,
+                    os.environ.get("GITHUB_TOKEN", ""), transport_session_id or session_id, OUT,
                     duration_seconds=int(os.environ.get("BROWSER_COMMAND_WINDOW_SECONDS", "180")),
                 )
             else:
