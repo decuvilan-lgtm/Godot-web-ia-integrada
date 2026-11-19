@@ -14,6 +14,13 @@ import time
 import uuid
 from pathlib import Path
 
+# Executed as a file by Workflow B, so Python otherwise places only
+# scripts/bridge on sys.path. Add the repository root for the shared transport
+# helpers without changing the working directory or request payload.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from scripts.bridge.artifacts import (
     download_json_artifact,
     enqueue_transport_command,
