@@ -213,8 +213,10 @@ export default {
       if (url.pathname === "/v1/artifacts/download-url") return await downloadUrl(device, request);
       return json({ error: "not_found" }, 404);
     } catch (error) {
-      const code = error?.message === "request_too_large" ? 413 : 400;
-      return json({ error: code === 413 ? "request_too_large" : "invalid_request" }, code);
+      if (error?.message === "request_too_large") return json({ error: "request_too_large" }, 413);
+      if (error?.message === "invalid_json") return json({ error: "invalid_json" }, 400);
+      console.error("[abbridge] request failed", error?.name || "Error");
+      return json({ error: "internal_error" }, 500);
     }
   },
 };
