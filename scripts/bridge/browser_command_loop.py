@@ -95,7 +95,7 @@ def _validate(command, session_id, last_seq):
             raise ValueError("semantic_command arguments do not match the action allowlist")
         if editor_action in {"project.read_file","project.write_file","resource.inspect"}:
             path=args.get("path")
-            if set(args)-SEMANTIC_ACTIONS[editor_action] or not isinstance(path,str) or not path.startswith("res://") or len(path)>512 or ".." in path.split("/") or "\\" in path or "//" in path:
+            if set(args)-SEMANTIC_ACTIONS[editor_action] or not isinstance(path,str) or not path.startswith("res://") or len(path)>512 or ".." in path.split("/") or "\\" in path or "//" in path[6:]:
                 raise ValueError("Project operation requires a bounded safe res:// path")
             if editor_action in {"project.read_file","project.write_file"} and Path(path).suffix.lower() not in {".gd",".tscn",".tres",".godot",".cfg",".json",".txt",".md"}:
                 raise ValueError("Only allowlisted text project files can be read or written")
