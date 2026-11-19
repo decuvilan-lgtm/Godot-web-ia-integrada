@@ -230,7 +230,7 @@ The one-shot B result records:
 - minimum, median, p95, and maximum command round trips for the latency benchmark;
 - total B operator runtime.
 
-In Neon mode A polls for commands every 250 ms and sends a session heartbeat every 20 seconds. B polls for results every 250 ms. The GitHub Issues fallback retains its slower polling cadence to stay within GitHub API budgets. These are configured polling intervals, not measured end-to-end latency guarantees.
+In Neon mode A makes one bounded 10-second long-poll request; the Function checks Postgres every 250 ms inside that request, so commands are picked up quickly without a network request every 250 ms. A refreshes the session heartbeat every 20 seconds. B polls for results every 250 ms. The GitHub Issues fallback retains its slower polling cadence to stay within GitHub API budgets. These are configured polling intervals, not measured end-to-end latency guarantees.
 
 The Neon staging branch is `ab-transport-staging`. It is a child of `production`, is not the default branch, and has the additive `command_center.artifacts` table applied. The `production` branch was not modified.
 
