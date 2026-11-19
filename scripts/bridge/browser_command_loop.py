@@ -227,12 +227,16 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
     last_seq=0
     processed=0
     stopped=False
+    last_transport_heartbeat=0.0
     log=[]
     comments_url=(f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc" if issue else None)
     while time.monotonic()<deadline and not stopped:
         try:
             if neon_mode:
-                heartbeat_transport_session(neon_api, neon_token, session_id)
+                now=time.monotonic()
+                if now-last_transport_heartbeat>=20.0:
+                    heartbeat_transport_session(neon_api, neon_token, session_id)
+                    last_transport_heartbeat=now
                 claimed = claim_transport_command(neon_api, neon_token, session_id)
                 comments = []
                 if claimed:
@@ -423,6 +427,8 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
             log.append({"poll_error":f"{type(exc).__name__}: {str(exc)[:300]}"})
         remaining = max(0, deadline - time.monotonic())
         if remaining:
-            time.sleep(min(POLL_SECONDS, remaining))
+            # Neon A/B is a short-lived request/response session: poll quickly, but
+            # keep the legacy GitHub fallback under its API request budget.
+            time.sleep(min(0.25 if neon_mode else POLL_SECONDS, remaining))
     Path(out_dir,"browser-command-log.json").write_text(json.dumps(log,ensure_ascii=False,indent=2),encoding="utf-8")
     return {"enabled":True,"processed_commands":processed,"last_sequence":last_seq,"stopped_by_command":stopped,"duration_seconds":int(max(0,time.monotonic()-started_at)),"log_file":"browser-command-log.json"}
