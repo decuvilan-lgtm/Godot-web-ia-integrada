@@ -146,7 +146,7 @@ jobs:
           "Workflow B obtains a short-lived OIDC device identity": "id-token: write" in operator_source and "request_github_actions_oidc_token" in operator_source and "issue_transport_device_token" in operator_source,
 
           "Workflow A command loop can use Neon leases and artifact results": "claim_transport_command" in command_loop_source and "complete_transport_command" in command_loop_source and "upload_json_artifact" in command_loop_source,
-              "Neon Function validates short-lived GitHub OIDC identities": "jwtVerify" in function_source and "AUTHORIZED_WORKFLOWS" in function_source and "payload.workflow_ref" in function_source and "expires_at" in function_source,
+              "Neon Function validates short-lived GitHub OIDC identities": "createPublicKey" in function_source and "verifySignature" in function_source and "AUTHORIZED_WORKFLOWS" in function_source and "payload.workflow_ref" in function_source and "expires_at" in function_source,
               "Neon Function uses bounded server-side command long polling": "wait_ms" in function_source and "setTimeout(resolve, 250)" in function_source,
               "Workflow A keeps browser commands available after optional warnings": "if browser_ready and not page.is_closed()" in worker_source and "semantic_controller_probe" in worker_source,
               "Workflow A stores evidence in GitHub Actions": "actions/upload-artifact@v4" in host_source and "artifact_storage" in worker_source and "GitHub Actions workflow artifact" in worker_source,
