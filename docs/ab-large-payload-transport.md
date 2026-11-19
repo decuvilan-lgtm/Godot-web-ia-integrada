@@ -173,3 +173,11 @@ The Function now also implements a Postgres-backed command queue:
 - `POST /v1/commands/complete` atomically records success/failure and inserts its result row. Large outputs must be uploaded as artifacts and represented by an artifact ID in the result JSON.
 
 The Python client has corresponding enqueue, claim, start, renew, and complete helpers. This provides a durable polling-based control path that does not have GitHub comment size limits; WebSocket notifications can be layered on later to reduce polling latency, while Postgres remains the source of truth. GitHub Issues is still the fallback until both A and B are wired to these helpers and a real session passes end-to-end.
+
+
+The command queue uses the existing `command_center.commands` and `command_center.command_results` tables (no replacement queue schema):
+- `POST /v1/commands/enqueue` — creates a queued command with workspace-scoped idempotency.
+- `POST /v1/commands/claim` — one command per poll, matching the caller's device role.
+- `POST /v1/commands/start`, `/lease`, and `/complete` — claim lifecycle and result persistence.
+
+Command bodies/results are capped by the 32 KiB control-request limit. Put screenshots, scene dumps, and large context in object storage, then pass only `artifact_id` and manifest references in `args` or `result`. Claim leases expire after 60 seconds and can be reclaimed, so clients must keep operations idempotent and renew while executing.
