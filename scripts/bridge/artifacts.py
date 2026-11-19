@@ -260,6 +260,42 @@ def download_json_artifact(
     return unpack_json_artifact(packed, manifest)
 
 
+def create_transport_session(api_base: str, token: str) -> dict[str, Any]:
+    """Create a durable session from a web_editor or android_editor device."""
+    result = _control_request(api_base, token, "/v1/sessions", {})
+    if not isinstance(result.get("session_id"), str):
+        raise ArtifactError("Session API returned an invalid session identifier")
+    try:
+        uuid.UUID(result["session_id"])
+    except ValueError as exc:
+        raise ArtifactError("Session API returned an invalid session identifier") from exc
+    return result
+
+
+def join_transport_session(api_base: str, token: str, session_id: str) -> dict[str, Any]:
+    """Join a session from an agent_controller or android_editor device."""
+    try:
+        uuid.UUID(session_id)
+    except (ValueError, AttributeError) as exc:
+        raise ArtifactError("session_id must be a UUID") from exc
+    result = _control_request(api_base, token, "/v1/sessions/join", {"session_id": session_id})
+    if result.get("session_id") != session_id:
+        raise ArtifactError("Session API joined a different session")
+    return result
+
+
+def heartbeat_transport_session(api_base: str, token: str, session_id: str) -> dict[str, Any]:
+    """Refresh session activity and expiry for a participating device."""
+    try:
+        uuid.UUID(session_id)
+    except (ValueError, AttributeError) as exc:
+        raise ArtifactError("session_id must be a UUID") from exc
+    result = _control_request(api_base, token, "/v1/sessions/heartbeat", {"session_id": session_id})
+    if result.get("session_id") != session_id:
+        raise ArtifactError("Session heartbeat refers to a different session")
+    return result
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Presigned URLs are single-origin capabilities; redirects are never followed."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
