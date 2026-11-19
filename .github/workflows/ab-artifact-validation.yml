@@ -15,7 +15,7 @@ on:
       - ".github/workflows/ab-artifact-validation.yml"
   workflow_dispatch:
 
-# Kept separate from the long-running browser session tests for fast feedback.
+# Fast feedback for the artifact protocol and its client orchestration; no live storage writes.
 
 permissions:
   contents: read
