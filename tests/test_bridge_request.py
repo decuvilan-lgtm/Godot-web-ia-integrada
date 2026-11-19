@@ -79,9 +79,8 @@ class BridgeRequestValidationTests(unittest.TestCase):
     def test_rejects_task_level_operation_selector(self):
         request = valid_request()
         request["operation"] = "latency-benchmark"
-        # Top-level unknown metadata is ignored; only command is the transport payload.
-        _, _, action, _, _ = validate_request(request, REPOSITORY, BRANCH)
-        self.assertEqual(action, "status")
+        with self.assertRaisesRegex(ValueError, "task-level fields"):
+            validate_request(request, REPOSITORY, BRANCH)
 
 
 if __name__ == "__main__":
