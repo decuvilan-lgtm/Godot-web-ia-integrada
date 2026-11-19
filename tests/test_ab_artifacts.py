@@ -59,7 +59,9 @@ class ArtifactTests(unittest.TestCase):
             {"artifact_id": manifest["artifact_id"], "upload_url": "https://storage.example/put"},
             {"artifact_id": manifest["artifact_id"], "status": "ready"},
         ]
-        with mock.patch("scripts.bridge.artifacts._control_request", side_effect=responses) as control, \
+        with mock.patch("scripts.bridge.artifacts.pack_json_artifact", return_value=(data, manifest)),
+             mock.patch("scripts.bridge.artifacts._control_request", side_effect=responses) as control,
+             mock.patch("scripts.bridge.artifacts.upload_artifact") as upload:
              mock.patch("scripts.bridge.artifacts.upload_artifact") as upload:
             result = __import__("scripts.bridge.artifacts", fromlist=["upload_json_artifact"]).upload_json_artifact(
                 "https://api.example", "device-token", {"scene": "Main"}, session_id="session-abc"
