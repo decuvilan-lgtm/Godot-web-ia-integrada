@@ -222,13 +222,13 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
     duration_seconds = _bounded_duration_seconds(duration_seconds)
     started_at = time.monotonic()
     deadline = started_at + duration_seconds
-    issue=int(issue_number)
+    issue=int(issue_number) if issue_number else None
     last_comment_id=0
     last_seq=0
     processed=0
     stopped=False
     log=[]
-    comments_url=f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc"
+    comments_url=(f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc" if issue else None)
     while time.monotonic()<deadline and not stopped:
         try:
             if neon_mode:
