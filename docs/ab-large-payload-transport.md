@@ -1,6 +1,6 @@
 # A/B large-payload transport
 
-Status: architecture specification; not yet wired into the live A/B runtime.
+Status: staging implementation deployed; live A/B sessions remain on the GitHub fallback until device credentials are configured and the end-to-end Neon test passes.
 
 ## Goal
 
@@ -117,7 +117,7 @@ The repository now contains `scripts/bridge/artifacts.py`:
 
 Automated tests live in `tests/test_ab_artifacts.py`. Focused CI run: [A/B artifact transport validation](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/44405952207) — passed after correcting the corruption test to mutate a byte without changing the payload length.
 
-The additive manifest-table proposal is `sql/001_ab_artifacts.sql`. It references the existing workspace, session, and device records and enforces bounded sizes, allowed content types/kinds, and SHA-256 format. **It has not been applied to Neon.** The existing branch schema was inspected read-only; device records already contain a token hash and revocation timestamp.
+The additive manifest-table migration is `sql/001_ab_artifacts.sql`. It references existing workspace, session, and device records and enforces bounded sizes, allowed content types/kinds, and SHA-256 format. It has been applied only to the child branch `ab-transport-staging`; production remains unchanged. The parent branch schema was inspected read-only; device records already contain a token hash and revocation timestamp. The staging branch was created as `br-falling-waterfall-b5x4fu2i`, inherits the private `godot-visual-captures` bucket, and contains the new `command_center.artifacts` table and indexes.
 
 ## Not live yet
 
@@ -150,7 +150,7 @@ An initial Function implementation is now in `neon/functions/abbridge/`:
 - Downloads require a ready artifact and a currently authorized session member. The signed GET URL expires after five minutes.
 - Control request bodies are capped at 32 KiB; object bytes travel directly between the client and private object storage.
 
-The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function has not been deployed, and the SQL has not been applied. The deployment still requires confirming the Neon Function environment receives the existing bucket's AWS-compatible variables, applying the reviewed schema, and provisioning two device identities (web editor and agent controller). There are no device rows on the inspected branch yet.
+The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function is deployed on `ab-transport-staging` at `https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech/` (deployment status completed, Node.js 24). The staging migration is applied. A/B device identities (web editor and agent controller) still need to be provisioned and their tokens stored as GitHub Actions secrets before a live A/B run. There are no device rows on the inspected branch yet.
 
 
 ### Durable session endpoints
@@ -233,3 +233,19 @@ The one-shot B result records:
 In Neon mode A polls for commands every 250 ms and sends a session heartbeat every 20 seconds. B polls for results every 250 ms. The GitHub Issues fallback retains its slower polling cadence to stay within GitHub API budgets. These are configured polling intervals, not measured end-to-end latency guarantees.
 
 The Neon staging branch is `ab-transport-staging`. It is a child of `production`, is not the default branch, and has the additive `command_center.artifacts` table applied. The `production` branch was not modified.
+
+### Measured GitHub fallback baseline (2026-11-18)
+
+The archived Workflow B artifact for run [44249881250](https://github.com/decuvilan-lgtm/Godot-web-ia-integrada/actions/runs/44249881250) contains 12 measured `editor.get_state` semantic commands on one real A/Chromium session, after two warm-ups:
+
+| Metric | Measured |
+|---|---:|
+| Minimum B→A round trip | 4,831.06 ms |
+| Median B→A round trip | 5,049.72 ms |
+| Mean B→A round trip | 5,066.18 ms |
+| P95 B→A round trip | 6,490.33 ms |
+| Maximum B→A round trip | 6,490.33 ms |
+| A-side processing median | 151.86 ms |
+| A-side processing range | 7.23–570.68 ms |
+
+This is the **GitHub Issues transport baseline**, not a Neon measurement. The several-second round trip, despite generally sub-200 ms A-side processing, shows that polling and comment transport dominate much of the wait. The new 250 ms Neon polling cadence is intended to reduce that overhead; only a live Neon A/B benchmark can confirm the improvement.
