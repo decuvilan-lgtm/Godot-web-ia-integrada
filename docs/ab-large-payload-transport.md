@@ -161,3 +161,15 @@ The Function now also exposes:
 - `POST /v1/sessions/heartbeat` with `{ "session_id": "..." }` — a member refreshes activity and extends the session expiry.
 
 The Python client has matching `create_transport_session`, `join_transport_session`, and `heartbeat_transport_session` helpers. Session IDs are database UUIDs; the existing GitHub/browser-run identifier remains a separate correlation ID until the A/B adapters are migrated.
+
+
+### Durable command queue (GitHub Issues replacement path)
+
+The Function now also implements a Postgres-backed command queue:
+- `POST /v1/commands/enqueue` validates the session, target device role, action allowlist, arguments, idempotency key, priority, and TTL.
+- `POST /v1/commands/claim` atomically claims one command for the authenticated device's role using `FOR UPDATE SKIP LOCKED`; claims have a 60-second lease and expired leases can be reclaimed.
+- `POST /v1/commands/start` transitions a valid claim to running.
+- `POST /v1/commands/lease` renews a running/claimed command lease.
+- `POST /v1/commands/complete` atomically records success/failure and inserts its result row. Large outputs must be uploaded as artifacts and represented by an artifact ID in the result JSON.
+
+The Python client has corresponding enqueue, claim, start, renew, and complete helpers. This provides a durable polling-based control path that does not have GitHub comment size limits; WebSocket notifications can be layered on later to reduce polling latency, while Postgres remains the source of truth. GitHub Issues is still the fallback until both A and B are wired to these helpers and a real session passes end-to-end.
