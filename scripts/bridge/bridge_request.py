@@ -32,6 +32,12 @@ def fail(message: str) -> None:
 def validate_request(request: object, repository: str, branch: str) -> tuple[str, str, str, dict, int]:
     if not isinstance(request, dict):
         raise ValueError("Bridge request must be a JSON object")
+    allowed_request_keys = {
+        "repository", "branch", "request_id", "transport_session_id",
+        "command", "timeout_seconds",
+    }
+    if set(request) - allowed_request_keys:
+        raise ValueError("Bridge request contains unsupported task-level fields")
     if request.get("repository") != repository:
         raise ValueError("Bridge request repository mismatch")
     if branch != "test/verdant-valley-development-benchmark" or request.get("branch") != branch:
