@@ -27,12 +27,14 @@ jobs:
       - name: Install production dependencies
         working-directory: neon/functions/abbridge
         run: npm install --omit=dev --no-audit --no-fund
-      - name: Validate and package deployable Function
+      - name: Bundle Function and production dependencies into one module
         working-directory: neon/functions/abbridge
         run: |
-          node --check index.mjs
-          node --input-type=module -e "import('./index.mjs').then(() => console.log('Function module loaded'))"
-          zip -qr "$GITHUB_WORKSPACE/abbridge-deployment.zip" index.mjs package.json node_modules
+          npx --yes esbuild@0.25.12 index.mjs --bundle --minify --platform=node --format=esm --packages=bundle --external:node:* --outfile=dist/index.mjs
+          node --check dist/index.mjs
+          node --input-type=module -e "import('./dist/index.mjs').then(() => console.log('Bundled Function module loaded'))"
+          cd dist
+          zip -q "$GITHUB_WORKSPACE/abbridge-deployment.zip" index.mjs
           unzip -t "$GITHUB_WORKSPACE/abbridge-deployment.zip"
           ls -lh "$GITHUB_WORKSPACE/abbridge-deployment.zip"
       - uses: actions/upload-artifact@v4
