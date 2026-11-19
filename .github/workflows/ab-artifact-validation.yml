@@ -7,6 +7,7 @@ on:
     paths:
       - "scripts/bridge/artifacts.py"
       - "tests/test_ab_artifacts.py"
+      - "neon/functions/abbridge/**"
       - ".github/workflows/ab-artifact-validation.yml"
   pull_request:
     paths:
@@ -28,6 +29,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Check Neon artifact Function syntax
+        run: node --check neon/functions/abbridge/index.mjs
       - name: Compile artifact transport module
         run: python -m py_compile scripts/bridge/artifacts.py
       - name: Run artifact transfer contract tests
