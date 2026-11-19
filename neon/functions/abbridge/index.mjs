@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
 import { attachDatabasePool } from "@neon/functions";
 import {
@@ -13,6 +14,13 @@ const ALLOWED_KINDS = new Set([
   "video", "project_archive", "logs", "animation_frames", "command_result",
 ]);
 const BUCKET = process.env.AB_ARTIFACT_BUCKET || "godot-visual-captures";
+const GITHUB_OIDC_JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
+const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
+const GITHUB_OIDC_AUDIENCE = "godot-abbridge";
+const AUTHORIZED_WORKFLOWS = new Map([
+  ["decuvilan-lgtm/Godot-web-ia-integrada/.github/workflows/persistent-session-host.yml@refs/heads/test/verdant-valley-development-benchmark", "web_editor"],
+  ["decuvilan-lgtm/Godot-web-ia-integrada/.github/workflows/persistent-session-operator.yml@refs/heads/test/verdant-valley-development-benchmark", "agent_controller"],
+]);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 4, idleTimeoutMillis: 30_000 });
 attachDatabasePool(pool);
 
@@ -56,6 +64,7 @@ async function authenticate(request) {
     `SELECT id, workspace_id, device_kind
        FROM command_center.devices
       WHERE token_hash = $1 AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
       LIMIT 1`,
     [tokenHash],
   );
@@ -95,6 +104,46 @@ async function bodyJson(request) {
     throw new Error("invalid_json");
   }
 }
+async function issueDevice(request) {
+  const token = bearer(request);
+  if (!token) return json({ error: "unauthorized" }, 401);
+  let payload;
+  try {
+    ({ payload } = await jwtVerify(token, GITHUB_OIDC_JWKS, {
+      issuer: GITHUB_OIDC_ISSUER,
+      audience: GITHUB_OIDC_AUDIENCE,
+    }));
+  } catch {
+    return json({ error: "invalid_github_oidc_token" }, 401);
+  }
+  const role = AUTHORIZED_WORKFLOWS.get(payload.workflow_ref);
+  if (!role
+      || payload.repository !== "decuvilan-lgtm/Godot-web-ia-integrada"
+      || payload.ref !== "refs/heads/test/verdant-valley-development-benchmark"
+      || !/^[0-9]{1,30}$/.test(String(payload.run_id || ""))
+      || !/^[0-9]{1,10}$/.test(String(payload.run_attempt || ""))) {
+    return json({ error: "workflow_identity_not_authorized" }, 403);
+  }
+  const runId = String(payload.run_id);
+  const runAttempt = String(payload.run_attempt);
+  const deviceToken = randomBytes(32).toString("base64url");
+  const result = await pool.query(
+    "INSERT INTO command_center.devices " +
+    "(id, workspace_id, device_kind, label, installation_id, token_hash, expires_at, created_at) " +
+    "SELECT $1, id, $2, $3, $4, $5, now() + interval '2 hours', now() " +
+    "FROM command_center.workspaces WHERE slug = 'default' " +
+    "RETURNING id, workspace_id, device_kind, expires_at",
+    [randomUUID(), role, "gha-" + role + "-" + runId, "gha-" + role + "-" + runId + "-" + runAttempt, sha256(deviceToken)],
+  );
+  if (result.rowCount !== 1) return json({ error: "default_workspace_not_found" }, 500);
+  return json({
+    device_id: result.rows[0].id,
+    device_kind: result.rows[0].device_kind,
+    device_token: deviceToken,
+    expires_at: result.rows[0].expires_at,
+  }, 201);
+}
+
 async function createSession(device) {
   if (device.device_kind !== "web_editor" && device.device_kind !== "android_editor") {
     return json({ error: "device_role_cannot_create_session" }, 403);
@@ -418,6 +467,7 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true, service: "ab-artifact-control" });
+    if (request.method === "POST" && url.pathname === "/v1/devices/issue") return await issueDevice(request);
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     const device = await authenticate(request);
     if (!device) return json({ error: "unauthorized" }, 401);
