@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 import re
 import time
 import urllib.error
@@ -263,8 +264,8 @@ def download_json_artifact(
 
 def request_github_actions_oidc_token(*, audience: str = "godot-abbridge") -> str:
     """Request a short-lived GitHub Actions OIDC JWT without logging its value."""
-    request_url = __import__("os").environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
-    request_token = __import__("os").environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
     parsed = urllib.parse.urlsplit(request_url)
     if (parsed.scheme != "https" or not parsed.hostname
             or not parsed.hostname.endswith(".actions.githubusercontent.com")
