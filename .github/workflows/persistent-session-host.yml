@@ -158,7 +158,7 @@ jobs:
           BRIDGE_REPOSITORY: ${{ github.repository }}
           EDITOR_BUILD_SHA: ${{ env.EDITOR_BUILD_SHA }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AB_API_URL: ${{ vars.AB_API_URL }}
+          AB_API_URL: https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech
           AB_DEVICE_TOKEN: ${{ secrets.AB_WEB_DEVICE_TOKEN }}
         run: python scripts/godot-browser-worker.py
 
