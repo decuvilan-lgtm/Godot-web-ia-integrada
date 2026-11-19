@@ -187,5 +187,18 @@ class ArtifactTests(unittest.TestCase):
                 )
 
 
+    def test_origin_scoped_command_result_polling(self):
+        from scripts.bridge.artifacts import fetch_transport_command_result
+        command_id = "a8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        with mock.patch("scripts.bridge.artifacts._control_request", side_effect=[
+            {"ready": False, "status": "running"},
+            {"ready": True, "status": "succeeded", "ok": True, "result": {"ok": True}},
+        ]) as control:
+            self.assertIsNone(fetch_transport_command_result("https://api.example", "token", command_id))
+            result = fetch_transport_command_result("https://api.example", "token", command_id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(control.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
