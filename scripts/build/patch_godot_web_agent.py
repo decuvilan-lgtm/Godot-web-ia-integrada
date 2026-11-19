@@ -25,6 +25,8 @@ BRIDGE_BLOCK = r'''
 #include "core/io/json.h"
 #include "core/io/resource.h"
 #include "core/io/resource_loader.h"
+#include "core/io/file_access.h"
+#include "core/io/dir_access.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_undo_redo_manager.h"
@@ -45,13 +47,13 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tgetCapabilities() {
 \t\t\treturn {
 \t\t\t\tprotocol: 1,
-\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "scene.get_tree", "scene.inspect_node", "scene.add_node", "scene.set_property"]
+\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "project.list_files", "project.read_file", "project.write_file", "resource.inspect", "scene.get_tree", "scene.inspect_node", "scene.add_node", "scene.set_property", "scene.save"]
 \t\t\t};
 \t\t},
 \t\tdispatch(request) {
 \t\t\treturn new Promise((resolve, reject) => {
 \t\t\t\tif (!request || typeof request.id !== "string" || !request.id || request.id.length > 128 ||
-\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64 || (request.args != null && (typeof request.args !== "object" || Array.isArray(request.args) || Object.keys(request.args).length > 3))) {
+\t\t\t\t\ttypeof request.command !== "string" || !request.command || request.command.length > 64 || pending.size >= 64 || (request.args != null && (typeof request.args !== "object" || Array.isArray(request.args) || Object.keys(request.args).length > 4))) {
 \t\t\t\t\treject(new Error("Invalid agent request"));
 \t\t\t\t\treturn;
 \t\t\t\t}
@@ -210,6 +212,31 @@ static bool godot_web_agent_convert_property_value(const Variant &p_input, const
 	return false;
 }
 
+static bool godot_web_agent_safe_text_path(const String &p_path) {
+	if (!p_path.begins_with("res://") || p_path.length() > 512 || p_path.find("..") != -1 || p_path.find("\\") != -1) return false;
+	String ext = p_path.get_extension().to_lower();
+	return ext == "gd" || ext == "tscn" || ext == "tres" || ext == "godot" || ext == "cfg" || ext == "json" || ext == "txt" || ext == "md";
+}
+
+static void godot_web_agent_collect_files(const String &p_path, Array &r_files, int p_depth) {
+	if (r_files.size() >= 500 || p_depth > 12) return;
+	Ref<DirAccess> dir = DirAccess::open(p_path);
+	if (dir.is_null()) return;
+	PackedStringArray files = dir->get_files();
+	for (int i = 0; i < files.size() && r_files.size() < 500; i++) {
+		String name = files[i];
+		String lower = name.to_lower();
+		if (name.begins_with(".") || lower.ends_with(".import") || lower.begins_with(".env") || lower.ends_with(".key") || lower.ends_with(".pem")) continue;
+		r_files.push_back(p_path.path_join(name));
+	}
+	PackedStringArray dirs = dir->get_directories();
+	for (int i = 0; i < dirs.size() && r_files.size() < 500; i++) {
+		String name = dirs[i];
+		if (name.begins_with(".") || name == ".godot" || name == ".git" || name == "node_modules") continue;
+		godot_web_agent_collect_files(p_path.path_join(name), r_files, p_depth + 1);
+	}
+}
+
 static Dictionary godot_web_agent_node_to_dict(Node *p_scene_root, Node *p_node, int &r_count, int p_depth) {
 \tDictionary result;
 \tresult["name"] = p_node->get_name();
@@ -254,6 +281,11 @@ void WebToolsEditorPlugin::_process_requests() {
 			commands.push_back("scene.inspect_node");
 			commands.push_back("scene.add_node");
 			commands.push_back("scene.set_property");
+			commands.push_back("project.list_files");
+			commands.push_back("project.read_file");
+			commands.push_back("project.write_file");
+			commands.push_back("resource.inspect");
+			commands.push_back("scene.save");
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = Dictionary();
 \t\t\tDictionary result;
@@ -269,7 +301,114 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tresult["scene_path"] = root ? root->get_scene_file_path() : String();
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = result;
-\t\t} else if (command == "scene.get_tree") {
+\t\t} else if (command == "project.list_files") {
+			Array files;
+			godot_web_agent_collect_files("res://", files, 0);
+			Dictionary result;
+			result["files"] = files;
+			result["count"] = files.size();
+			result["truncated"] = files.size() >= 500;
+			response["ok"] = true;
+			response["result"] = result;
+		} else if (command == "project.read_file") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", Variant());
+			String path = path_value;
+			if (args.size() != 1 || path_value.get_type() != Variant::STRING || !godot_web_agent_safe_text_path(path)) {
+				response["error"] = "INVALID_PROJECT_PATH";
+				response["message"] = "Read requires a bounded, allowlisted res:// text file path.";
+			} else if (!FileAccess::file_exists(path)) {
+				response["error"] = "FILE_NOT_FOUND";
+				response["message"] = "The requested project file does not exist.";
+			} else {
+				Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+				if (file.is_null() || file->get_length() > 262144) {
+					response["error"] = "FILE_READ_LIMIT";
+					response["message"] = "The file is unavailable or exceeds the 256 KiB read limit.";
+				} else {
+					Dictionary result;
+					result["path"] = path;
+					result["content"] = file->get_as_utf8_string();
+					result["bytes"] = file->get_length();
+					response["ok"] = true;
+					response["result"] = result;
+				}
+			}
+		} else if (command == "project.write_file") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", Variant());
+			Variant content_value = args.get("content", Variant());
+			String path = path_value;
+			String content = content_value;
+			bool valid = args.size() == 2 && path_value.get_type() == Variant::STRING &&
+				content_value.get_type() == Variant::STRING && godot_web_agent_safe_text_path(path) &&
+				content.to_utf8_buffer().size() <= 10000;
+			if (!valid) {
+				response["error"] = "INVALID_PROJECT_WRITE";
+				response["message"] = "Write requires an allowlisted res:// text path and content no larger than 10,000 UTF-8 bytes.";
+			} else {
+				Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+				if (file.is_null()) {
+					response["error"] = "FILE_WRITE_FAILED";
+					response["message"] = "Godot could not open the target file for writing.";
+				} else {
+					file->store_string(content);
+					file->flush();
+					Error write_error = file->get_error();
+					file.unref();
+					String verified = FileAccess::get_file_as_string(path);
+					if (write_error != OK || verified != content) {
+						response["error"] = "FILE_VERIFY_FAILED";
+						response["message"] = "The written file did not match the requested content.";
+					} else {
+						Dictionary result;
+						result["path"] = path;
+						result["bytes"] = content.to_utf8_buffer().size();
+						result["verified"] = true;
+						response["ok"] = true;
+						response["result"] = result;
+						if (path.ends_with(".gd") || path.ends_with(".tscn") || path.ends_with(".tres") || path.ends_with(".godot")) {
+							EditorInterface::get_singleton()->get_resource_filesystem()->scan();
+						}
+					}
+				}
+			}
+		} else if (command == "resource.inspect") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", Variant());
+			String path = path_value;
+			if (args.size() != 1 || path_value.get_type() != Variant::STRING || !path.begins_with("res://") || path.length() > 512 || path.find("..") != -1 || path.find("\\") != -1) {
+				response["error"] = "INVALID_RESOURCE_PATH";
+				response["message"] = "Resource inspection requires a bounded res:// path.";
+			} else {
+				Ref<Resource> resource = ResourceLoader::load(path);
+				if (resource.is_null()) {
+					response["error"] = "RESOURCE_LOAD_FAILED";
+					response["message"] = "Godot could not load the requested resource.";
+				} else {
+					Dictionary result;
+					result["path"] = path;
+					result["class"] = resource->get_class();
+					result["resource_local_to_scene"] = resource->is_local_to_scene();
+					response["ok"] = true;
+					response["result"] = result;
+				}
+			}
+		} else if (command == "scene.save") {
+			Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+			if (root == nullptr || root->get_scene_file_path().is_empty()) {
+				response["error"] = "SCENE_NOT_SAVED";
+				response["message"] = "There is no active scene with a destination path.";
+			} else {
+				EditorInterface::get_singleton()->save_scene();
+				Dictionary result;
+				result["scene_path"] = root->get_scene_file_path();
+				result["save_requested"] = true;
+				result["saved_automatically"] = false;
+				response["ok"] = true;
+				response["result"] = result;
+			}
+		} else if (command == "scene.get_tree") {
 \t\t\tNode *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
 \t\t\tif (root == nullptr) {
 \t\t\t\tresponse["error"] = "NO_ACTIVE_SCENE";
