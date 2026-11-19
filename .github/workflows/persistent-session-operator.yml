@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write
 
 concurrency:
   group: godot-session-operator-${{ github.repository }}-${{ github.sha }}
@@ -32,7 +33,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           AB_API_URL: https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech
-          AB_DEVICE_TOKEN: ${{ secrets.AB_AGENT_DEVICE_TOKEN }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -169,7 +169,12 @@ jobs:
               raise TimeoutError("Workflow A did not publish a ready marker for this browser session")
           ready_marker_wait_ms=round((time.monotonic()-ready_started)*1000,2)
           neon_api=os.environ.get("AB_API_URL","").strip()
-          neon_token=os.environ.get("AB_DEVICE_TOKEN","").strip()
+          neon_token=""
+          if neon_api:
+              oidc_token=request_github_actions_oidc_token()
+              neon_token=issue_transport_device_token(
+                  neon_api,oidc_token,expected_kind="agent_controller"
+              )
           neon_mode=bool(neon_api and neon_token)
           if neon_mode:
               if not isinstance(transport_session_id,str) or not re.fullmatch(r"[0-9a-fA-F-]{36}",transport_session_id):
