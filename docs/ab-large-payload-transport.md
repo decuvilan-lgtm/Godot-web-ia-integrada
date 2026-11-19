@@ -150,7 +150,7 @@ An initial Function implementation is now in `neon/functions/abbridge/`:
 - Downloads require a ready artifact and a currently authorized session member. The signed GET URL expires after five minutes.
 - Control request bodies are capped at 32 KiB; object bytes travel directly between the client and private object storage.
 
-The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function is deployed on `ab-transport-staging` at `https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech/` (deployment status completed, Node.js 24). The staging migration is applied. A/B device identities (web editor and agent controller) still need to be provisioned and their tokens stored as GitHub Actions secrets before a live A/B run. There are no device rows on the inspected branch yet.
+The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function is deployed on `ab-transport-staging` at `https://br-falling-waterfall-b5x4fu2i-abbridge.compute.c-7.us-east-2.aws.neon.tech/` (deployment status completed, Node.js 24). The staging migration is applied. The workflows now obtain short-lived device identities automatically through GitHub Actions OIDC. The Function verifies the exact repository, branch, and workflow file before issuing a two-hour token; no long-lived device-token secrets are required. There are no device rows on the inspected branch yet.
 
 
 ### Durable session endpoints
@@ -250,4 +250,4 @@ The archived Workflow B artifact for run [44249881250](https://github.com/decuvi
 
 This is the **GitHub Issues transport baseline**, not a Neon measurement. The several-second round trip, despite generally sub-200 ms A-side processing, shows that polling and comment transport dominate much of the wait. The new 250 ms Neon polling cadence is intended to reduce that overhead; only a live Neon A/B benchmark can confirm the improvement.
 
-The staging A/B workflows now point directly at the staging Function URL, so no `AB_API_URL` repository variable is needed. The only remaining GitHub configuration inputs are the two device-token secrets: `AB_WEB_DEVICE_TOKEN` for Workflow A and `AB_AGENT_DEVICE_TOKEN` for ephemeral Workflow B.
+The staging A/B workflows point directly at the staging Function URL, so no `AB_API_URL` repository variable or long-lived device-token secrets are needed. Both workflows have `id-token: write` permission and exchange their short-lived GitHub Actions OIDC identity for a role-specific two-hour device token. The Function only authorizes the two exact workflow files on the development branch.
