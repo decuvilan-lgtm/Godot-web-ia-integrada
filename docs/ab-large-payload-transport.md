@@ -151,3 +151,13 @@ An initial Function implementation is now in `neon/functions/abbridge/`:
 - Control request bodies are capped at 32 KiB; object bytes travel directly between the client and private object storage.
 
 The SQL proposal now stores both compressed and expanded byte counts and SHA-256 digests, matching the client manifest. The Function has not been deployed, and the SQL has not been applied. The deployment still requires confirming the Neon Function environment receives the existing bucket's AWS-compatible variables, applying the reviewed schema, and provisioning two device identities (web editor and agent controller). There are no device rows on the inspected branch yet.
+
+
+### Durable session endpoints
+
+The Function now also exposes:
+- `POST /v1/sessions` — a `web_editor` or `android_editor` device creates a one-hour session.
+- `POST /v1/sessions/join` with `{ "session_id": "..." }` — an `agent_controller` or `android_editor` device joins an available session in the same workspace.
+- `POST /v1/sessions/heartbeat` with `{ "session_id": "..." }` — a member refreshes activity and extends the session expiry.
+
+The Python client has matching `create_transport_session`, `join_transport_session`, and `heartbeat_transport_session` helpers. Session IDs are database UUIDs; the existing GitHub/browser-run identifier remains a separate correlation ID until the A/B adapters are migrated.
