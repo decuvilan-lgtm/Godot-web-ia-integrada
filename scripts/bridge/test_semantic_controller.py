@@ -19,6 +19,25 @@ class SemanticControllerValidationTests(unittest.TestCase):
             with self.subTest(action=action):
                 _validate(action, {})
 
+    def test_project_file_operations_accept_safe_paths(self):
+        from semantic_controller import _validate
+        _validate("project.list_files", {})
+        _validate("project.read_file", {"path": "res://scripts/player.gd"})
+        _validate("project.write_file", {"path": "res://scripts/player.gd", "content": "extends Node2D\\n"})
+        _validate("resource.inspect", {"path": "res://scenes/main.tscn"})
+        _validate("scene.save", {})
+
+    def test_project_file_operations_reject_traversal_and_binary_writes(self):
+        from semantic_controller import _validate
+        for action, args in (
+            ("project.read_file", {"path": "res://../outside.gd"}),
+            ("project.write_file", {"path": "res://assets/image.png", "content": "x"}),
+            ("project.write_file", {"path": "res://scripts/a.gd", "content": "x" * 10001}),
+            ("resource.inspect", {"path": "res://folder\\\\secret.tres"}),
+        ):
+            with self.subTest(action=action, args=args), self.assertRaises(ValueError):
+                _validate(action, args)
+
     def test_scene_inspect_node_accepts_bounded_relative_path(self):
         from semantic_controller import _validate
         _validate("scene.inspect_node", {"path": "Player/AnimatedSprite2D"})
