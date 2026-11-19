@@ -192,7 +192,7 @@ jobs:
                   created=enqueue_transport_command(
                       neon_api, neon_token, session_id=transport_session_id,
                       target="web_editor", action=action, args=fields,
-                      idempotency_key=f"{transport_session_id}:{nonlocal_seq[0]}",
+                      idempotency_key=f"{transport_session_id}:{os.environ.get('GITHUB_RUN_ID','manual')}:{nonlocal_seq[0]}",
                       ttl_seconds=240,
                   )
                   command_id=created["id"]
