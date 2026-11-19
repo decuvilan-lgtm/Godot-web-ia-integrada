@@ -137,5 +137,55 @@ class ArtifactTests(unittest.TestCase):
                 join_transport_session("https://api.example", "token", session_id)
 
 
+    def test_command_queue_client_lifecycle(self):
+        from scripts.bridge.artifacts import (
+            enqueue_transport_command, claim_transport_command,
+            start_transport_command, renew_transport_command_lease,
+            complete_transport_command,
+        )
+        session_id = "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        command_id = "a8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        command = {"id": command_id, "action": "status", "args": {}}
+        with mock.patch("scripts.bridge.artifacts._control_request", side_effect=[
+            {"command": command}, {"command": command}, {"command": command},
+            {"command": command}, {"command_id": command_id, "status": "succeeded"},
+        ]) as control:
+            queued = enqueue_transport_command(
+                "https://api.example", "token", session_id=session_id,
+                target="web_editor", action="status", args={},
+                idempotency_key="test-command-1",
+            )
+            claimed = claim_transport_command("https://api.example", "token", session_id)
+            started = start_transport_command("https://api.example", "token", command_id)
+            renewed = renew_transport_command_lease("https://api.example", "token", command_id)
+            completed = complete_transport_command(
+                "https://api.example", "token", command_id, ok=True, result={"text": "ready"},
+            )
+        self.assertEqual(queued["id"], command_id)
+        self.assertEqual(claimed["id"], command_id)
+        self.assertEqual(started["id"], command_id)
+        self.assertEqual(renewed["id"], command_id)
+        self.assertEqual(completed["status"], "succeeded")
+        self.assertEqual(control.call_count, 5)
+
+    def test_command_claim_allows_empty_queue(self):
+        from scripts.bridge.artifacts import claim_transport_command
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={"command": None}):
+            self.assertIsNone(claim_transport_command(
+                "https://api.example", "token", "d8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+            ))
+
+    def test_command_client_rejects_mismatched_completion(self):
+        from scripts.bridge.artifacts import complete_transport_command
+        command_id = "a8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21"
+        with mock.patch("scripts.bridge.artifacts._control_request", return_value={
+            "command_id": "b8a1c31f-7f3b-4d0e-9a11-8a8e5d8f1c21", "status": "succeeded",
+        }):
+            with self.assertRaisesRegex(ArtifactError, "invalid completion"):
+                complete_transport_command(
+                    "https://api.example", "token", command_id, ok=True, result={},
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
