@@ -5,8 +5,16 @@ import base64, json, math, os, re, time, urllib.request
 from pathlib import Path
 try:
     from .semantic_controller import execute_semantic_command
+    from .artifacts import (
+        claim_transport_command, start_transport_command, heartbeat_transport_session,
+        complete_transport_command, upload_json_artifact,
+    )
 except ImportError:  # Support unittest discovery with scripts/bridge as the start directory.
     from semantic_controller import execute_semantic_command
+    from artifacts import (
+        claim_transport_command, start_transport_command, heartbeat_transport_session,
+        complete_transport_command, upload_json_artifact,
+    )
 
 API="https://api.github.com"
 TRUSTED_ACTORS={"decuvilan-lgtm","github-actions[bot]"}
@@ -200,7 +208,16 @@ def _fetch_new_comments(comments_url, token, last_comment_id):
 
 
 def run_command_loop(page, repo, issue_number, token, session_id, out_dir, duration_seconds=180):
-    if not token or not issue_number:
+    neon_api = os.environ.get("AB_API_URL", "").strip()
+    neon_token = os.environ.get("AB_DEVICE_TOKEN", "").strip()
+    neon_mode = bool(neon_api and neon_token)
+    if neon_mode:
+        try:
+            import uuid
+            uuid.UUID(session_id)
+        except (ValueError, TypeError, AttributeError):
+            return {"enabled":False,"reason":"Neon transport requires a database session UUID"}
+    elif not token or not issue_number:
         return {"enabled":False,"reason":"Missing issue-scoped GitHub token or issue number"}
     duration_seconds = _bounded_duration_seconds(duration_seconds)
     started_at = time.monotonic()
@@ -214,7 +231,26 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
     comments_url=f"{API}/repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc"
     while time.monotonic()<deadline and not stopped:
         try:
-            comments=_fetch_new_comments(comments_url,token,last_comment_id)
+            if neon_mode:
+                heartbeat_transport_session(neon_api, neon_token, session_id)
+                claimed = claim_transport_command(neon_api, neon_token, session_id)
+                comments = []
+                if claimed:
+                    command_id = claimed["id"]
+                    start_transport_command(neon_api, neon_token, command_id)
+                    command_payload = {
+                        "protocol": 1, "session_id": session_id,
+                        "seq": last_seq + 1, "action": claimed["action"],
+                        **(claimed.get("args") or {}),
+                    }
+                    comments = [{
+                        "id": last_seq + 1,
+                        "user": {"login": "github-actions[bot]"},
+                        "body": json.dumps(command_payload, ensure_ascii=False),
+                        "command_id": command_id,
+                    }]
+            else:
+                comments=_fetch_new_comments(comments_url,token,last_comment_id)
             for item in comments:
                 comment_id=int(item.get("id",0))
                 if comment_id<=last_comment_id:
@@ -352,12 +388,37 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                     processed+=1
                     command_ok=not (action=="semantic_command" and result.get("ok") is False)
                     log.append({"comment_id":comment_id,"seq":seq,"action":action,"ok":command_ok,"result":result})
-                    _post_result(repo,issue,token,comment_id,{"ok":command_ok,**result})
+                    if neon_mode:
+                        result_payload = {"ok": command_ok, **result}
+                        if len(json.dumps(result_payload, ensure_ascii=False).encode("utf-8")) > 24000:
+                            artifact = upload_json_artifact(
+                                neon_api, neon_token, result_payload,
+                                session_id=session_id, kind="command_result",
+                            )
+                            result_payload = {"artifact_id": artifact["artifact_id"], "manifest": artifact["manifest"]}
+                        complete_transport_command(
+                            neon_api, neon_token, item["command_id"], ok=command_ok,
+                            result=result_payload,
+                            duration_ms=int((time.monotonic()-command_started)*1000),
+                        )
+                    else:
+                        _post_result(repo,issue,token,comment_id,{"ok":command_ok,**result})
                 except Exception as exc:
                     error={"ok":False,"error":f"{type(exc).__name__}: {str(exc)[:400]}","bridge_timing":{"a_processing_ms":round((time.monotonic()-command_started)*1000,2)}}
                     log.append({"comment_id":comment_id,"ok":False,"error":error["error"]})
-                    try: _post_result(repo,issue,token,comment_id,error)
-                    except Exception: pass
+                    try:
+                        if neon_mode:
+                            complete_transport_command(
+                                neon_api, neon_token, item["command_id"], ok=False,
+                                result={"error": error["error"]},
+                                duration_ms=int((time.monotonic()-command_started)*1000),
+                                error_code=type(exc).__name__,
+                                error_message=str(exc)[:400],
+                            )
+                        else:
+                            _post_result(repo,issue,token,comment_id,error)
+                    except Exception:
+                        pass
         except Exception as exc:
             log.append({"poll_error":f"{type(exc).__name__}: {str(exc)[:300]}"})
         remaining = max(0, deadline - time.monotonic())
