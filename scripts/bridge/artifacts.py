@@ -367,6 +367,20 @@ def complete_transport_command(
     return response
 
 
+def fetch_transport_command_result(api_base: str, token: str, command_id: str) -> dict[str, Any] | None:
+    """Poll a command result visible only to the originating device."""
+    try:
+        uuid.UUID(command_id)
+    except (ValueError, AttributeError) as exc:
+        raise ArtifactError("command_id must be a UUID") from exc
+    response = _control_request(api_base, token, "/v1/commands/result", {"command_id": command_id})
+    if response.get("ready") is not True:
+        return None
+    if response.get("status") not in {"succeeded", "failed"} or not isinstance(response.get("result"), dict):
+        raise ArtifactError("Command result API returned an invalid completed result")
+    return response
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Presigned URLs are single-origin capabilities; redirects are never followed."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
