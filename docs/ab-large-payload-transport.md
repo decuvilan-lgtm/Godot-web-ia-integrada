@@ -241,8 +241,8 @@ The archived Workflow B artifact for run [44249881250](https://github.com/decuvi
 | Metric | Measured |
 |---|---:|
 | Minimum B→A round trip | 4,831.06 ms |
-| Median B→A round trip | 5,049.72 ms |
-| Mean B→A round trip | 5,066.18 ms |
+| Median B→A round trip | 5,006.31 ms |
+| Mean B→A round trip | 5,281.68 ms |
 | P95 B→A round trip | 6,490.33 ms |
 | Maximum B→A round trip | 6,490.33 ms |
 | A-side processing median | 151.86 ms |
