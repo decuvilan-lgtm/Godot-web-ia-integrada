@@ -181,3 +181,16 @@ The command queue uses the existing `command_center.commands` and `command_cente
 - `POST /v1/commands/start`, `/lease`, and `/complete` — claim lifecycle and result persistence.
 
 Command bodies/results are capped by the 32 KiB control-request limit. Put screenshots, scene dumps, and large context in object storage, then pass only `artifact_id` and manifest references in `args` or `result`. Claim leases expire after 60 seconds and can be reclaimed, so clients must keep operations idempotent and renew while executing.
+
+
+## Optional A/B adapter wiring
+
+The existing Workflow A browser worker and Workflow B operator now have an opt-in Neon path while preserving the tested GitHub fallback:
+
+- Workflow A accepts repository variable `AB_API_URL` and secret `AB_WEB_DEVICE_TOKEN`. When both are present, it creates a database session, publishes its `transport_session_id` in the existing readiness marker, and runs the A-side command loop against the Postgres queue.
+- Workflow B accepts the same `AB_API_URL` variable and secret `AB_AGENT_DEVICE_TOKEN`. It reads the transport session ID from A's readiness marker, joins the session, enqueues commands to `web_editor`, polls its origin-scoped result endpoint, and downloads large result artifacts.
+- When those settings are absent, both workflows retain the current GitHub Issues behavior.
+
+The new queue/result endpoints use the existing `commands` and `command_results` schema. A-side claims are role-scoped and lease-protected. B's idempotency key includes the Workflow B run ID, so a retry within one run is repeatable without colliding with later operator runs.
+
+**Activation is intentionally still off.** The required repository variable/secrets are not assumed to exist, the device rows have not been provisioned, the Function has not been deployed, and the artifact table migration has not been applied. The inspected Neon branch is named `production` and is the default branch, so I have not modified its schema or deployed anything there. Keep the existing GitHub path until a non-production Neon branch has been prepared and the full A/B session test passes.
