@@ -322,8 +322,21 @@ def enqueue_transport_command(
     return command
 
 
-def claim_transport_command(api_base: str, token: str, session_id: str) -> dict[str, Any] | None:
-    result = _control_request(api_base, token, "/v1/commands/claim", {"session_id": session_id})
+def claim_transport_command(
+    api_base: str,
+    token: str,
+    session_id: str,
+    *,
+    wait_ms: int = 10_000,
+) -> dict[str, Any] | None:
+    """Long-poll for one command; the server checks its durable queue every 250 ms."""
+    if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or not 0 <= wait_ms <= 10_000:
+        raise ArtifactError("wait_ms must be an integer between 0 and 10000")
+    result = _control_request(
+        api_base, token, "/v1/commands/claim",
+        {"session_id": session_id, "wait_ms": wait_ms},
+        timeout=20,
+    )
     command = result.get("command")
     if command is not None and not isinstance(command, dict):
         raise ArtifactError("Command API returned an invalid claim response")
