@@ -29,7 +29,7 @@ BRIDGE_BLOCK = r'''
 #include "core/io/dir_access.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
-#include "editor/editor_file_system.h"
+#include "editor/file_system/editor_file_system.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "core/object/class_db.h"
 #include "core/os/memory.h"
