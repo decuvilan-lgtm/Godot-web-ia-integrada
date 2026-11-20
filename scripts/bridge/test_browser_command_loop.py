@@ -69,6 +69,15 @@ class BrowserCommandValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate(self.command("canvas_drag",points=[[0.5,0.5],[2,0.5]]),SESSION,0)
 
+    def test_capture_editor_panel_accepts_output_and_debugger(self):
+        for panel in ("Output", "Debugger"):
+            cmd=self.command("capture_editor_panel",panel=panel)
+            self.assertEqual(_validate(cmd,SESSION,0),(1,"capture_editor_panel"))
+
+    def test_capture_editor_panel_rejects_unknown_panel(self):
+        with self.assertRaises(ValueError):
+            _validate(self.command("capture_editor_panel",panel="Inspector"),SESSION,0)
+
     def test_semantic_command_accepts_read_only_editor_action(self):
         cmd=self.command("semantic_command",editor_action="scene.get_tree",args={})
         self.assertEqual(_validate(cmd,SESSION,0),(1,"semantic_command"))
