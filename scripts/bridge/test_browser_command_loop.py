@@ -94,6 +94,11 @@ class BrowserCommandValidationTests(unittest.TestCase):
             with self.subTest(args=args), self.assertRaises(ValueError):
                 _validate(self.command("semantic_command",editor_action="project.write_file",args=args),SESSION,0)
 
+    def test_semantic_select_node_rejects_unsafe_path(self):
+        cmd=self.command("semantic_command",editor_action="scene.select_node",args={"path":"../Outside"})
+        with self.assertRaises(ValueError):
+            _validate(cmd,SESSION,0)
+
     def test_semantic_command_rejects_unknown_editor_action(self):
         cmd=self.command("semantic_command",editor_action="execute_script",args={"code":"print(1)"})
         with self.assertRaises(ValueError):
