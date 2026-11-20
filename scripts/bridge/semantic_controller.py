@@ -10,6 +10,8 @@ CHANNEL = "GODOT_CONTROLLER_BRIDGE_V1"
 ACTIONS = {
     "editor.get_state": set(),
     "editor.list_capabilities": set(),
+    "editor.get_selection": set(),
+    "scene.select_node": {"path"},
     "project.list_files": set(),
     "project.read_file": {"path"},
     "project.write_file": {"path", "content"},
@@ -41,6 +43,13 @@ def _validate(action: str, args: dict[str, Any]) -> None:
             content = args.get("content")
             if not isinstance(content, str) or len(content.encode("utf-8")) > 10000:
                 raise ValueError("project.write_file content is limited to 10,000 UTF-8 bytes")
+        return
+    if action == "scene.select_node":
+        path = args.get("path")
+        if set(args) != {"path"} or not isinstance(path, str) or not path or len(path) > 200:
+            raise ValueError("scene.select_node requires one bounded relative node path")
+        if path.startswith("/") or ".." in path.split("/") or "//" in path:
+            raise ValueError("scene.select_node path must stay inside the active scene root")
         return
     if action == "scene.inspect_node":
         path = args.get("path")
