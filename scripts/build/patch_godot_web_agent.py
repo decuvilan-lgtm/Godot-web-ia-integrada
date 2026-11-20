@@ -29,6 +29,7 @@ BRIDGE_BLOCK = r'''
 #include "core/io/dir_access.h"
 #include "core/templates/vector.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_selection.h"
 #include "editor/file_system/editor_file_system.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "core/object/class_db.h"
@@ -48,7 +49,7 @@ EM_JS(void, godot_web_agent_install, (), {
 \t\tgetCapabilities() {
 \t\t\treturn {
 \t\t\t\tprotocol: 1,
-\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "project.list_files", "project.read_file", "project.write_file", "resource.inspect", "scene.get_tree", "scene.inspect_node", "scene.add_node", "scene.set_property", "scene.save"]
+\t\t\t\tcommands: ["editor.list_capabilities", "editor.get_state", "editor.get_selection", "scene.select_node", "project.list_files", "project.read_file", "project.write_file", "resource.inspect", "scene.get_tree", "scene.inspect_node", "scene.add_node", "scene.set_property", "scene.save"]
 \t\t\t};
 \t\t},
 \t\tdispatch(request) {
@@ -278,6 +279,8 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tArray commands;
 \t\t\tcommands.push_back("editor.list_capabilities");
 \t\t\tcommands.push_back("editor.get_state");
+			commands.push_back("editor.get_selection");
+			commands.push_back("scene.select_node");
 \t\t\tcommands.push_back("scene.get_tree");
 			commands.push_back("scene.inspect_node");
 			commands.push_back("scene.add_node");
@@ -302,7 +305,52 @@ void WebToolsEditorPlugin::_process_requests() {
 \t\t\tresult["scene_path"] = root ? root->get_scene_file_path() : String();
 \t\t\tresponse["ok"] = true;
 \t\t\tresponse["result"] = result;
-\t\t} else if (command == "project.list_files") {
+\t\t} else if (command == "editor.get_selection") {
+			EditorSelection *selection = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_selection() : nullptr;
+			Array selected;
+			if (selection != nullptr) {
+				Array nodes = selection->get_selected_nodes();
+				Node *root = EditorInterface::get_singleton()->get_edited_scene_root();
+				for (int i = 0; i < nodes.size() && i < 64; i++) {
+					Node *node = Object::cast_to<Node>(nodes[i]);
+					if (node == nullptr || root == nullptr || (node != root && !root->is_ancestor_of(node))) continue;
+					Dictionary item;
+					item["name"] = node->get_name();
+					item["type"] = node->get_class();
+					item["path"] = node == root ? String(".") : String(root->get_path_to(node));
+					selected.push_back(item);
+				}
+			}
+			Dictionary result;
+			result["selected_nodes"] = selected;
+			result["count"] = selected.size();
+			response["ok"] = true;
+			response["result"] = result;
+		} else if (command == "scene.select_node") {
+			Dictionary args = request.get("args", Dictionary());
+			Variant path_value = args.get("path", Variant());
+			String path = path_value;
+			Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+			Node *target = path_value.get_type() == Variant::STRING && args.size() == 1 && !path.is_empty() && path.length() <= 200 && !path.begins_with("/") && path.find("..") == -1 && path.find("//") == -1 && root ? (path == "." ? root : root->get_node_or_null(NodePath(path))) : nullptr;
+			if (root == nullptr) {
+				response["error"] = "NO_ACTIVE_SCENE";
+				response["message"] = "There is no active edited scene.";
+			} else if (target == nullptr || (target != root && !root->is_ancestor_of(target))) {
+				response["error"] = "NODE_NOT_FOUND";
+				response["message"] = "The requested node does not exist inside the active edited scene.";
+			} else {
+				EditorSelection *selection = EditorInterface::get_singleton()->get_selection();
+				selection->clear();
+				selection->add_node(target);
+				Dictionary result;
+				result["selected"] = path == "." ? String(".") : String(root->get_path_to(target));
+				result["name"] = target->get_name();
+				result["type"] = target->get_class();
+				result["verified"] = true;
+				response["ok"] = true;
+				response["result"] = result;
+			}
+		} else if (command == "project.list_files") {
 			Array files;
 			godot_web_agent_collect_files("res://", files, 0);
 			Dictionary result;
