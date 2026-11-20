@@ -46,6 +46,9 @@ El árbol está limitado por profundidad y número de nodos. `scene.add_node` so
 ## Output y Debugger
 Las capturas de Chromium conservan el contexto visual de los paneles abiertos. La lectura textual de Output y Debugger requiere extraer el contenido de los controles visibles del editor; no se deben inventar mensajes a partir de una captura. La extracción focalizada de ambos paneles queda como siguiente extensión del controlador.
 
+## Output y Debugger: captura + texto
+El comando de transporte `capture_editor_panel` acepta `panel: "Output"` o `panel: "Debugger"`. B pulsa la pestaña correspondiente en la sesión Chromium, recoge texto visible de la interfaz (máximo 15.000 caracteres) y guarda una captura PNG de la ventana del editor. El texto se marca como truncado si excede el límite. Esto permite correlacionar el contenido legible con el estado visual, sin afirmar que el panel contiene mensajes que no estén visibles.
+
 ## Vista previa del juego en ejecución
 
 Workflow B dispone de una ruta de preview separada de la edición de escena:
