@@ -1,7 +1,7 @@
 (() => {
 "use strict";
 const CHANNEL="GODOT_CONTROLLER_BRIDGE_V1";
-const ALLOWED=new Set(["editor.get_state","editor.list_capabilities","project.list_files","project.read_file","project.write_file","resource.inspect","scene.get_tree","scene.inspect_node","scene.add_node","scene.set_property","scene.save"]);
+const ALLOWED=new Set(["editor.get_state","editor.get_selection","scene.select_node","editor.list_capabilities","project.list_files","project.read_file","project.write_file","resource.inspect","scene.get_tree","scene.inspect_node","scene.add_node","scene.set_property","scene.save"]);
 window.addEventListener("message",async event=>{
  if(event.source!==window||event.origin!==location.origin) return;
  const data=event.data; if(!data||data.channel!==CHANNEL||data.direction!=="request") return;
