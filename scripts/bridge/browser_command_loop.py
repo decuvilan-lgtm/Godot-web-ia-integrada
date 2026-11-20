@@ -46,7 +46,7 @@ def _valid_unit(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=1
 
 def _validate(command, session_id, last_seq):
-    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args","include_image","scope"}
+    allowed_fields={"protocol","session_id","seq","action","text","placeholder","seconds","x","y","points","duration_ms","key","delta_x","delta_y","editor_action","args","include_image","scope","panel"}
     if not isinstance(command,dict) or set(command)-allowed_fields:
         raise ValueError("Unsupported command shape")
     if command.get("protocol")!=1 or command.get("session_id")!=session_id:
@@ -55,7 +55,7 @@ def _validate(command, session_id, last_seq):
     if not isinstance(seq,int) or isinstance(seq,bool) or seq<=last_seq:
         raise ValueError("Sequence must be a new increasing integer")
     action=command.get("action")
-    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","semantic_command","run_game","game_view","game_click","game_input","stop"}:
+    if action not in {"status","screenshot","click_text","fill_placeholder","wait","assert_text","canvas_click","canvas_drag","canvas_scroll","press_key","type_text","semantic_command","run_game","game_view","game_click","game_input","capture_editor_panel","stop"}:
         raise ValueError("Action is not allowlisted")
     text=command.get("text")
     placeholder=command.get("placeholder")
@@ -68,6 +68,8 @@ def _validate(command, session_id, last_seq):
         raise ValueError("wait seconds must be 0-20")
     if action in {"canvas_click","game_click"} and not (_valid_unit(command.get("x")) and _valid_unit(command.get("y"))):
         raise ValueError("canvas_click x and y must be normalized numbers from 0 to 1")
+    if action=="capture_editor_panel" and command.get("panel") not in {"Output","Debugger"}:
+        raise ValueError("capture_editor_panel panel must be Output or Debugger")
     if action=="screenshot":
         include_image=command.get("include_image",False)
         scope=command.get("scope","page")
@@ -306,6 +308,17 @@ def run_command_loop(page, repo, issue_number, token, session_id, out_dir, durat
                                 result["image_scope"]=scope
                             else:
                                 result["inline_image_omitted"]="Compressed image exceeded the safe issue-comment size; full PNG remains in Workflow A evidence."
+                    elif action=="capture_editor_panel":
+                        panel=command["panel"]
+                        tab=page.get_by_text(panel,exact=True)
+                        if tab.count()<1:
+                            raise ValueError(f"Godot {panel} panel tab is not visible")
+                        tab.first.click(timeout=10000)
+                        page.wait_for_timeout(300)
+                        panel_text=page.locator("body").inner_text(timeout=5000)
+                        path=Path(out_dir)/f"command-{seq:03d}-{panel.lower()}.png"
+                        page.screenshot(path=str(path),full_page=False,timeout=15000)
+                        result={"panel":panel,"text":panel_text[-15000:],"truncated":len(panel_text)>15000,"screenshot":path.name,"title":page.title()}
                     elif action=="click_text":
                         locator=page.get_by_text(command["text"],exact=True)
                         if locator.count()<1: raise ValueError("Exact visible text was not found")
