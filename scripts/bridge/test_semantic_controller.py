@@ -15,7 +15,7 @@ class FakePage:
 class SemanticControllerValidationTests(unittest.TestCase):
     def test_read_only_queries_accept_empty_arguments(self):
         from semantic_controller import _validate
-        for action in ("editor.get_state", "editor.list_capabilities", "scene.get_tree"):
+        for action in ("editor.get_state", "editor.list_capabilities", "editor.get_selection", "scene.get_tree"):
             with self.subTest(action=action):
                 _validate(action, {})
 
@@ -26,6 +26,7 @@ class SemanticControllerValidationTests(unittest.TestCase):
         _validate("project.write_file", {"path": "res://scripts/player.gd", "content": "extends Node2D\\n"})
         _validate("resource.inspect", {"path": "res://scenes/main.tscn"})
         _validate("scene.save", {})
+        _validate("scene.select_node", {"path": "Player/Sprite2D"})
 
     def test_project_file_operations_reject_traversal_and_binary_writes(self):
         from semantic_controller import _validate
@@ -37,6 +38,11 @@ class SemanticControllerValidationTests(unittest.TestCase):
         ):
             with self.subTest(action=action, args=args), self.assertRaises(ValueError):
                 _validate(action, args)
+
+    def test_scene_select_node_rejects_unsafe_paths(self):
+        from semantic_controller import _validate
+        with self.assertRaises(ValueError):
+            _validate("scene.select_node", {"path": "../Outside"})
 
     def test_scene_inspect_node_accepts_bounded_relative_path(self):
         from semantic_controller import _validate
