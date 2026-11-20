@@ -23,6 +23,8 @@ El adaptador procesa las solicitudes en el hilo principal del editor. Las respue
 
 - editor.list_capabilities
 - editor.get_state
+- editor.get_selection (lectura de selección actual)
+- scene.select_node (selección explícita por ruta relativa y consulta del nodo seleccionado)
 - scene.get_tree (jerarquía limitada, con rutas relativas a la raíz de la escena)
 - scene.inspect_node (lectura acotada de propiedades visibles en el Inspector para un nodo)
 - scene.add_node (creación de nodos allowlisted, deshacible y sin guardado automático)
@@ -37,6 +39,12 @@ El adaptador procesa las solicitudes en el hilo principal del editor. Las respue
 El Inspector devuelve hasta 80 propiedades marcadas por Godot para el editor, con nombre, tipo y valor serializado. La edición de propiedades utiliza el historial Undo/Redo. Los scripts se editan como archivos de texto UTF-8 mediante `project.write_file`; los cambios se leen de vuelta para verificar el contenido.
 
 El árbol está limitado por profundidad y número de nodos. `scene.add_node` solo acepta clases de nodo allowlisted, nombres identificadores y padres dentro de la escena activa. Usa el historial Undo/Redo del editor y no guarda automáticamente. La extensión y el cliente rechazan comandos fuera de la allowlist. La edición de propiedades, recursos y scripts sigue pendiente.
+
+## Selección y jerarquía
+`scene.get_tree` devuelve la jerarquía recursiva acotada. `scene.select_node` selecciona un nodo por ruta relativa dentro de la escena activa y `editor.get_selection` permite consultar la selección real del editor. Las rutas absolutas y los segmentos de traversal se rechazan.
+
+## Output y Debugger
+Las capturas de Chromium conservan el contexto visual de los paneles abiertos. La lectura textual de Output y Debugger requiere extraer el contenido de los controles visibles del editor; no se deben inventar mensajes a partir de una captura. La extracción focalizada de ambos paneles queda como siguiente extensión del controlador.
 
 ## Vista previa del juego en ejecución
 
