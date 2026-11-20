@@ -455,6 +455,29 @@ def main() -> int:
                     raise RuntimeError("Built-in agent could not create the allowlisted test node: " + json.dumps(node_creation_probe))
                 if node_creation_probe.get("result", {}).get("saved_automatically") is not False:
                     raise RuntimeError("Scene node creation must remain unsaved for review.")
+                selection_probe = execute_semantic_command(
+                    page,
+                    "scene.select_node",
+                    {"path": "ControllerSmokeNode"},
+                    timeout_ms=15000,
+                )
+                if not selection_probe.get("ok") or selection_probe.get("result", {}).get("verified") is not True:
+                    raise RuntimeError("Built-in agent could not select and verify the test node: " + json.dumps(selection_probe))
+                selected_nodes_probe = execute_semantic_command(page, "editor.get_selection", timeout_ms=15000)
+                selected_nodes = selected_nodes_probe.get("result", {}).get("selected_nodes", [])
+                if (
+                    not selected_nodes_probe.get("ok")
+                    or not any(item.get("path") == "ControllerSmokeNode" and item.get("type") == "Node2D" for item in selected_nodes)
+                ):
+                    raise RuntimeError("EditorSelection did not report the selected test node: " + json.dumps(selected_nodes_probe))
+                invalid_selection_probe = page.evaluate("""async () => await window.__godotEditorAgent.dispatch({
+                    id: "smoke-invalid-selection-path",
+                    command: "scene.select_node",
+                    args: {path: "../OutsideScene"}
+                })""")
+                if invalid_selection_probe.get("ok") is not False or invalid_selection_probe.get("error") != "NODE_NOT_FOUND":
+                    raise RuntimeError("The built-in agent did not reject a node path outside the active scene: " + json.dumps(invalid_selection_probe))
+
                 tree_after_creation_probe = execute_semantic_command(page, "scene.get_tree", timeout_ms=15000)
                 if not tree_after_creation_probe.get("ok"):
                     raise RuntimeError("Could not inspect the scene after node creation: " + json.dumps(tree_after_creation_probe))
@@ -646,6 +669,9 @@ def main() -> int:
                     "runtime": runtime,
                     "semantic_probes": probes,
                     "node_creation_probe": node_creation_probe,
+                    "selection_probe": selection_probe,
+                    "selected_nodes_probe": selected_nodes_probe,
+                    "invalid_selection_probe": invalid_selection_probe,
                     "tree_after_creation_probe": tree_after_creation_probe,
                     "property_set_probe": property_set_probe,
                     "inspected_smoke_node": inspected_smoke_node,
@@ -669,7 +695,7 @@ def main() -> int:
                     "request_failures": request_failures[-30:],
                     "http_errors": http_errors[-30:],
                     "workers": worker_urls[-20:],
-                    "note": "The built editor imported a clean project, answered semantic queries, created an allowlisted scene node, set and re-inspected a typed Node2D Inspector property through the undo manager, and rejected unapproved node classes, mismatched property values and Script resource attachment. The scene remains unsaved for review.",
+                    "note": "The built editor imported a clean project, answered semantic queries, selected and re-queried a scene node through EditorSelection, rejected an out-of-scene selection path, created an allowlisted scene node, set and re-inspected a typed Node2D Inspector property through the undo manager, and rejected unapproved node classes, mismatched property values and Script resource attachment. The scene remains unsaved for review.",
                 }
                 result, report_redactions = redact_sensitive_payload(result)
                 result["report_redactions_applied"] = report_redactions
